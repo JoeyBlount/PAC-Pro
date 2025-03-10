@@ -1,0 +1,10 @@
+{
+  "name": "my-pac-project",
+  "version": "1.0.0",
+  "description": "PAC skeleton for development",
+  "scripts": {
+    "start": "live-server public"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

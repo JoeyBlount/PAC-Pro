@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>PAC Dashboard Layout</title>
+    <link rel="stylesheet" href="./css/style.css" />
+
+    <!-- Font Awesome (Optional) -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+      integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2DhKNCHaI0FO5vJcQ66Bkp0S5D+xu/7PBO8MAd6FVi/kfHLZW6YX1FLRS8WXeZSOA=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+
+    <!-- Chart.js (Optional) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  </head>
+  <body>
+    <!-- TOP BAR -->
+    <div class="top-bar">
+      <div class="top-bar-center">
+        <div class="store-selector">
+          <i class="fas fa-store"></i>
+          <select>
+            <option>Store #101</option>
+            <option>Store #202</option>
+            <option>Store #303</option>
+          </select>
+        </div>
+      </div>
+      <div class="top-bar-right">
+        <button class="account-btn" onclick="showAccount()">
+          <i class="fas fa-user"></i> Account
+        </button>
+      </div>
+    </div>
+
+    <!-- LAYOUT -->
+    <div class="layout">
+      <!-- SIDE NAV -->
+      <nav class="side-nav">
+        <a href="#" onclick="showDashboard()"
+          ><i class="fas fa-home nav-icon"></i> Dashboard</a
+        >
+        <a href="#" onclick="showInvoiceLog()"
+          ><i class="fas fa-file-alt nav-icon"></i> Invoice Logs</a
+        >
+        <a href="#" onclick="showInvoicePage()"
+          ><i class="fas fa-upload nav-icon"></i> Submit Invoice</a
+        >
+        <a href="#" onclick="alert('Reports clicked')"
+          ><i class="fas fa-chart-bar nav-icon"></i> Reports</a
+        >
+        <a href="#" onclick="showSettings()"
+          ><i class="fas fa-cog nav-icon"></i> Settings</a
+        >
+        <a href="#" onclick="showPAC()" class="pac-highlight">
+          <i class="fas fa-clipboard-list nav-icon"></i> PAC
+        </a>
+      </nav>
+
+      <!-- MAIN CONTENT -->
+      <div class="main-content">
+        <!-- DASHBOARD -->
+        <div id="dashboardSection">
+          <h1 class="dashboard-title">Dashboard</h1>
+          <div class="dashboard-container">
+            <div class="dashboard-column">
+              <h2>Monthly Profit and Loss</h2>
+              <canvas id="profitLossChart" width="400" height="300"></canvas>
+              <div class="dashboard-stats">
+                <p><strong>$110,421</strong> Total Revenue</p>
+                <p><strong>$42,145</strong> Total Expenses</p>
+                <p><strong>$68,276</strong> Net Profit</p>
+              </div>
+            </div>
+            <div class="dashboard-column">
+              <h2>Year-to-Date Performance</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Metric</th>
+                    <th>Amount</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Total Revenue</td>
+                    <td>$450,000</td>
+                    <td>YTD</td>
+                  </tr>
+                  <tr>
+                    <td>Total Expenses</td>
+                    <td>$185,000</td>
+                    <td>YTD</td>
+                  </tr>
+                  <tr>
+                    <td>Profit Margin</td>
+                    <td>58%</td>
+                    <td>Goal: 55%</td>
+                  </tr>
+                  <tr>
+                    <td>Avg. Daily Sales</td>
+                    <td>$2,300</td>
+                    <td>Jan-Jun</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="dashboard-column">
+              <h2>Upcoming Deadlines</h2>
+              <ul>
+                <li><strong>March 15</strong>: Deadline info here</li>
+                <li><strong>April 1</strong>: Deadline info here</li>
+                <li><strong>April 29</strong>: Deadline info here</li>
+                <li><strong>May 17</strong>: Deadline info here</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- ACCOUNT -->
+        <div id="accountSection">
+          <h2>Account Information</h2>
+          <div class="account-details">
+            <p><strong>Account Name:</strong> John Doe</p>
+            <p><strong>Store Number:</strong> #101</p>
+          </div>
+          <hr />
+          <div class="account-actions">
+            <button id="changePassBtn">Change Password</button>
+            <button id="signOutBtn">Sign Out</button>
+          </div>
+        </div>
+
+        <!-- SUBMIT INVOICE -->
+        <div id="invoiceSection">
+          <div class="invoice-header">Submit Invoice</div>
+          <button class="upload-btn">Upload Invoice (pdf, png, jpeg)</button>
+          <div class="invoice-form">
+            <label>Invoice #:</label>
+            <input type="text" placeholder="Enter Invoice Number" />
+
+            <label>Company: (benefactor)</label>
+            <input type="text" placeholder="Enter company name" />
+
+            <label>Invoice Date:</label>
+            <input type="date" placeholder="Enter Date" />
+
+            <div class="additional-costs">
+              <h4>Amount:</h4>
+              <div id="costLinesContainer"></div>
+              <button class="add-cost-btn" onclick="addCostLine()">
+                + Add Another
+              </button>
+            </div>
+          </div>
+          <button
+            class="invoice-submit"
+            onclick="alert('Invoice submitted (placeholder)!')"
+          >
+            Submit Invoice
+          </button>
+        </div>
+
+        <!-- INVOICE LOG -->
+        <div id="invoiceLogSection">
+          <div class="invoice-log-header">Invoice Log</div>
+          <div class="invoice-log-controls">
+            <div class="search-box">
+              <input type="text" placeholder="Search invoice..." />
+            </div>
+            <div class="sort-box">
+              <span>Sort By:</span>
+              <select>
+                <option value="dateSubmitted">Date Submitted</option>
+                <option value="invoiceNumber">Invoice #</option>
+                <option value="company">Company</option>
+              </select>
+            </div>
+          </div>
+          <table class="invoice-log-table">
+            <thead>
+              <tr>
+                <th>Invoice #</th>
+                <th>Date Submitted</th>
+                <th>Invoice Date</th>
+                <th>Company</th>
+                <th>Amount</th>
+                <th>FOOD</th>
+                <th>CONDIMENT</th>
+                <th>PAPER</th>
+                <th>NON PROD</th>
+                <th>TRAVEL</th>
+                <th>ANY OTHER</th>
+                <th>PROMO</th>
+                <th>OUTSIDE SVC</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <i
+                    class="fas fa-file-invoice view-invoice-icon"
+                    onclick="alert('Viewing invoice INV-1001')"
+                  ></i>
+                  <i
+                    class="fas fa-image picture-icon"
+                    onclick="alert('Viewing pictures for INV-1001')"
+                  ></i>
+                  INV-1001
+                </td>
+                <td>2025-01-20</td>
+                <td>2025-01-15</td>
+                <td>Benefactor Inc</td>
+                <td>$2,100.00</td>
+                <td>$300</td>
+                <td>$50</td>
+                <td>$120</td>
+                <td>$90</td>
+                <td>$0</td>
+                <td>$45</td>
+                <td>$100</td>
+                <td>$150</td>
+              </tr>
+              <tr>
+                <td>
+                  <i
+                    class="fas fa-file-invoice view-invoice-icon"
+                    onclick="alert('Viewing invoice INV-1002')"
+                  ></i>
+                  <i
+                    class="fas fa-image picture-icon"
+                    onclick="alert('Viewing pictures for INV-1002')"
+                  ></i>
+                  INV-1002
+                </td>
+                <td>2025-02-25</td>
+                <td>2025-02-20</td>
+                <td>ABC Supplies</td>
+                <td>$3,500.00</td>
+                <td>$500</td>
+                <td>$80</td>
+                <td>$300</td>
+                <td>$150</td>
+                <td>$50</td>
+                <td>$0</td>
+                <td>$200</td>
+                <td>$0</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>TOTAL</td>
+                <td colspan="3"></td>
+                <td>$5,600.00</td>
+                <td>$800</td>
+                <td>$130</td>
+                <td>$420</td>
+                <td>$240</td>
+                <td>$50</td>
+                <td>$45</td>
+                <td>$300</td>
+                <td>$150</td>
+              </tr>
+              <tr>
+                <td>BUDGET</td>
+                <td colspan="3"></td>
+                <td>$10,000.00</td>
+                <td>$1,000</td>
+                <td>$300</td>
+                <td>$500</td>
+                <td>$500</td>
+                <td>$100</td>
+                <td>$150</td>
+                <td>$400</td>
+                <td>$250</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- SETTINGS -->
+        <div id="settingsSection">
+          <div class="settings-header">Settings</div>
+          <div class="settings-container">
+            <div class="settings-column">
+              <h3>Your Company</h3>
+              <ul>
+                <li>Account and Settings</li>
+                <li>Manage Users</li>
+                <li>Invoice Settings</li>
+              </ul>
+            </div>
+            <div class="settings-column">
+              <h3>Profile</h3>
+              <ul>
+                <li>User Information</li>
+                <li>Password and Security</li>
+                <li>Language and Timezone</li>
+              </ul>
+            </div>
+            <div class="settings-column">
+              <h3>Tools</h3>
+              <ul>
+                <li>Data Import/Export</li>
+                <li>Backup and Restore</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- PAC SECTION -->
+        <div id="pacSection">
+          <div class="tabs">
+            <button class="tab-button active" data-tab="projections">
+              1) Projections
+            </button>
+            <button class="tab-button" data-tab="generate">2) Generate</button>
+            <button class="tab-button" data-tab="pacView">3) P.A.C.</button>
+          </div>
+
+          <!-- Projections -->
+          <div id="projections" class="tab-content active">
+            <h2>1) Projections</h2>
+            <div class="projections-container">
+              <div class="projections-left">
+                <table id="projectionsTable">
+                  <thead>
+                    <tr>
+                      <th>Accounting Name</th>
+                      <th>Est. (Avg %)</th>
+                      <th>Projected (%)</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                  <tfoot>
+                    <tr>
+                      <td colspan="2"><strong>Total</strong></td>
+                      <td id="projectionsTotal">0%</td>
+                    </tr>
+                  </tfoot>
+                </table>
+                <button class="apply-btn" onclick="applyProjections()">
+                  Apply
+                </button>
+              </div>
+              <div class="projections-right">
+                <h3>Historical Data (Last 3 Months)</h3>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Month</th>
+                      <th>Base Food</th>
+                      <th>Employee Meal</th>
+                      <th>Condiment</th>
+                      <th>Total Waste</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Jan 2025</td>
+                      <td>12.1%</td>
+                      <td>3.0%</td>
+                      <td>1.0%</td>
+                      <td>2.2%</td>
+                    </tr>
+                    <tr>
+                      <td>Feb 2025</td>
+                      <td>12.3%</td>
+                      <td>2.9%</td>
+                      <td>1.2%</td>
+                      <td>2.4%</td>
+                    </tr>
+                    <tr>
+                      <td>Mar 2025</td>
+                      <td>13.0%</td>
+                      <td>3.1%</td>
+                      <td>1.1%</td>
+                      <td>2.1%</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Generate -->
+          <div id="generate" class="tab-content">
+            <h2>2) Generate</h2>
+            <p>Enter your updated expense inputs below and click “Submit.”</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Expense Name</th>
+                  <th>Input</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Product Net Sales $</td>
+                  <td><input type="text" placeholder="Enter $" /></td>
+                </tr>
+                <tr>
+                  <td>Cash +/- $</td>
+                  <td><input type="text" placeholder="Enter $" /></td>
+                </tr>
+                <tr>
+                  <td>Promo $</td>
+                  <td><input type="text" placeholder="Enter $" /></td>
+                </tr>
+                <tr>
+                  <td>Manager Meal $</td>
+                  <td><input type="text" placeholder="Enter $" /></td>
+                </tr>
+                <tr>
+                  <td>All Net Sales $</td>
+                  <td><input type="text" placeholder="Enter $" /></td>
+                </tr>
+                <tr>
+                  <td>Crew Labor %</td>
+                  <td><input type="text" placeholder="Enter %" /></td>
+                </tr>
+                <tr>
+                  <td>Total Labor %</td>
+                  <td><input type="text" placeholder="Enter %" /></td>
+                </tr>
+                <!-- etc. -->
+              </tbody>
+            </table>
+            <button class="submit-btn">Submit</button>
+          </div>
+
+          <!-- P.A.C. -->
+          <div id="pacView" class="tab-content">
+            <h2>3) P.A.C.</h2>
+            <label
+              for="pacMonthSelect"
+              style="display: block; margin-bottom: 0.5rem; font-weight: 600"
+            >
+              Select Month:
+            </label>
+            <select
+              id="pacMonthSelect"
+              style="
+                margin-bottom: 1rem;
+                padding: 0.3rem;
+                border-radius: 4px;
+                border: 1px solid #ccc;
+              "
+            >
+              <option>January 2025</option>
+              <option>February 2025</option>
+              <option>March 2025</option>
+              <option>April 2025</option>
+            </select>
+            <p>Breakdown of Actual vs. Projected for the following items:</p>
+            <table id="pacTable" class="pac-table">
+              <thead>
+                <tr>
+                  <th>Row Item</th>
+                  <th>Actual ($)</th>
+                  <th>Projected ($)</th>
+                  <th>Actual (%)</th>
+                  <th>Projected (%)</th>
+                  <th>Bucket</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- example rows from your earlier mockup -->
+              </tbody>
+              <tfoot>
+                <!-- total expenses row, P.A.C. total row -->
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="./js/data.js"></script>
+    <script src="./js/chart.js"></script>
+    <script src="./js/events.js"></script>
+    <script src="./js/main.js"></script>
+  </body>
+</html>
