@@ -1,6 +1,4 @@
-# My PAC Project
-
-A mockup-based skeleton project for P&L invoice tracking.
+# PAC-PRO
 
 ## Quick Start
 
