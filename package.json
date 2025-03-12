@@ -5,6 +5,7 @@
   "scripts": {
     "start": "live-server public"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "firebase": "^11.4.0"
+  }
 }
