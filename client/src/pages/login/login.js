@@ -7,6 +7,12 @@ import MicrosoftIcon from "@mui/icons-material/Microsoft";
 const Login = () => {
   const navigate = useNavigate(); // Hook for navigation
 
+  // Function to handle login
+  const handleLogin = () => {
+    localStorage.setItem("user", "true"); // ✅ Store user session
+    navigate("/navi/dashboard"); // ✅ Navigate to dashboard
+  };
+
   return (
     <Box
       sx={{
@@ -43,7 +49,7 @@ const Login = () => {
             "&:hover": { backgroundColor: "#333" },
             marginBottom: 2,
           }}
-          onClick={() => navigate("/dashboard")}
+          onClick={handleLogin} // ✅ Calls the function to store user & navigate
         >
           Login with Google
         </Button>
@@ -59,7 +65,7 @@ const Login = () => {
             padding: "12px",
             "&:hover": { backgroundColor: "#333" },
           }}
-          onClick={() => navigate("/dashboard")}
+          onClick={handleLogin} // ✅ Same function for Microsoft login
         >
           Login with Microsoft
         </Button>

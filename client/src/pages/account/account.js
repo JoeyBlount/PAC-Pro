@@ -27,7 +27,7 @@ const Account = () => {
  
     return (
     <Container sx={{ textAlign: "center", marginTop: 10 }}>
-      <Typography variant="h3">Account Information</Typography>
+       <h1 className="Header">Dashboard</h1>
       <div> 
         {userList.map((user) => (
             <div>
