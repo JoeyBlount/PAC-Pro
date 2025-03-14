@@ -1,7 +1,7 @@
 import React from "react";
 import { Container, Typography } from "@mui/material";
 import { useState, useEffect } from "react";
-import { db } from "../config/firebase-config";
+import { db } from "../../config/firebase-config";
 import { getDocs, collection } from 'firebase/firestore';
 
 const Dashboard = () => {
@@ -29,21 +29,9 @@ const Dashboard = () => {
    
   return (
     <Container sx={{ textAlign: "center", marginTop: 10 }}>
-      <Typography variant="h3">Welcome to the dashboard!</Typography>
+       <h1 className="Header">Welcome to the Dashboard!</h1>
 
-      {/* display info from database */}
-      <div> 
-            {userList.map((user) => (
-                <div>
-                <h2> Account Information </h2>
-                <p> Account: {user.fname} {user.lname}</p>
-                <p> Email: {user.email} </p>
-                <p> Role: {user.role} </p>
-                </div>
-            ))
-    
-            }
-          </div>
+     
     </Container>
           
    
