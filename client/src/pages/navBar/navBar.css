@@ -1,0 +1,58 @@
+/* Navigation Bar on the Left Side */
+.left-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 20px;
+    background-color: #052a3b;
+    position: fixed;
+    top: 8vh;
+    left: 0;
+    height: 100vh; /* Full height */
+    width: 250px; /* Sidebar width */
+    transition: transform 0.3s ease-in-out;
+}
+
+.left-nav button {
+    width: 100%;
+    padding: 15px 20px;
+    font-size: 20px;
+    color: #ffffff;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    margin-bottom: 10px;
+    text-align: left;
+}
+
+.left-nav button:hover {
+    background-color: #f01f53;
+}
+
+/* Hamburger Menu */
+.hamburger {
+    display: flex;
+    padding: 10px;
+    position: fixed;
+    top: 5px;
+    left: 5px;
+    z-index: 1000;
+   
+}
+
+.hamburger button {
+    border: none;
+    justify-content: center;
+    align-items: center;
+    font-size: 30px;
+    width: 50px;
+    height: 50px;
+    border-radius: 100%;
+    background-color: #535353;
+    color: #ffffff;
+    cursor: pointer;
+}
+
+.hamburger button:hover {
+    background-color: #4e99ca;
+}
