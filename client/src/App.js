@@ -7,30 +7,16 @@ import SubmitInvoice from "./pages/submitInvoice/submitInvoice";
 import Reports from "./pages/reports/reports"; 
 import Settings from "./pages/settings/settings"; 
 import PAC from "./pages/pac/pac"; 
+import SignUpScreen from "./pages/login/signupscreen";
 import { NavBar } from './pages/navBar/navBar';
+import PrivateRoute from "./routes/PrivateRoute"; // ✅ Import PrivateRoute
 
-// Private route component to check authentication
-function PrivateRoute({ element }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // Simulate checking user authentication
-    setTimeout(() => {
-      const loggedInUser = localStorage.getItem("user");
-      setUser(loggedInUser);
-      setLoading(false);
-    }, 1000);
-  }, []);
-
-  if (loading) return <div>Loading...</div>;
-
-  return user ? element : <Navigate to="/" replace />;
-}
 
 // Define the routing configuration
 const router = createBrowserRouter([
   { path: '/', element: <Login /> }, // Root login page
+  { path: 'signupscreen', element: <SignUpScreen /> },
   {
     path: '/navi',
     element: <PrivateRoute element={<NavBar />} />, // Protected NavBar with child routes
@@ -41,6 +27,7 @@ const router = createBrowserRouter([
       { path: 'reports', element: <Reports /> },
       { path: 'settings', element: <Settings /> },
       { path: 'pac', element: <PAC /> },
+
       { path: '*', element: <h1>404 - Page Not Found</h1> } // Catch-all for invalid child routes
     ]
   },
