@@ -10,30 +10,6 @@ const Account = () => {
   const [newPassword, setNewPassword] = useState("");
   const storesCollectionRef = collection(db, "stores");
 
-  useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("user"));
-    setCurrentUser(user);
-
-    const getStoreAssignments = async () => {
-      try {
-        const q = query(storesCollectionRef, where("userId", "==", user.uid));
-        const data = await getDocs(q);
-        const filteredData = data.docs.map((doc) => ({
-          ...doc.data(),
-          id: doc.id,
-        }));
-        setStoreAssignments(filteredData);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
-    if (user) {
-      getStoreAssignments();
-    }
-  }, []);
-
-
   const handleLogout = async () => {
     try {
       await signOut(auth);
