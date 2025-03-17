@@ -1,12 +1,17 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Container, Button, Box, Typography } from "@mui/material";
+import { Container, Button, Box, Typography, useColorScheme } from "@mui/material";
 import GoogleIcon from "@mui/icons-material/Google";
 import EmailIcon from '@mui/icons-material/Email';
 import MicrosoftIcon from "@mui/icons-material/Microsoft";
+<<<<<<< HEAD
 import { auth } from "../../config/firebaseConfigEmail";
 import { useMsal } from "@azure/msal-react"; // Import useMsal hook
 import { loginRequest } from "../../authconfig";
+=======
+import { auth, googleAuthProvider } from "../../config/firebaseConfigEmail";
+import { signInWithPopup } from "firebase/auth";
+>>>>>>> 495a25a72aa5ccb94960669e7f6e88cec78e3942
 
 const Login = () => {
   const navigate = useNavigate(); // Hook for navigation
@@ -32,9 +37,15 @@ const Login = () => {
   }
   
   // Function to handle login
-  const handleLogin = () => {
-    localStorage.setItem("user", "true"); // ✅ Store user session
-    navigate("/navi/dashboard"); // ✅ Navigate to dashboard
+  const handleGoogleLogin = async () => {
+    try {
+      console.log("attempting to sign in with google...");
+      const result = await signInWithPopup(auth, googleAuthProvider);
+      console.log("google login result: ", result);
+      navigate("/navi/dashboard");
+    } catch (error) {
+      console.error("Google Login Error:", error);
+    }
   };
 
   const handleLoginEmail = () => {
@@ -96,7 +107,7 @@ const Login = () => {
             "&:hover": { backgroundColor: "#333" },
             marginBottom: 2,
           }}
-          onClick={handleLogin} // ✅ Calls the function to store user & navigate
+          onClick={handleGoogleLogin} // ✅ Calls the function to store user & navigate
         >
           Login with Google
         </Button>
@@ -112,7 +123,11 @@ const Login = () => {
             padding: "12px",
             "&:hover": { backgroundColor: "#333" },
           }}
+<<<<<<< HEAD
           onClick={handleMicrosoftLogin} // ✅ Same function for Microsoft login
+=======
+          onClick={handleGoogleLogin} // ✅ Same function for Microsoft login
+>>>>>>> 495a25a72aa5ccb94960669e7f6e88cec78e3942
         >
           Login with Microsoft
         </Button>

@@ -31,9 +31,26 @@ export function NavBar() {
     return (
         <>
             <Outlet />
-            {/* Menu button always visible */}
-            <div className="hamburger">
-                <button className="NaviMenu" onClick={handleBar}><TiThMenu /></button>
+            {/* Top navigation bar */}
+            <div className="top-nav">
+                <div className="hamburger">
+                    <Button
+                        className="NaviMenu"
+                        onClick={handleBar}
+                        variant="outlined"
+                    >
+                        <TiThMenu />
+                    </Button>
+                </div>
+                <div className="account-section">
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={() => handleNavigation("account")}
+                    >
+                        Account
+                    </Button>
+                </div>
             </div>
 
             {/* Only show navigation when bar is visible */}
