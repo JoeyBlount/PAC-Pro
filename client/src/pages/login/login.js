@@ -4,14 +4,11 @@ import { Container, Button, Box, Typography, useColorScheme } from "@mui/materia
 import GoogleIcon from "@mui/icons-material/Google";
 import EmailIcon from '@mui/icons-material/Email';
 import MicrosoftIcon from "@mui/icons-material/Microsoft";
-<<<<<<< HEAD
-import { auth } from "../../config/firebaseConfigEmail";
+//import { auth } from "../../config/firebaseConfigEmail";
 import { useMsal } from "@azure/msal-react"; // Import useMsal hook
 import { loginRequest } from "../../authconfig";
-=======
 import { auth, googleAuthProvider } from "../../config/firebaseConfigEmail";
 import { signInWithPopup } from "firebase/auth";
->>>>>>> 495a25a72aa5ccb94960669e7f6e88cec78e3942
 
 const Login = () => {
   const navigate = useNavigate(); // Hook for navigation
@@ -123,11 +120,7 @@ const Login = () => {
             padding: "12px",
             "&:hover": { backgroundColor: "#333" },
           }}
-<<<<<<< HEAD
           onClick={handleMicrosoftLogin} // ✅ Same function for Microsoft login
-=======
-          onClick={handleGoogleLogin} // ✅ Same function for Microsoft login
->>>>>>> 495a25a72aa5ccb94960669e7f6e88cec78e3942
         >
           Login with Microsoft
         </Button>
