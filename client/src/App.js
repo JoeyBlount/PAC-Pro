@@ -13,6 +13,8 @@ import PrivateRoute from "./routes/PrivateRoute"; // ✅ Import PrivateRoute
 
 
 
+
+
 // Define the routing configuration
 const router = createBrowserRouter([
   { path: '/', element: <Login /> }, // Root login page
@@ -33,6 +35,7 @@ const router = createBrowserRouter([
   },
   { path: '*', element: <h1>404 - Page Not Found</h1> } // Catch-all for invalid routes
 ]);
+
 
 function App() {
   return (

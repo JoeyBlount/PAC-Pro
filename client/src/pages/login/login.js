@@ -5,9 +5,25 @@ import GoogleIcon from "@mui/icons-material/Google";
 import EmailIcon from '@mui/icons-material/Email';
 import MicrosoftIcon from "@mui/icons-material/Microsoft";
 import { auth } from "../../config/firebaseConfigEmail";
+import { useMsal } from "@azure/msal-react"; // Import useMsal hook
+import { loginRequest } from "../../authconfig";
+
 const Login = () => {
   const navigate = useNavigate(); // Hook for navigation
   const user = auth.currentUser;
+  const { instance } = useMsal(); // MSAL instance
+
+  const handleMicrosoftLogin = () => {
+    instance
+      .loginRedirect(loginRequest)
+      .then(() => {
+        // After successful login, store user session and navigate
+        localStorage.setItem("user", "true");
+        navigate("/navi/dashboard");
+      })
+      .catch((error) => console.error("Microsoft login error:", error));
+  };
+
   //for debugging to see if user is actually logged out or not
   if (user) {
     console.log(user.displayName)
@@ -23,7 +39,9 @@ const Login = () => {
 
   const handleLoginEmail = () => {
     navigate("/signupscreen")
-  }
+  };
+
+
 
   return (
     <Box
@@ -94,7 +112,7 @@ const Login = () => {
             padding: "12px",
             "&:hover": { backgroundColor: "#333" },
           }}
-          onClick={handleLogin} // ✅ Same function for Microsoft login
+          onClick={handleMicrosoftLogin} // ✅ Same function for Microsoft login
         >
           Login with Microsoft
         </Button>
