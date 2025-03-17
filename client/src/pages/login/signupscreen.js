@@ -35,6 +35,7 @@ const SignUpScreen = () => {
         // Log In
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         console.log("User Logged In:", userCredential.user);
+        localStorage.setItem("user", JSON.stringify(userCredential.user));
         navigate("/navi/dashboard");
       }
 
