@@ -5,29 +5,18 @@ import { getDocs, collection, query, where } from 'firebase/firestore';
 import { signOut, updatePassword } from "firebase/auth";
 
 const Account = () => {
-  const [userList, setUserList] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   const [storeAssignments, setStoreAssignments] = useState([]);
   const [newPassword, setNewPassword] = useState("");
-  const usersCollectionRef = collection(db, "users");
   const storesCollectionRef = collection(db, "stores");
 
   useEffect(() => {
-    const getUserList = async () => {
-      try {
-        const data = await getDocs(usersCollectionRef);
-        const filteredData = data.docs.map((doc) => ({
-          ...doc.data(),
-          id: doc.id,
-        }));
-        setUserList(filteredData);
-      } catch (err) {
-        console.error(err);
-      }
-    };
+    const user = JSON.parse(localStorage.getItem("user"));
+    setCurrentUser(user);
 
     const getStoreAssignments = async () => {
       try {
-        const q = query(storesCollectionRef, where("userId", "==", auth.currentUser.uid));
+        const q = query(storesCollectionRef, where("userId", "==", user.uid));
         const data = await getDocs(q);
         const filteredData = data.docs.map((doc) => ({
           ...doc.data(),
@@ -39,9 +28,11 @@ const Account = () => {
       }
     };
 
-    getUserList();
-    getStoreAssignments();
+    if (user) {
+      getStoreAssignments();
+    }
   }, []);
+
 
   const handleLogout = async () => {
     try {
@@ -65,15 +56,12 @@ const Account = () => {
   return (
     <Container sx={{ textAlign: "center", marginTop: 10 }}>
       <h1 className="Header">Account info</h1>
-      <div>
-        {userList.map((user) => (
-          <div key={user.id}>
-            <p>Account: {user.fname} {user.lname}</p>
-            <p>Email: {user.email}</p>
-            <p>Role: {user.role}</p>
-          </div>
-        ))}
-      </div>
+      {currentUser && (
+        <div>
+          <p>Account: {currentUser.displayName}</p>
+          <p>Email: {currentUser.email}</p>
+        </div>
+      )}
       <Box mt={4}>
         <Button variant="contained" color="primary" onClick={handleLogout}>
           Log Out

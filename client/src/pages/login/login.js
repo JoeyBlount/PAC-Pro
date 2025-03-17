@@ -20,7 +20,7 @@ const Login = () => {
       .loginRedirect(loginRequest)
       .then(() => {
         // After successful login, store user session and navigate
-        localStorage.setItem("user", "true");
+        localStorage.setItem("user", JSON.stringify(auth.currentUser));
         navigate("/navi/dashboard");
       })
       .catch((error) => console.error("Microsoft login error:", error));
@@ -39,6 +39,7 @@ const Login = () => {
       console.log("attempting to sign in with google...");
       const result = await signInWithPopup(auth, googleAuthProvider);
       console.log("google login result: ", result);
+      localStorage.setItem("user", JSON.stringify(result.user));
       navigate("/navi/dashboard");
     } catch (error) {
       console.error("Google Login Error:", error);
