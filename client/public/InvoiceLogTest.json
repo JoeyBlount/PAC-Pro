@@ -1,0 +1,218 @@
+{
+  "location": "54321",
+  "invoices": [
+    {
+      "dateSubmitted": "03/01/2025",
+      "invoiceDate": "03/01/2025",
+      "companyName": "Company A",
+      "invoiceNumber": "1001",
+      "FOOD": [1500]
+    },
+    {
+      "dateSubmitted": "03/02/2025",
+      "invoiceDate": "03/02/2025",
+      "companyName": "Company B",
+      "invoiceNumber": "1002",
+      "CONDIMENT": [400]
+    },
+    {
+      "dateSubmitted": "03/03/2025",
+      "invoiceDate": "03/03/2025",
+      "companyName": "Company C",
+      "invoiceNumber": "1003",
+      "PAPER": [250]
+    },
+    {
+      "dateSubmitted": "03/04/2025",
+      "invoiceDate": "03/04/2025",
+      "companyName": "Company D",
+      "invoiceNumber": "1004",
+      "NON PROD": [8000]
+    },
+    {
+      "dateSubmitted": "03/05/2025",
+      "invoiceDate": "03/05/2025",
+      "companyName": "Company E",
+      "invoiceNumber": "1005",
+      "TRAVEL": [1000]
+    },
+    {
+      "dateSubmitted": "03/06/2025",
+      "invoiceDate": "03/06/2025",
+      "companyName": "Company F",
+      "invoiceNumber": "1006",
+      "ADV-OTHER": [3000]
+    },
+    {
+      "dateSubmitted": "03/07/2025",
+      "invoiceDate": "03/07/2025",
+      "companyName": "Company G",
+      "invoiceNumber": "1007",
+      "PROMO": [800]
+    },
+    {
+      "dateSubmitted": "03/08/2025",
+      "invoiceDate": "03/08/2025",
+      "companyName": "Company H",
+      "invoiceNumber": "1008",
+      "OUTSIDE SVC": [4500]
+    },
+    {
+      "dateSubmitted": "03/09/2025",
+      "invoiceDate": "03/09/2025",
+      "companyName": "Company I",
+      "invoiceNumber": "1009",
+      "LINEN": [1200]
+    },
+    {
+      "dateSubmitted": "03/10/2025",
+      "invoiceDate": "03/10/2025",
+      "companyName": "Company J",
+      "invoiceNumber": "1010",
+      "OP. SUPPLY": [2500]
+    },
+    {
+      "dateSubmitted": "03/11/2025",
+      "invoiceDate": "03/11/2025",
+      "companyName": "Company K",
+      "invoiceNumber": "1011",
+      "M+R": [1900]
+    },
+    {
+      "dateSubmitted": "03/12/2025",
+      "invoiceDate": "03/12/2025",
+      "companyName": "Company L",
+      "invoiceNumber": "1012",
+      "SML EQUIP": [4000]
+    },
+    {
+      "dateSubmitted": "03/13/2025",
+      "invoiceDate": "03/13/2025",
+      "companyName": "Company M",
+      "invoiceNumber": "1013",
+      "UTILITIES": [2200]
+    },
+    {
+      "dateSubmitted": "03/14/2025",
+      "invoiceDate": "03/14/2025",
+      "companyName": "Company N",
+      "invoiceNumber": "1014",
+      "OFFICE": [900]
+    },
+    {
+      "dateSubmitted": "03/15/2025",
+      "invoiceDate": "03/15/2025",
+      "companyName": "Company O",
+      "invoiceNumber": "1015",
+      "TRAINING": [1600]
+    },
+    {
+      "dateSubmitted": "03/16/2025",
+      "invoiceDate": "03/16/2025",
+      "companyName": "Company P",
+      "invoiceNumber": "1016",
+      "CR": [850]
+    },
+    {
+      "dateSubmitted": "03/17/2025",
+      "invoiceDate": "03/17/2025",
+      "companyName": "Company Q",
+      "invoiceNumber": "1017",
+      "FOOD": [1700]
+    },
+    {
+      "dateSubmitted": "03/18/2025",
+      "invoiceDate": "03/18/2025",
+      "companyName": "Company R",
+      "invoiceNumber": "1018",
+      "CONDIMENT": [500]
+    },
+    {
+      "dateSubmitted": "03/19/2025",
+      "invoiceDate": "03/19/2025",
+      "companyName": "Company S",
+      "invoiceNumber": "1019",
+      "PAPER": [300]
+    },
+    {
+      "dateSubmitted": "03/20/2025",
+      "invoiceDate": "03/20/2025",
+      "companyName": "Company T",
+      "invoiceNumber": "1020",
+      "NON PROD": [7500]
+    },
+    {
+      "dateSubmitted": "03/21/2025",
+      "invoiceDate": "03/21/2025",
+      "companyName": "Company U",
+      "invoiceNumber": "1021",
+      "TRAVEL": [1100]
+    },
+    {
+      "dateSubmitted": "03/22/2025",
+      "invoiceDate": "03/22/2025",
+      "companyName": "Company V",
+      "invoiceNumber": "1022",
+      "ADV-OTHER": [3200]
+    },
+    {
+      "dateSubmitted": "03/23/2025",
+      "invoiceDate": "03/23/2025",
+      "companyName": "Company W",
+      "invoiceNumber": "1023",
+      "PROMO": [1000]
+    },
+    {
+      "dateSubmitted": "03/24/2025",
+      "invoiceDate": "03/24/2025",
+      "companyName": "Company X",
+      "invoiceNumber": "1024",
+      "OUTSIDE SVC": [4000]
+    },
+    {
+      "dateSubmitted": "03/25/2025",
+      "invoiceDate": "03/25/2025",
+      "companyName": "Company Y",
+      "invoiceNumber": "1025",
+      "LINEN": [1000]
+    }
+  ],
+  "total": {
+    "invoiceNumber": "TOTAL",
+    "FOOD": 3200,
+    "CONDIMENT": 900,
+    "PAPER": 550,
+    "NON PROD": 15500,
+    "TRAVEL": 2100,
+    "ADV-OTHER": 6200,
+    "PROMO": 1800,
+    "OUTSIDE SVC": 8500,
+    "LINEN": 2200,
+    "OP. SUPPLY": 2500,
+    "M+R": 1900,
+    "SML EQUIP": 4000,
+    "UTILITIES": 2200,
+    "OFFICE": 900,
+    "TRAINING": 1600,
+    "CR": 850
+  },
+  "budget": {
+    "invoiceNumber": "BUDGET",
+    "FOOD": 5000,
+    "CONDIMENT": 1000,
+    "PAPER": 1000,
+    "NON PROD": 10000,
+    "TRAVEL": 3000,
+    "ADV-OTHER": 5000,
+    "PROMO": 2000,
+    "OUTSIDE SVC": 6000,
+    "LINEN": 1500,
+    "OP. SUPPLY": 3000,
+    "M+R": 2500,
+    "SML EQUIP": 4500,
+    "UTILITIES": 3000,
+    "OFFICE": 1500,
+    "TRAINING": 2000,
+    "CR": 1000
+  }
+}
