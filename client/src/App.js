@@ -10,13 +10,14 @@ import PAC from "./pages/pac/pac";
 import SignUpScreen from "./pages/login/signupscreen";
 import { NavBar } from './pages/navBar/navBar';
 import PrivateRoute from "./routes/PrivateRoute"; // ✅ Import PrivateRoute
-
-
+import Invite from "./pages/invite/invite"
+import NotAllowed from './pages/notAllowed/notAllowed';
 
 // Define the routing configuration
 const router = createBrowserRouter([
   { path: '/', element: <Login /> }, // Root login page
-  { path: 'signupscreen', element: <SignUpScreen /> },
+  { path: 'invite', element: <Invite /> },
+  { path: 'not-allowed', element: <NotAllowed /> },
   {
     path: '/navi',
     element: <PrivateRoute element={<NavBar />} />, // Protected NavBar with child routes
