@@ -37,7 +37,6 @@
     top: 5px;
     left: 5px;
     z-index: 1000;
-   
 }
 
 .hamburger button {
@@ -55,4 +54,13 @@
 
 .hamburger button:hover {
     background-color: #4e99ca;
+}
+
+.account-section {
+    display: flex;
+    padding: 10px;
+    position: fixed;
+    top: 5px;
+    right: 5px;
+    z-index: 1000;
 }

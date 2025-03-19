@@ -1,10 +1,12 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Container, Button, Box, Typography } from "@mui/material";
+import { Container, Button, Box, Typography, useColorScheme } from "@mui/material";
 import GoogleIcon from "@mui/icons-material/Google";
 import EmailIcon from '@mui/icons-material/Email';
 import MicrosoftIcon from "@mui/icons-material/Microsoft";
-import { auth } from "../../config/firebaseConfigEmail";
+import { auth, googleAuthProvider } from "../../config/firebaseConfigEmail";
+import { signInWithPopup } from "firebase/auth";
+
 const Login = () => {
   const navigate = useNavigate(); // Hook for navigation
   const user = auth.currentUser;
@@ -16,9 +18,15 @@ const Login = () => {
   }
   
   // Function to handle login
-  const handleLogin = () => {
-    localStorage.setItem("user", "true"); // ✅ Store user session
-    navigate("/navi/dashboard"); // ✅ Navigate to dashboard
+  const handleGoogleLogin = async () => {
+    try {
+      console.log("attempting to sign in with google...");
+      const result = await signInWithPopup(auth, googleAuthProvider);
+      console.log("google login result: ", result);
+      navigate("/navi/dashboard");
+    } catch (error) {
+      console.error("Google Login Error:", error);
+    }
   };
 
   const handleLoginEmail = () => {
@@ -78,7 +86,7 @@ const Login = () => {
             "&:hover": { backgroundColor: "#333" },
             marginBottom: 2,
           }}
-          onClick={handleLogin} // ✅ Calls the function to store user & navigate
+          onClick={handleGoogleLogin} // ✅ Calls the function to store user & navigate
         >
           Login with Google
         </Button>
@@ -94,7 +102,7 @@ const Login = () => {
             padding: "12px",
             "&:hover": { backgroundColor: "#333" },
           }}
-          onClick={handleLogin} // ✅ Same function for Microsoft login
+          onClick={handleGoogleLogin} // ✅ Same function for Microsoft login
         >
           Login with Microsoft
         </Button>
