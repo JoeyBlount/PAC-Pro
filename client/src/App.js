@@ -11,10 +11,10 @@ import SignUpScreen from "./pages/login/signupscreen";
 import Account from "./pages/account/account";
 import { NavBar } from './pages/navBar/navBar';
 import PrivateRoute from "./routes/PrivateRoute"; // ✅ Import PrivateRoute
-
-
-
-
+import UserManagement from "./pages/settings/UserManagement";
+import StoreManagement from "./pages/settings/StoreManagement";
+import Notifications from "./pages/settings/Notifications";
+import InvoiceSettings from "./pages/settings/InvoiceSettings";
 
 // Define the routing configuration
 const router = createBrowserRouter([
@@ -28,16 +28,33 @@ const router = createBrowserRouter([
       { path: 'invoiceLogs', element: <InvoiceLogs /> },
       { path: 'submitInvoice', element: <SubmitInvoice /> },
       { path: 'reports', element: <Reports /> },
-      { path: 'settings', element: <Settings /> },
+      { path: 'settings', element: <Settings /> }, // Main Settings Page
       { path: 'pac', element: <PAC /> },
       { path: 'account', element: <Account /> },
+
+      // ✅ Add individual settings pages as sub-routes
+      {
+        path: 'settings/user-management',
+        element: <UserManagement />,
+      },
+      {
+        path: 'settings/store-management',
+        element: <StoreManagement />,
+      },
+      {
+        path: 'settings/notifications',
+        element: <Notifications />,
+      },
+      {
+        path: 'settings/invoice-settings',
+        element: <InvoiceSettings />,
+      },
 
       { path: '*', element: <h1>404 - Page Not Found</h1> } // Catch-all for invalid child routes
     ]
   },
   { path: '*', element: <h1>404 - Page Not Found</h1> } // Catch-all for invalid routes
 ]);
-
 
 function App() {
   return (
