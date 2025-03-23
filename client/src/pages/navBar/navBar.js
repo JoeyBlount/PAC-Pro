@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { TiThMenu } from "react-icons/ti";
 import './navBar.css';
-import { auth } from "../../config/firebaseConfigEmail";
+import { auth } from "../../config/firebase";
 import { signOut } from "firebase/auth";
 import { Button } from '@mui/material';
 
