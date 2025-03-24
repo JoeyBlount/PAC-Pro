@@ -1,13 +1,27 @@
-.topBar {
+.topNavBar {
     background-color: #052a3b;
-    position: absolute;
+    position: fixed;
     top: 0;
     width: 100%;
     height: 40px;
 }
 
+.leftNavBar {
+    position: fixed;
+    left: 0;
+    top: 40px;
+    width: auto;
+    height: calc(100% - 40px);
+}
+
 .menuButton {
     padding-left: 10px;
+}
+
+.softwareName {
+    text-align: center;
+    vertical-align: middle;
+    color: #ffffff;
 }
 
 .logoutButton {
@@ -16,13 +30,4 @@
 
 .accountButton {
     float: right;
-}
-
-.leftBar {
-    background-color: #052a3b;
-    position: absolute;
-    left: 0;
-    top: 40px;
-    width: 0%;
-    height: 100%;
 }

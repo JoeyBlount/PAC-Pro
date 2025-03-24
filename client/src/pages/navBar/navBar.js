@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate, Outlet } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import './navBar.css';
 import { auth } from "../../config/firebaseConfigEmail";
 import { signOut } from "firebase/auth";
@@ -38,22 +38,19 @@ export function NavBar() {
 
     return (
         <>
-        <Outlet />
-        <div className = "topBar">
+        <div className = "topNavBar">
             <span className = "menuButton">
                 <Button variant = "text" startIcon={<MenuOpen />} onClick={toggleDrawer(true)}>
                 Menu
                 </Button>
             </span>
 
-            <span className = 'homeButton'>
-                <IconButton aria-label='Home' color="primary" onClick={() => handleNav('dashboard')}>
-                    <Home />
-                </IconButton>
+            <span className = "softwareName">
+                PAC Pro
             </span>
-            
+
             <span className = "logoutButton">
-                <IconButton aria-label= 'Logout' color="primary" onClick={() => handleSignOut}>
+                <IconButton aria-label= 'Logout' color="primary" onClick={() => handleSignOut()}>
                     <Logout />
                 </IconButton>
             </span>
@@ -70,9 +67,14 @@ export function NavBar() {
             </span>
         </div>
 
-        <div className = "leftBar">
+        <div className = "leftNavBar">
             {/* Save for Future */}
             <ButtonGroup orientation='vertical' aria-label="Quick navigation buttons" variant='text'>
+                <Tooltip title='Home' placement='right'>
+                    <IconButton aria-label='Home' color='primary' onClick={() => handleNav("dashboard")}>
+                        <Home />
+                    </IconButton>
+                </Tooltip>
                 <Tooltip title='Invoice Logs' placement='right'>
                     <IconButton aria-label='Invoice Logs' color='primary' onClick={() => handleNav("invoiceLogs")}>
                         <ReceiptLong />
@@ -129,7 +131,7 @@ export function NavBar() {
                         <ListItemText primary="Settings" />
                     </ListItemButton>
 
-                    <ListItemButton button onClick={() => handleSignOut}>
+                    <ListItemButton button onClick={() => handleSignOut()}>
                         <ListItemIcon> <Logout /> </ListItemIcon>
                         <ListItemText primary="Logout" />
                     </ListItemButton>
