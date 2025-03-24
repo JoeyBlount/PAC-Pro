@@ -3,6 +3,9 @@ import { Container } from "@mui/material";
 import './pac.css';
 
 const PAC = () => {
+  React.useEffect(() => {
+    document.title = "PAC Pro - PAC";
+  }, []); // Used to change the title.
    
   return (
     <Container sx={{ textAlign: "center", marginTop: 10 }}>
