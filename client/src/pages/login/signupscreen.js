@@ -4,6 +4,10 @@ import { Container, Button, Box, Typography, TextField } from "@mui/material";
 import { auth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, db } from "../../config/firebaseConfigEmail";
 import { doc, setDoc } from "firebase/firestore";
 const SignUpScreen = () => {
+  React.useEffect(() => {
+    document.title = "PAC Pro - Sign Up";
+  }, []); // Used to change the title.
+
   const navigate = useNavigate();
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [name, setName] = useState("");
