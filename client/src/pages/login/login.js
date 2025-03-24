@@ -11,6 +11,10 @@ import { auth, googleAuthProvider } from "../../config/firebaseConfigEmail";
 import { signInWithPopup } from "firebase/auth";
 
 const Login = () => {
+  React.useEffect(() => {
+    document.title = "PAC Pro - Login";
+  }, []); // Used to change the title.
+
   const navigate = useNavigate(); // Hook for navigation
   const user = auth.currentUser;
   const { instance } = useMsal(); // MSAL instance

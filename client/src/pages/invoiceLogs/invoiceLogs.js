@@ -3,6 +3,10 @@ import { Container } from "@mui/material";
 import "./invoiceLogs.css";
 
 const InvoiceLogs = () => {
+  React.useEffect(() => {
+    document.title = "PAC Pro - Invoice Logs";
+  }, []); // Used to change the title.
+
   const [data, setData] = useState(null);
   const [activeSearchColumn, setActiveSearchColumn] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
