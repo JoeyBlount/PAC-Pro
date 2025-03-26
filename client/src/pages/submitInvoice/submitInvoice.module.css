@@ -1,0 +1,98 @@
+/* Page Container */
+.pageContainer {
+  background-color: #f7f7f7;
+  min-height: 100vh;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+/* Top Bar: "Submit Invoice" */
+.topBar {
+  background-color: #000; /* Black background */
+  color: #fff;           /* White text */
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  padding: 15px;
+  margin-bottom: 20px;
+  border-radius: 4px;
+}
+
+/* Upload Invoice Button (Red) */
+.uploadBar {
+  display: block;
+  width: 100%;
+  max-width: 400px;    /* Optional: limit button width */
+  margin: 0 auto 20px; /* Center button with margin below */
+  background-color: #f44336; /* Red background */
+  color: #fff;               /* White text */
+  font-size: 16px;
+  font-weight: bold;
+  padding: 10px;
+  border: none;
+  border-radius: 4px;
+  text-align: center;
+  cursor: pointer;
+}
+
+/* Form Container (White box) */
+.formContainer {
+  background-color: #fff;
+  max-width: 600px; /* Adjust for desired form width */
+  margin: 0 auto;
+  padding: 20px;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* Each Form Group (label + input) */
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 15px;
+}
+
+.formGroup label {
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+/* Invoice Date, Category, Amount in a row */
+.inputRow {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+/* Inputs and Selects */
+input,
+select {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  flex: 1;
+}
+
+/* "+ Add Another" Button */
+.addAnotherBtn {
+  display: inline-block;
+  background-color: #e0e0e0;
+  color: #000;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 15px;
+}
+
+/* "Submit Invoice" Button */
+.submitBtn {
+  display: inline-block;
+  background-color: #0078d7;
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
