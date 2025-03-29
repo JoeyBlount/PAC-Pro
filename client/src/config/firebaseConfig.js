@@ -4,18 +4,18 @@ import { getFirestore } from "firebase/firestore";
 
 // Firebase config
 const firebaseConfig = {
-  apiKey: "AIzaSyBS4t-iWyrff2L23AZYoAnxpPGliSG5PyU",
-  authDomain: "pacpro-46fe6.firebaseapp.com",
-  projectId: "pacpro-46fe6",
-  storageBucket: "pacpro-46fe6.firebasestorage.app",
-  messagingSenderId: "441891157124",
-  appId: "1:441891157124:web:08589bcdfb6bd0cbc03ed1",
-  measurementId: "G-6RPBEL1S0S",
+  apiKey: "AIzaSyDavRQ2gT3tkyTP4Ll6PBEIq09HLFoIx08",
+  authDomain: "pacpro-ef499.firebaseapp.com",
+  projectId: "pacpro-ef499",
+  storageBucket: "pacpro-ef499.firebasestorage.app",
+  messagingSenderId: "506342087804",
+  appId: "1:506342087804:web:b5b88d3661f63a66f83df9"
 };
+
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const googleAuthProvider = new GoogleAuthProvider();
-const db = getFirestore(app)
+const db = getFirestore(app);
 export { auth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, db, googleAuthProvider };

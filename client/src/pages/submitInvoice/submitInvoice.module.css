@@ -42,10 +42,10 @@
   margin: 0 auto;
   padding: 20px;
   border-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-/* Each Form Group (label + input) */
+/* Each Form Group (label + input/select) */
 .formGroup {
   display: flex;
   flex-direction: column;
@@ -57,7 +57,7 @@
   margin-bottom: 5px;
 }
 
-/* Invoice Date, Category, Amount in a row */
+/* Row for Category & Amount */
 .inputRow {
   display: flex;
   gap: 10px;

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Container, Button, Box, Typography, TextField } from "@mui/material";
-import { auth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, db } from "../../config/firebaseConfigEmail";
+import { auth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, db } from "../../config/firebaseConfig";
 import { doc, setDoc } from "firebase/firestore";
 const SignUpScreen = () => {
   React.useEffect(() => {
