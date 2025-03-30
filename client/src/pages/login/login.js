@@ -19,15 +19,14 @@ const Login = () => {
   const user = auth.currentUser;
   const { instance } = useMsal(); // MSAL instance
 
-  const handleMicrosoftLogin = () => {
-    instance
-      .loginRedirect(loginRequest)
-      .then(() => {
-        // After successful login, store user session and navigate
-        localStorage.setItem("user", JSON.stringify(auth.currentUser));
-        navigate("/navi/dashboard");
-      })
-      .catch((error) => console.error("Microsoft login error:", error));
+  const handleMicrosoftLogin = async () => {
+    try {
+      const response = await instance.loginPopup(loginRequest);
+      localStorage.setItem("user", JSON.stringify(response.account));
+      navigate("/navi/dashboard");
+    } catch (error) {
+      console.error("Microsoft login error:", error);
+    }
   };
 
   //for debugging to see if user is actually logged out or not
