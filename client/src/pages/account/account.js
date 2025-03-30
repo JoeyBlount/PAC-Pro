@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Container, Typography, Button, TextField, Box } from "@mui/material";
-import { db, auth } from "../../config/firebase-config";
+import { db, auth } from "../../config/firebaseConfigEmail";
 import { getDocs, collection, query, where } from 'firebase/firestore';
 import { signOut, updatePassword } from "firebase/auth";
 

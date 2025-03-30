@@ -8,7 +8,6 @@ const InvoiceLogs = () => {
   }, []); // Used to change the title.
 
   const [data, setData] = useState(null);
-  const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [activeSearchColumn, setActiveSearchColumn] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState({
@@ -43,39 +42,6 @@ const InvoiceLogs = () => {
       .then((json) => setData(json))
       .catch((error) => console.error("Error loading data:", error));
   }, []);
-
-
-  const handleInvoiceSelect = (invoice) => {
-    if (selectedInvoice?.invoiceNumber === invoice.invoiceNumber) {
-      setSelectedInvoice(null);
-    } else {
-      setSelectedInvoice(invoice);
-    }
-  };
-
-  const handlePrint = () => {
-    if (!selectedInvoice) {
-      alert("Please select an invoice to print.");
-      return;
-    }
-    
-    const printWindow = window.open("", "_blank");
-    printWindow.document.write(
-      `<html><head><title>Invoice ${selectedInvoice.invoiceNumber}</title></head><body>`
-    );
-    printWindow.document.write(
-      `<h2>Invoice Number: ${selectedInvoice.invoiceNumber}</h2>`
-    );
-    printWindow.document.write(`<p>Location: ${data.location}</p>`);
-    printWindow.document.write(`<p>Company Name: ${selectedInvoice.companyName}</p>`);
-    printWindow.document.write(`<p>Date Submitted: ${selectedInvoice.dateSubmitted}</p>`);
-    printWindow.document.write(`<p>Invoice Date: ${selectedInvoice.invoiceDate}</p>`);
-    printWindow.document.write(`<p>Amount: ${selectedInvoice.totalAmount}</p>`);
-    printWindow.document.write("</body></html>");
-    printWindow.document.close();
-    printWindow.print();
-    printWindow.close();
-  };
 
   const handleSort = (column) => {
     let direction = "asc";
@@ -123,7 +89,6 @@ const InvoiceLogs = () => {
   const renderHeader = () => {
     if (!data) return null;
     const fixedHeaders = [
-      "Select",
       "Location",
       "Date Submitted",
       "Invoice Date",
@@ -190,13 +155,6 @@ const InvoiceLogs = () => {
     return sortedInvoices.map((row, i) => {
       const fixedCells = (
         <>
-          <td>
-            <input
-              type="checkbox"
-              checked={selectedInvoice?.invoiceNumber === row.invoiceNumber}
-              onChange={() => handleInvoiceSelect(row)}
-            />
-          </td>
           <td className="tableCell">{loc}</td>
           <td className="tableCell">{row.dateSubmitted}</td>
           <td className="tableCell">{row.invoiceDate}</td>
@@ -212,9 +170,9 @@ const InvoiceLogs = () => {
             {sum === 0
               ? ""
               : sum.toLocaleString("en-US", {
-                style: "currency",
-                currency: "USD",
-              })}
+                  style: "currency",
+                  currency: "USD",
+                })}
           </td>
         );
       });
@@ -372,8 +330,10 @@ const InvoiceLogs = () => {
                 </option>
               ))}
             </select>
-            <button onClick={handlePrint}>Print Selected Invoice</button>
           </div>
+          <button className="printButton" onClick={() => window.print()}>
+            Print
+          </button>
         </div>
       </div>
       {activeSearchColumn && (

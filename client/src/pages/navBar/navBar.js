@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import './navBar.css';
-import { auth } from "../../config/firebase-config";
+import { auth } from "../../config/firebaseConfigEmail";
 import { signOut } from "firebase/auth";
 import { Button, Drawer, ListItemText, Box, List, ListItemButton, ListItemIcon, IconButton, ButtonGroup, Tooltip, Menu, MenuItem } from '@mui/material';
 import { Home, Logout, Settings, Analytics, UploadFile, ReceiptLong, Summarize, MenuOpen, AccountCircleRounded } from '@mui/icons-material'
