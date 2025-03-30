@@ -1,143 +1,264 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import './navBar.css';
+import React from "react";
+import { useNavigate } from "react-router-dom";
+import "./navBar.css";
 import { auth } from "../../config/firebase-config";
 import { signOut } from "firebase/auth";
-import { Button, Drawer, ListItemText, Box, List, ListItemButton, ListItemIcon, IconButton, ButtonGroup, Tooltip, Menu, MenuItem } from '@mui/material';
-import { Home, Logout, Settings, Analytics, UploadFile, ReceiptLong, Summarize, MenuOpen, AccountCircleRounded } from '@mui/icons-material'
+import {
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  IconButton,
+  Button,
+  Tooltip,
+  Menu,
+  MenuItem as MenuOption,
+} from "@mui/material";
+import {
+  Home,
+  ReceiptLong,
+  UploadFile,
+  Summarize,
+  Analytics,
+  Settings,
+  Logout,
+  AccountCircle,
+  Storefront,
+  Menu as MenuIcon,
+  Close as CloseIcon,
+  Dashboard,
+} from "@mui/icons-material";
 
 export function NavBar() {
-    const navigate = useNavigate();
+  const navigate = useNavigate();
 
-    function handleNav(path) {
-        navigate('/navi/' + path);
+  // Collapsible side nav state
+  const [sideNavOpen, setSideNavOpen] = React.useState(false);
+
+  // Add ref for the side nav
+  const sideNavRef = React.useRef(null);
+
+  // Add click outside handler
+  React.useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        sideNavRef.current &&
+        !sideNavRef.current.contains(event.target) &&
+        !event.target.closest(".hamburgerButton")
+      ) {
+        setSideNavOpen(false);
+      }
     }
 
-    async function handleSignOut() {
-        try {
-            await signOut(auth);
-            localStorage.removeItem("user");
-            navigate('/');
-        } catch (e) {
-            console.error("An error has occured while signing out: ", e);
-        }
+    // Add event listener
+    document.addEventListener("mousedown", handleClickOutside);
+
+    // Cleanup
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Account menu anchor
+  const [anchorEl, setAnchorEl] = React.useState(null);
+  const openMenu = Boolean(anchorEl);
+
+  const handleAccountMenuClick = (event) => setAnchorEl(event.currentTarget);
+  const handleAccountMenuClose = () => setAnchorEl(null);
+
+  // Demo user info
+  const firstName = "John";
+
+  // Store selection state and sample data
+  const [store, setStore] = React.useState("");
+  const stores = [
+    { id: "store1", number: "001", subName: "Sunrise" },
+    { id: "store2", number: "002", subName: "Douglas Mcdonalds" },
+  ];
+
+  const handleStoreChange = (event) => {
+    setStore(event.target.value);
+    // TODO: Refresh data accordingly
+  };
+
+  const getSelectedStoreText = () => {
+    const selectedStore = stores.find((s) => s.id === store);
+    return selectedStore
+      ? `${selectedStore.number} - ${selectedStore.subName}`
+      : "Select Store";
+  };
+
+  // Navigate helper
+  function handleNav(path) {
+    navigate("/navi/" + path);
+  }
+
+  // Sign out logic
+  async function handleSignOut() {
+    try {
+      await signOut(auth);
+      localStorage.removeItem("user");
+      navigate("/");
+    } catch (e) {
+      console.error("An error has occurred while signing out: ", e);
     }
+  }
 
-    const [open, setOpen] = React.useState(false);
+  return (
+    <>
+      {/* TOP NAV BAR */}
+      <div className="topNavBar">
+        {/* Left side: Hamburger icon & store selector */}
+        <div className="topNavLeft">
+          {/* Hamburger icon: toggles side nav open/close */}
+          <IconButton
+            className="hamburgerButton"
+            onClick={() => setSideNavOpen(!sideNavOpen)}
+          >
+            {sideNavOpen ? (
+              <CloseIcon sx={{ fontSize: 28 }} />
+            ) : (
+              <MenuIcon sx={{ fontSize: 28 }} />
+            )}
+          </IconButton>
 
-    const toggleDrawer = (newOpen) => () => {
-        setOpen(newOpen);
-    }
+          {/* Extra spacing is now added by the hamburgerButton margin-right */}
 
-    const [anchorEl, setAnchorE1] = React.useState(null);
-
-    const openMenu = Boolean(anchorEl);
-
-    const handleMenuClick = (event) => { setAnchorE1(event.currentTarget); };
-    const handleMenuClose = () => { setAnchorE1(null); };
-
-    return (
-        <>
-        <div className = "topNavBar">
-            <span className = "menuButton">
-                <Button variant = "text" startIcon={<MenuOpen />} onClick={toggleDrawer(true)}>
-                Menu
-                </Button>
-            </span>
-
-            <span className = "softwareName">
-                PAC Pro
-            </span>
-
-            <span className = "logoutButton">
-                <IconButton aria-label= 'Logout' color="primary" onClick={() => handleSignOut()}>
-                    <Logout />
-                </IconButton>
-            </span>
-
-            <span className ="accountButton">
-                <IconButton aria-label='Account' color="primary" onClick={handleMenuClick}>
-                    <AccountCircleRounded />
-                </IconButton>
-                <Menu id="avatar-menu" anchorEl={anchorEl} open={openMenu} onClose={handleMenuClose} anchorOrigin={{vertical: 'bottom',  horizontal: 'center'}} transformOrigin={{vertical: 'top', horizontal: 'right'}}>
-                    <MenuItem onClick={() => {handleMenuClose(); handleNav("account")}}>Account Infomation</MenuItem>
-                    <MenuItem onClick={() => {handleMenuClose(); handleNav("settings")}}>Settings</MenuItem>
-                    <MenuItem onClick={() => {handleMenuClose(); handleSignOut()}}>Logout</MenuItem>
-                </Menu>
-            </span>
+          {/* Store Selector */}
+          <div className="storeSelectorWrapper">
+            <FormControl variant="outlined" size="small">
+              <InputLabel id="store-select-label">
+                <Storefront />
+              </InputLabel>
+              <Select
+                labelId="store-select-label"
+                id="store-select"
+                value={store}
+                onChange={handleStoreChange}
+                label="Store"
+                style={{ minWidth: 180 }}
+                renderValue={() => getSelectedStoreText()}
+              >
+                {stores.map((storeItem) => (
+                  <MenuItem key={storeItem.id} value={storeItem.id}>
+                    {storeItem.number} - {storeItem.subName}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </div>
         </div>
 
-        <div className = "leftNavBar">
-            {/* Save for Future */}
-            <ButtonGroup orientation='vertical' aria-label="Quick navigation buttons" variant='text'>
-                <Tooltip title='Home' placement='right'>
-                    <IconButton aria-label='Home' color='primary' onClick={() => handleNav("dashboard")}>
-                        <Home />
-                    </IconButton>
-                </Tooltip>
-                <Tooltip title='Invoice Logs' placement='right'>
-                    <IconButton aria-label='Invoice Logs' color='primary' onClick={() => handleNav("invoiceLogs")}>
-                        <ReceiptLong />
-                    </IconButton>
-                </Tooltip>
-                <Tooltip title='Submit New Invoice' placement='right'>
-                    <IconButton aria-label='Submit New Invoice' color='primary' onClick={() => handleNav("submitInvoice")}>
-                        <UploadFile />
-                    </IconButton>
-                </Tooltip>
-                <Tooltip title='Reports' placement='right'>
-                    <IconButton aria-label='Reports' color='primary' onClick={() => handleNav("reports")}>
-                        <Summarize />
-                    </IconButton>
-                </Tooltip>
-                <Tooltip title='PAC' placement='right'>
-                    <IconButton aria-label='PAC' color='primary' onClick={() => handleNav("pac")}>
-                        <Analytics />
-                    </IconButton>
-                </Tooltip>
-            </ButtonGroup>
+        {/* Spacer pushes account button to far right */}
+        <div className="spacer" />
+
+        {/* Account Button */}
+        <div className="accountButton">
+          <Button
+            className="accountBtn"
+            onClick={handleAccountMenuClick}
+            startIcon={<AccountCircle sx={{ fontSize: 22 }} />}
+          >
+            {firstName}
+          </Button>
+          <Menu
+            id="avatar-menu"
+            anchorEl={anchorEl}
+            open={openMenu}
+            onClose={handleAccountMenuClose}
+            anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+            transformOrigin={{ vertical: "top", horizontal: "right" }}
+          >
+            <MenuOption
+              onClick={() => {
+                handleAccountMenuClose();
+                handleNav("account");
+              }}
+            >
+              Account Information
+            </MenuOption>
+          </Menu>
         </div>
+      </div>
 
-        <Drawer open = {open} onClose={toggleDrawer(false)}>
-            <Box sx={{width: 250}} role="navigation" onClick={toggleDrawer(false)}>
-                <List component='nav'>
-                    <ListItemButton button onClick={() => handleNav('dashboard')}>
-                        <ListItemIcon> <Home /> </ListItemIcon>
-                        <ListItemText primary="Home" />
-                    </ListItemButton>
+      {/* COLLAPSIBLE LEFT NAV BAR */}
+      <div
+        ref={sideNavRef}
+        className={`leftNavBar ${sideNavOpen ? "open" : ""}`}
+      >
+        <div className="sideNavContent">
+          {/* Top section (main icons) */}
+          <div className="sideNavMain">
+            <Tooltip title="Dashboard" placement="left">
+              <Button
+                className="navItem"
+                onClick={() => handleNav("dashboard")}
+                startIcon={<Dashboard />}
+              >
+                {sideNavOpen && "Home"}
+              </Button>
+            </Tooltip>
+            <Tooltip title="Invoice Logs" placement="left">
+              <Button
+                className="navItem"
+                onClick={() => handleNav("invoiceLogs")}
+                startIcon={<ReceiptLong />}
+              >
+                {sideNavOpen && "Invoice Logs"}
+              </Button>
+            </Tooltip>
+            <Tooltip title="Submit Invoice" placement="left">
+              <Button
+                className="navItem"
+                onClick={() => handleNav("submitInvoice")}
+                startIcon={<UploadFile />}
+              >
+                {sideNavOpen && "Submit Invoice"}
+              </Button>
+            </Tooltip>
+            <Tooltip title="Reports" placement="left">
+              <Button
+                className="navItem"
+                onClick={() => handleNav("reports")}
+                startIcon={<Summarize />}
+              >
+                {sideNavOpen && "Reports"}
+              </Button>
+            </Tooltip>
+            <Tooltip title="PAC" placement="left">
+              <Button
+                className="navItem"
+                onClick={() => handleNav("pac")}
+                startIcon={<Analytics />}
+              >
+                {sideNavOpen && "PAC"}
+              </Button>
+            </Tooltip>
+          </div>
 
-                    <ListItemButton button onClick={() => handleNav('invoiceLogs')}>
-                        <ListItemIcon> <ReceiptLong /> </ListItemIcon>
-                        <ListItemText primary="Invoice Logs" />
-                    </ListItemButton>
-
-                    <ListItemButton button onClick={() => handleNav('submitInvoice')}>
-                        <ListItemIcon> <UploadFile /> </ListItemIcon>
-                        <ListItemText primary="Submit New Invoice" />
-                    </ListItemButton>
-
-                    <ListItemButton button onClick={() => handleNav('reports')}>
-                        <ListItemIcon> <Summarize /> </ListItemIcon>
-                        <ListItemText primary="Reports" />
-                    </ListItemButton>
-
-                    <ListItemButton button onClick={() => handleNav('pac')}>
-                        <ListItemIcon> <Analytics /> </ListItemIcon>
-                        <ListItemText primary="PAC" />
-                    </ListItemButton>
-
-                    <ListItemButton button onClick={() => handleNav('settings')}>
-                        <ListItemIcon> <Settings /> </ListItemIcon>
-                        <ListItemText primary="Settings" />
-                    </ListItemButton>
-
-                    <ListItemButton button onClick={() => handleSignOut()}>
-                        <ListItemIcon> <Logout /> </ListItemIcon>
-                        <ListItemText primary="Logout" />
-                    </ListItemButton>
-                </List>
-            </Box>
-        </Drawer>
-        </>
-    );
+          {/* Bottom section (Settings & Logout) */}
+          <div className="sideNavBottom">
+            <Tooltip title="Settings" placement="left">
+              <Button
+                className="navItem"
+                onClick={() => handleNav("settings")}
+                startIcon={<Settings />}
+              >
+                {sideNavOpen && "Settings"}
+              </Button>
+            </Tooltip>
+            <Tooltip title="Logout" placement="left">
+              <Button
+                className="navItem"
+                onClick={handleSignOut}
+                startIcon={<Logout />}
+              >
+                {sideNavOpen && "Logout"}
+              </Button>
+            </Tooltip>
+          </div>
+        </div>
+      </div>
+    </>
+  );
 }
