@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import "./navBar.css";
 import { auth } from "../../config/firebase-config";
@@ -11,8 +11,6 @@ import {
   IconButton,
   Button,
   Tooltip,
-  Menu,
-  MenuItem as MenuOption,
 } from "@mui/material";
 import {
   Home,
@@ -28,18 +26,56 @@ import {
   Close as CloseIcon,
   Dashboard,
 } from "@mui/icons-material";
+import { StoreContext } from "../../context/storeContext"; // Import StoreContext
 
 export function NavBar() {
   const navigate = useNavigate();
-
-  // Collapsible side nav state
-  const [sideNavOpen, setSideNavOpen] = React.useState(false);
-
-  // Add ref for the side nav
+  const [sideNavOpen, setSideNavOpen] = useState(false);
   const sideNavRef = React.useRef(null);
 
+  // Replace hardcoded data with state
+  const [userData, setUserData] = useState(null);
+  const [stores, setStores] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Get global selected store from context
+  const { selectedStore, setSelectedStore } = useContext(StoreContext);
+
+  // Fetch data from JSON file
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch("/navBarTest.json");
+        const data = await response.json();
+        setUserData(data.userData);
+        setStores(data.stores);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error loading data:", error);
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Update store change handler
+  const handleStoreChange = (event) => {
+    const newStore = event.target.value;
+    setSelectedStore(newStore);
+    // Optionally, trigger refresh of data in other components here
+  };
+
+  // Update store text getter
+  const getSelectedStoreText = () => {
+    const selected = stores.find((s) => s.storeNum === selectedStore);
+    return selected
+      ? `${selected.storeNum} - ${selected.subName}`
+      : "Select Store";
+  };
+
   // Add click outside handler
-  React.useEffect(() => {
+  useEffect(() => {
     function handleClickOutside(event) {
       if (
         sideNavRef.current &&
@@ -49,44 +85,11 @@ export function NavBar() {
         setSideNavOpen(false);
       }
     }
-
-    // Add event listener
     document.addEventListener("mousedown", handleClickOutside);
-
-    // Cleanup
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
-
-  // Account menu anchor
-  const [anchorEl, setAnchorEl] = React.useState(null);
-  const openMenu = Boolean(anchorEl);
-
-  const handleAccountMenuClick = (event) => setAnchorEl(event.currentTarget);
-  const handleAccountMenuClose = () => setAnchorEl(null);
-
-  // Demo user info
-  const firstName = "John";
-
-  // Store selection state and sample data
-  const [store, setStore] = React.useState("");
-  const stores = [
-    { id: "store1", number: "001", subName: "Sunrise" },
-    { id: "store2", number: "002", subName: "Douglas Mcdonalds" },
-  ];
-
-  const handleStoreChange = (event) => {
-    setStore(event.target.value);
-    // TODO: Refresh data accordingly
-  };
-
-  const getSelectedStoreText = () => {
-    const selectedStore = stores.find((s) => s.id === store);
-    return selectedStore
-      ? `${selectedStore.number} - ${selectedStore.subName}`
-      : "Select Store";
-  };
 
   // Navigate helper
   function handleNav(path) {
@@ -108,9 +111,7 @@ export function NavBar() {
     <>
       {/* TOP NAV BAR */}
       <div className="topNavBar">
-        {/* Left side: Hamburger icon & store selector */}
         <div className="topNavLeft">
-          {/* Hamburger icon: toggles side nav open/close */}
           <IconButton
             className="hamburgerButton"
             onClick={() => setSideNavOpen(!sideNavOpen)}
@@ -122,9 +123,6 @@ export function NavBar() {
             )}
           </IconButton>
 
-          {/* Extra spacing is now added by the hamburgerButton margin-right */}
-
-          {/* Store Selector */}
           <div className="storeSelectorWrapper">
             <FormControl variant="outlined" size="small">
               <InputLabel id="store-select-label">
@@ -133,15 +131,15 @@ export function NavBar() {
               <Select
                 labelId="store-select-label"
                 id="store-select"
-                value={store}
+                value={selectedStore}
                 onChange={handleStoreChange}
                 label="Store"
                 style={{ minWidth: 180 }}
                 renderValue={() => getSelectedStoreText()}
               >
-                {stores.map((storeItem) => (
-                  <MenuItem key={storeItem.id} value={storeItem.id}>
-                    {storeItem.number} - {storeItem.subName}
+                {stores.map((store) => (
+                  <MenuItem key={store.storeNum} value={store.storeNum}>
+                    {store.storeNum} - {store.subName}
                   </MenuItem>
                 ))}
               </Select>
@@ -149,45 +147,24 @@ export function NavBar() {
           </div>
         </div>
 
-        {/* Spacer pushes account button to far right */}
         <div className="spacer" />
 
-        {/* Account Button */}
         <div className="accountButton">
           <Button
             className="accountBtn"
-            onClick={handleAccountMenuClick}
+            onClick={() => handleNav("account")}
             startIcon={<AccountCircle sx={{ fontSize: 22 }} />}
           >
-            {firstName}
+            {loading ? "Loading..." : userData?.firstName || "User"}
           </Button>
-          <Menu
-            id="avatar-menu"
-            anchorEl={anchorEl}
-            open={openMenu}
-            onClose={handleAccountMenuClose}
-            anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-            transformOrigin={{ vertical: "top", horizontal: "right" }}
-          >
-            <MenuOption
-              onClick={() => {
-                handleAccountMenuClose();
-                handleNav("account");
-              }}
-            >
-              Account Information
-            </MenuOption>
-          </Menu>
         </div>
       </div>
 
-      {/* COLLAPSIBLE LEFT NAV BAR */}
       <div
         ref={sideNavRef}
         className={`leftNavBar ${sideNavOpen ? "open" : ""}`}
       >
         <div className="sideNavContent">
-          {/* Top section (main icons) */}
           <div className="sideNavMain">
             <Tooltip title="Dashboard" placement="left">
               <Button
@@ -195,7 +172,7 @@ export function NavBar() {
                 onClick={() => handleNav("dashboard")}
                 startIcon={<Dashboard />}
               >
-                {sideNavOpen && "Home"}
+                {sideNavOpen && "Dashboard"}
               </Button>
             </Tooltip>
             <Tooltip title="Invoice Logs" placement="left">
@@ -236,7 +213,6 @@ export function NavBar() {
             </Tooltip>
           </div>
 
-          {/* Bottom section (Settings & Logout) */}
           <div className="sideNavBottom">
             <Tooltip title="Settings" placement="left">
               <Button
