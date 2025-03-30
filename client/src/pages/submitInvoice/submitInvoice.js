@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { collection, doc, setDoc } from "firebase/firestore";
+import { collection, doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "../../config/firebaseConfig"; // Adjust the path as needed
 import styles from "./submitInvoice.module.css";
 
@@ -8,34 +8,81 @@ const SubmitInvoice = () => {
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [company, setCompany] = useState("");
   const [userEmail, setUserEmail] = useState("");
+  const [storeNumber, setStoreNumber] = useState("");
   const [invoiceMonth, setInvoiceMonth] = useState("");
   const [category, setCategory] = useState("Choose Category");
   const [amount, setAmount] = useState("");
 
   const invoiceRef = collection(db, "invoices");
+
   // Submit the invoice to Firestore using the invoice number as the document ID
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await setDoc(doc(invoiceRef, invoiceNumber), {  
+      await verifyInput();
+
+      await setDoc(doc(invoiceRef, invoiceNumber), {
         Amount: parseFloat(amount),
         Category: category,
         Company: company,
         Date: new Date(), // date of submission
         Invoice_month: invoiceMonth,
         User_email: userEmail,
+        Store_number: storeNumber,
       });
       alert("Invoice submitted successfully!");
       // Reset form fields
       setInvoiceNumber("");
       setCompany("");
       setUserEmail("");
+      setStoreNumber("");
       setInvoiceMonth("");
       setCategory("Choose Category");
       setAmount("");
     } catch (error) {
       console.error("Error adding invoice: ", error);
-      alert("Error submitting invoice");
+      alert("Error submitting invoice: " + error.message);
+    }
+  };
+
+  const verifyInput = async () => {
+    if (invoiceNumber === "") {
+      return Promise.reject(new Error("Invoice Number Required"));
+    } else if (isNaN(invoiceNumber)) {
+      return Promise.reject(new Error("Invoice Number Needs to be a Number"));
+    }
+    if (company === "") {
+      return Promise.reject(new Error("Company Required"));
+    }
+    if (userEmail === "") {
+      return Promise.reject(new Error("Email Required"));
+    }
+    if (storeNumber === "") {
+      return Promise.reject(new Error("Store Number Required"));
+    } else if (isNaN(storeNumber)) {
+      return Promise.reject(new Error("Store Number Needs to be a Number"));
+    }
+    if (invoiceMonth === "") {
+      return Promise.reject(new Error("Invoice Month Required"));
+    }
+    if (category === "Choose Category") {
+      return Promise.reject(new Error("Category Required"));
+    }
+    if (amount === "") {
+      return Promise.reject(new Error("Amount Required"));
+    } else if (isNaN(amount)) {
+      return Promise.reject(new Error("Amount Needs to be a Number"));
+    }
+    // Check for duplicate invoice number
+    try {
+      const docRef = doc(db, "invoices", invoiceNumber);
+      const docSnapShot = await getDoc(docRef);
+      if (docSnapShot.exists()) {
+        return Promise.reject(new Error("Invoice Number Already Exists"));
+      }
+    } catch (error) {
+      console.error("Failed querying the database", error);
+      return Promise.reject(new Error("Failed querying the database"));
     }
   };
 
@@ -89,6 +136,17 @@ const SubmitInvoice = () => {
             />
           </div>
 
+          {/* Store Number */}
+          <div className={styles.formGroup}>
+            <label>Store Number</label>
+            <input
+              type="text"
+              placeholder="Enter Store Number"
+              value={storeNumber}
+              onChange={(e) => setStoreNumber(e.target.value)}
+            />
+          </div>
+
           {/* Invoice Month Dropdown */}
           <div className={styles.formGroup}>
             <label>Invoice Month</label>
@@ -125,18 +183,17 @@ const SubmitInvoice = () => {
               <option>Supplies</option>
               <option>Other</option>
             </select>
-            <input
-              type="text"
-              placeholder="Amount"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
+            {/* Amount input with dollar sign */}
+            <div className={styles.amountInputWrapper}>
+              <span className={styles.dollarSign}>$</span>
+              <input
+                type="text"
+                placeholder="Amount"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </div>
           </div>
-
-          {/* + Add Another (for future expansion) */}
-          <button type="button" className={styles.addAnotherBtn}>
-            + Add Another
-          </button>
 
           {/* Submit Invoice */}
           <button type="submit" className={styles.submitBtn}>

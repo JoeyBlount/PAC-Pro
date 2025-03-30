@@ -8,8 +8,8 @@
 
 /* Top Bar: "Submit Invoice" */
 .topBar {
-  background-color: #000; /* Black background */
-  color: #fff;           /* White text */
+  background-color: #000;
+  color: #fff;
   text-align: center;
   font-size: 24px;
   font-weight: bold;
@@ -22,10 +22,10 @@
 .uploadBar {
   display: block;
   width: 100%;
-  max-width: 400px;    /* Optional: limit button width */
-  margin: 0 auto 20px; /* Center button with margin below */
-  background-color: #f44336; /* Red background */
-  color: #fff;               /* White text */
+  max-width: 400px;
+  margin: 0 auto 20px;
+  background-color: #f44336;
+  color: #fff;
   font-size: 16px;
   font-weight: bold;
   padding: 10px;
@@ -38,7 +38,7 @@
 /* Form Container (White box) */
 .formContainer {
   background-color: #fff;
-  max-width: 600px; /* Adjust for desired form width */
+  max-width: 600px;
   margin: 0 auto;
   padding: 20px;
   border-radius: 4px;
@@ -64,13 +64,36 @@
   margin-bottom: 15px;
 }
 
-/* Inputs and Selects */
+/* Default styling for inputs and selects */
 input,
 select {
   padding: 8px;
   border: 1px solid #ccc;
   border-radius: 4px;
   flex: 1;
+}
+
+/* Wrapper for the Amount input with dollar sign */
+.amountInputWrapper {
+  display: flex;
+  align-items: center;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding-left: 5px;
+  flex: 1;
+}
+
+.amountInputWrapper input {
+  border: none;
+  outline: none;
+  flex: 1;
+  padding: 8px;
+}
+
+/* Dollar sign styling */
+.dollarSign {
+  margin-right: 5px;
+  font-size: 16px;
 }
 
 /* "+ Add Another" Button */
