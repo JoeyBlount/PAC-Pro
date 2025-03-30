@@ -1,143 +1,240 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import './navBar.css';
+import React, { useState, useEffect, useContext } from "react";
+import { useNavigate } from "react-router-dom";
+import "./navBar.css";
 import { auth } from "../../config/firebase-config";
 import { signOut } from "firebase/auth";
-import { Button, Drawer, ListItemText, Box, List, ListItemButton, ListItemIcon, IconButton, ButtonGroup, Tooltip, Menu, MenuItem } from '@mui/material';
-import { Home, Logout, Settings, Analytics, UploadFile, ReceiptLong, Summarize, MenuOpen, AccountCircleRounded } from '@mui/icons-material'
+import {
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  IconButton,
+  Button,
+  Tooltip,
+} from "@mui/material";
+import {
+  Home,
+  ReceiptLong,
+  UploadFile,
+  Summarize,
+  Analytics,
+  Settings,
+  Logout,
+  AccountCircle,
+  Storefront,
+  Menu as MenuIcon,
+  Close as CloseIcon,
+  Dashboard,
+} from "@mui/icons-material";
+import { StoreContext } from "../../context/storeContext"; // Import StoreContext
 
 export function NavBar() {
-    const navigate = useNavigate();
+  const navigate = useNavigate();
+  const [sideNavOpen, setSideNavOpen] = useState(false);
+  const sideNavRef = React.useRef(null);
 
-    function handleNav(path) {
-        navigate('/navi/' + path);
+  // Replace hardcoded data with state
+  const [userData, setUserData] = useState(null);
+  const [stores, setStores] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Get global selected store from context
+  const { selectedStore, setSelectedStore } = useContext(StoreContext);
+
+  // Fetch data from JSON file
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch("/navBarTest.json");
+        const data = await response.json();
+        setUserData(data.userData);
+        setStores(data.stores);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error loading data:", error);
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Update store change handler
+  const handleStoreChange = (event) => {
+    const newStore = event.target.value;
+    setSelectedStore(newStore);
+    // Optionally, trigger refresh of data in other components here
+  };
+
+  // Update store text getter
+  const getSelectedStoreText = () => {
+    const selected = stores.find((s) => s.storeNum === selectedStore);
+    return selected
+      ? `${selected.storeNum} - ${selected.subName}`
+      : "Select Store";
+  };
+
+  // Add click outside handler
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        sideNavRef.current &&
+        !sideNavRef.current.contains(event.target) &&
+        !event.target.closest(".hamburgerButton")
+      ) {
+        setSideNavOpen(false);
+      }
     }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
-    async function handleSignOut() {
-        try {
-            await signOut(auth);
-            localStorage.removeItem("user");
-            navigate('/');
-        } catch (e) {
-            console.error("An error has occured while signing out: ", e);
-        }
+  // Navigate helper
+  function handleNav(path) {
+    navigate("/navi/" + path);
+  }
+
+  // Sign out logic
+  async function handleSignOut() {
+    try {
+      await signOut(auth);
+      localStorage.removeItem("user");
+      navigate("/");
+    } catch (e) {
+      console.error("An error has occurred while signing out: ", e);
     }
+  }
 
-    const [open, setOpen] = React.useState(false);
+  return (
+    <>
+      {/* TOP NAV BAR */}
+      <div className="topNavBar">
+        <div className="topNavLeft">
+          <IconButton
+            className="hamburgerButton"
+            onClick={() => setSideNavOpen(!sideNavOpen)}
+          >
+            {sideNavOpen ? (
+              <CloseIcon sx={{ fontSize: 28 }} />
+            ) : (
+              <MenuIcon sx={{ fontSize: 28 }} />
+            )}
+          </IconButton>
 
-    const toggleDrawer = (newOpen) => () => {
-        setOpen(newOpen);
-    }
-
-    const [anchorEl, setAnchorE1] = React.useState(null);
-
-    const openMenu = Boolean(anchorEl);
-
-    const handleMenuClick = (event) => { setAnchorE1(event.currentTarget); };
-    const handleMenuClose = () => { setAnchorE1(null); };
-
-    return (
-        <>
-        <div className = "topNavBar">
-            <span className = "menuButton">
-                <Button variant = "text" startIcon={<MenuOpen />} onClick={toggleDrawer(true)}>
-                Menu
-                </Button>
-            </span>
-
-            <span className = "softwareName">
-                PAC Pro
-            </span>
-
-            <span className = "logoutButton">
-                <IconButton aria-label= 'Logout' color="primary" onClick={() => handleSignOut()}>
-                    <Logout />
-                </IconButton>
-            </span>
-
-            <span className ="accountButton">
-                <IconButton aria-label='Account' color="primary" onClick={handleMenuClick}>
-                    <AccountCircleRounded />
-                </IconButton>
-                <Menu id="avatar-menu" anchorEl={anchorEl} open={openMenu} onClose={handleMenuClose} anchorOrigin={{vertical: 'bottom',  horizontal: 'center'}} transformOrigin={{vertical: 'top', horizontal: 'right'}}>
-                    <MenuItem onClick={() => {handleMenuClose(); handleNav("account")}}>Account Infomation</MenuItem>
-                    <MenuItem onClick={() => {handleMenuClose(); handleNav("settings")}}>Settings</MenuItem>
-                    <MenuItem onClick={() => {handleMenuClose(); handleSignOut()}}>Logout</MenuItem>
-                </Menu>
-            </span>
+          <div className="storeSelectorWrapper">
+            <FormControl variant="outlined" size="small">
+              <InputLabel id="store-select-label">
+                <Storefront />
+              </InputLabel>
+              <Select
+                labelId="store-select-label"
+                id="store-select"
+                value={selectedStore}
+                onChange={handleStoreChange}
+                label="Store"
+                style={{ minWidth: 180 }}
+                renderValue={() => getSelectedStoreText()}
+              >
+                {stores.map((store) => (
+                  <MenuItem key={store.storeNum} value={store.storeNum}>
+                    {store.storeNum} - {store.subName}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </div>
         </div>
 
-        <div className = "leftNavBar">
-            {/* Save for Future */}
-            <ButtonGroup orientation='vertical' aria-label="Quick navigation buttons" variant='text'>
-                <Tooltip title='Home' placement='right'>
-                    <IconButton aria-label='Home' color='primary' onClick={() => handleNav("dashboard")}>
-                        <Home />
-                    </IconButton>
-                </Tooltip>
-                <Tooltip title='Invoice Logs' placement='right'>
-                    <IconButton aria-label='Invoice Logs' color='primary' onClick={() => handleNav("invoiceLogs")}>
-                        <ReceiptLong />
-                    </IconButton>
-                </Tooltip>
-                <Tooltip title='Submit New Invoice' placement='right'>
-                    <IconButton aria-label='Submit New Invoice' color='primary' onClick={() => handleNav("submitInvoice")}>
-                        <UploadFile />
-                    </IconButton>
-                </Tooltip>
-                <Tooltip title='Reports' placement='right'>
-                    <IconButton aria-label='Reports' color='primary' onClick={() => handleNav("reports")}>
-                        <Summarize />
-                    </IconButton>
-                </Tooltip>
-                <Tooltip title='PAC' placement='right'>
-                    <IconButton aria-label='PAC' color='primary' onClick={() => handleNav("pac")}>
-                        <Analytics />
-                    </IconButton>
-                </Tooltip>
-            </ButtonGroup>
+        <div className="spacer" />
+
+        <div className="accountButton">
+          <Button
+            className="accountBtn"
+            onClick={() => handleNav("account")}
+            startIcon={<AccountCircle sx={{ fontSize: 22 }} />}
+          >
+            {loading ? "Loading..." : userData?.firstName || "User"}
+          </Button>
         </div>
+      </div>
 
-        <Drawer open = {open} onClose={toggleDrawer(false)}>
-            <Box sx={{width: 250}} role="navigation" onClick={toggleDrawer(false)}>
-                <List component='nav'>
-                    <ListItemButton button onClick={() => handleNav('dashboard')}>
-                        <ListItemIcon> <Home /> </ListItemIcon>
-                        <ListItemText primary="Home" />
-                    </ListItemButton>
+      <div
+        ref={sideNavRef}
+        className={`leftNavBar ${sideNavOpen ? "open" : ""}`}
+      >
+        <div className="sideNavContent">
+          <div className="sideNavMain">
+            <Tooltip title="Dashboard" placement="left">
+              <Button
+                className="navItem"
+                onClick={() => handleNav("dashboard")}
+                startIcon={<Dashboard />}
+              >
+                {sideNavOpen && "Dashboard"}
+              </Button>
+            </Tooltip>
+            <Tooltip title="Invoice Logs" placement="left">
+              <Button
+                className="navItem"
+                onClick={() => handleNav("invoiceLogs")}
+                startIcon={<ReceiptLong />}
+              >
+                {sideNavOpen && "Invoice Logs"}
+              </Button>
+            </Tooltip>
+            <Tooltip title="Submit Invoice" placement="left">
+              <Button
+                className="navItem"
+                onClick={() => handleNav("submitInvoice")}
+                startIcon={<UploadFile />}
+              >
+                {sideNavOpen && "Submit Invoice"}
+              </Button>
+            </Tooltip>
+            <Tooltip title="Reports" placement="left">
+              <Button
+                className="navItem"
+                onClick={() => handleNav("reports")}
+                startIcon={<Summarize />}
+              >
+                {sideNavOpen && "Reports"}
+              </Button>
+            </Tooltip>
+            <Tooltip title="PAC" placement="left">
+              <Button
+                className="navItem"
+                onClick={() => handleNav("pac")}
+                startIcon={<Analytics />}
+              >
+                {sideNavOpen && "PAC"}
+              </Button>
+            </Tooltip>
+          </div>
 
-                    <ListItemButton button onClick={() => handleNav('invoiceLogs')}>
-                        <ListItemIcon> <ReceiptLong /> </ListItemIcon>
-                        <ListItemText primary="Invoice Logs" />
-                    </ListItemButton>
-
-                    <ListItemButton button onClick={() => handleNav('submitInvoice')}>
-                        <ListItemIcon> <UploadFile /> </ListItemIcon>
-                        <ListItemText primary="Submit New Invoice" />
-                    </ListItemButton>
-
-                    <ListItemButton button onClick={() => handleNav('reports')}>
-                        <ListItemIcon> <Summarize /> </ListItemIcon>
-                        <ListItemText primary="Reports" />
-                    </ListItemButton>
-
-                    <ListItemButton button onClick={() => handleNav('pac')}>
-                        <ListItemIcon> <Analytics /> </ListItemIcon>
-                        <ListItemText primary="PAC" />
-                    </ListItemButton>
-
-                    <ListItemButton button onClick={() => handleNav('settings')}>
-                        <ListItemIcon> <Settings /> </ListItemIcon>
-                        <ListItemText primary="Settings" />
-                    </ListItemButton>
-
-                    <ListItemButton button onClick={() => handleSignOut()}>
-                        <ListItemIcon> <Logout /> </ListItemIcon>
-                        <ListItemText primary="Logout" />
-                    </ListItemButton>
-                </List>
-            </Box>
-        </Drawer>
-        </>
-    );
+          <div className="sideNavBottom">
+            <Tooltip title="Settings" placement="left">
+              <Button
+                className="navItem"
+                onClick={() => handleNav("settings")}
+                startIcon={<Settings />}
+              >
+                {sideNavOpen && "Settings"}
+              </Button>
+            </Tooltip>
+            <Tooltip title="Logout" placement="left">
+              <Button
+                className="navItem"
+                onClick={handleSignOut}
+                startIcon={<Logout />}
+              >
+                {sideNavOpen && "Logout"}
+              </Button>
+            </Tooltip>
+          </div>
+        </div>
+      </div>
+    </>
+  );
 }
