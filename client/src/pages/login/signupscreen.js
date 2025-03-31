@@ -24,20 +24,20 @@
 //         // Store the name in Firebase Auth
 //         await updateProfile(user, { displayName: name });
 
-        console.log("User Signed Up:", user);
-        await setDoc(doc (db, "users", user.uid), {
-            name: name, 
-            email: user.email,
-            createdAt: new Date(),
-        });
-        navigate("/"); // Redirect after successful login/signup
-      } else {
-        // Log In
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        console.log("User Logged In:", userCredential.user);
-        localStorage.setItem("user", JSON.stringify(userCredential.user));
-        navigate("/navi/dashboard");
-      }
+      //   console.log("User Signed Up:", user);
+      //   await setDoc(doc (db, "users", user.uid), {
+      //       name: name, 
+      //       email: user.email,
+      //       createdAt: new Date(),
+      //   });
+      //   navigate("/"); // Redirect after successful login/signup
+      // } else {
+      //   // Log In
+      //   const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      //   console.log("User Logged In:", userCredential.user);
+      //   localStorage.setItem("user", JSON.stringify(userCredential.user));
+      //   navigate("/navi/dashboard");
+      // }
 
       
 //     } catch (err) {

@@ -1,15 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { RouterProvider, createBrowserRouter, Navigate } from "react-router-dom";
-import Login from "./pages/login/login";
-import Dashboard from "./pages/dashboard/dashboard"; 
-import InvoiceLogs from "./pages/invoiceLogs/invoiceLogs"; 
-import SubmitInvoice from "./pages/submitInvoice/submitInvoice"; 
-import Reports from "./pages/reports/reports"; 
-import Settings from "./pages/settings/settings"; 
-import PAC from "./pages/pac/pac"; 
-import SignUpScreen from "./pages/login/signupscreen";
-import Account from "./pages/account/account";
+import React from 'react';
+import { Outlet } from "react-router-dom";
 import { NavBar } from './pages/navBar/navBar';
+<<<<<<< HEAD
 import PrivateRoute from "./routes/PrivateRoute"; // ✅ Import PrivateRoute
 import UserManagement from "./pages/settings/UserManagement";
 import StoreManagement from "./pages/settings/StoreManagement";
@@ -58,11 +50,17 @@ const router = createBrowserRouter([
   },
   { path: '*', element: <h1>404 - Page Not Found</h1> } // Catch-all for invalid routes
 ]);
+=======
+import { Box } from '@mui/material';
+>>>>>>> 8ff8decee1336c10390d82fb7e45cd28b3461d9a
 
 function App() {
   return (
     <div>
-      <RouterProvider router={router} />
+      <NavBar />
+      <Box sx={{top: '40px', marginLeft: '40px'}}>
+        <Outlet />
+      </Box>
     </div>
   );
 }

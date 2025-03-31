@@ -3,6 +3,10 @@ import { Container, Grid, Card, CardActionArea, CardContent, Typography } from "
 import { useNavigate } from "react-router-dom";
 
 const Settings = () => {
+  React.useEffect(() => {
+    document.title = "PAC Pro - Settings";
+  }, []); // Used to change the title.
+
   const navigate = useNavigate();
 
   const tiles = [

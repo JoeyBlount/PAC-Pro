@@ -1,0 +1,91 @@
+{
+  "userData": {
+    "firstName": "John",
+    "lastName": "Smith",
+    "email": "john.smith@example.com",
+    "role": "manager",
+    "uid": "test123"
+  },
+  "stores": [
+    {
+      "storeNum": "7856",
+      "subName": "Elm & 1st",
+      "address": "123 Elm Street",
+      "city": "Sacramento",
+      "state": "CA",
+      "zip": "95814"
+    },
+    {
+      "storeNum": "35365",
+      "subName": "Hazel & Main",
+      "address": "456 Hazel Avenue",
+      "city": "Sacramento",
+      "state": "CA",
+      "zip": "95826"
+    },
+    {
+      "storeNum": "4587",
+      "subName": "Oak & River",
+      "address": "789 Oak Boulevard",
+      "city": "Sacramento",
+      "state": "CA",
+      "zip": "95831"
+    },
+    {
+      "storeNum": "12489",
+      "subName": "Broadway Plaza",
+      "address": "1010 Broadway",
+      "city": "Sacramento",
+      "state": "CA",
+      "zip": "95818"
+    },
+    {
+      "storeNum": "9563",
+      "subName": "Riverside Center",
+      "address": "234 Riverside Dr",
+      "city": "Sacramento",
+      "state": "CA",
+      "zip": "95833"
+    },
+    {
+      "storeNum": "84521",
+      "subName": "Folsom Gateway",
+      "address": "567 Folsom Blvd",
+      "city": "Folsom",
+      "state": "CA",
+      "zip": "95630"
+    },
+    {
+      "storeNum": "3654",
+      "subName": "Roseville Square",
+      "address": "890 Douglas Blvd",
+      "city": "Roseville",
+      "state": "CA",
+      "zip": "95661"
+    },
+    {
+      "storeNum": "45698",
+      "subName": "Citrus Heights Mall",
+      "address": "432 Sunrise Ave",
+      "city": "Citrus Heights",
+      "state": "CA",
+      "zip": "95610"
+    },
+    {
+      "storeNum": "7412",
+      "subName": "Elk Grove Center",
+      "address": "765 Elk Grove Blvd",
+      "city": "Elk Grove",
+      "state": "CA",
+      "zip": "95624"
+    },
+    {
+      "storeNum": "96325",
+      "subName": "Fair Oaks Village",
+      "address": "321 Fair Oaks Blvd",
+      "city": "Fair Oaks",
+      "state": "CA",
+      "zip": "95628"
+    }
+  ]
+}
