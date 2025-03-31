@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Navigate } from "react-router-dom";
-import { auth } from "../config/firebase"; // Adjust path if needed
+import { auth } from "../config/firebase-config"; // Adjust path if needed
 import { onAuthStateChanged } from "firebase/auth";
 
 // Private route component to check authentication

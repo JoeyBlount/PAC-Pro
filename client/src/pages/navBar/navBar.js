@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { TiThMenu } from "react-icons/ti";
 import './navBar.css';
-import { auth } from "../../config/firebase";
+import { auth } from "../../config/firebase-config";
 import { signOut } from "firebase/auth";
 import {
   FormControl,

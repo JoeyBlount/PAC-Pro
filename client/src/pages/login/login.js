@@ -7,7 +7,7 @@ import MicrosoftIcon from "@mui/icons-material/Microsoft";
 //import { auth } from "../../config/firebaseConfigEmail";
 import { useMsal } from "@azure/msal-react"; // Import useMsal hook
 import { loginRequest } from "../../authconfig";
-import { auth, googleAuthProvider } from "../../config/firebase";
+import { auth, googleAuthProvider } from "../../config/firebase-config";
 import { signInWithPopup } from "firebase/auth";
 import { getFirestore, doc, getDoc } from "firebase/firestore"; // Firebase Firestore functions
 
