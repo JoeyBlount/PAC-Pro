@@ -1,7 +1,7 @@
 import React from "react";
 import { Container } from "@mui/material";
 import './dashboard.css';
-import { auth } from "../../config/firebaseConfig";
+import { auth } from "../../config/firebase-config";
 
 const Dashboard = () => {
   React.useEffect(() => {
