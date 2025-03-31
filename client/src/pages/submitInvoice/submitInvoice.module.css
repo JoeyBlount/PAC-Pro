@@ -96,6 +96,14 @@ select {
   font-size: 16px;
 }
 
+/* Button Row for File Input and Submit Button */
+.buttonRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 15px;
+}
+
 /* "+ Add Another" Button */
 .addAnotherBtn {
   display: inline-block;

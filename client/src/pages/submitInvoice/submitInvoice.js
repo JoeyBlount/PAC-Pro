@@ -1,47 +1,19 @@
-import { Container } from "@mui/material";
-import "./submitInvoice.css";
-import { storage } from "../../config/firebase-config"; // Import initialized Firebase storage
+import { db, storage } from "../../config/firebase-config"; // Import initialized Firebase storage
 import { v4 } from "uuid"; // UUID for unique image names
-import { useState, useEffect } from "react";
 import {
   ref,
   uploadBytes,
   getDownloadURL,
   listAll,
 } from "firebase/storage";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { collection, doc, getDoc, setDoc } from "firebase/firestore";
-import { db } from "../../config/firebaseConfig"; // Adjust the path as needed
 import styles from "./submitInvoice.module.css";
 
 const SubmitInvoice = () => {
   const [imageUpload, setImageUpload] = useState(null);
   const [imageUrls, setImageUrls] = useState([]);
 
-  const imagesListRef = ref(storage, "images/");
-
-  const uploadFile = async () => {
-    if (!imageUpload) {
-      alert("Please select a file before uploading.");
-      return;
-    }
-  
-    try {
-      const imageRef = ref(storage, `images/${imageUpload.name + v4()}`);
-      const snapshot = await uploadBytes(imageRef, imageUpload);
-      const url = await getDownloadURL(snapshot.ref);
-      
-      setImageUrls((prev) => [...prev, url]);
-      
-      alert("Image uploaded successfully!");
-    } catch (error) {
-      console.error("Upload failed:", error);
-      alert("Upload failed, please try again.");
-    }
-  };
-  
-
- 
   useEffect(() => {
     document.title = "PAC Pro - Submit Invoice";
   }, []); // Used to change title
@@ -128,20 +100,36 @@ const SubmitInvoice = () => {
     }
   };
 
-  const handleUploadClick = () => {
-    alert("Upload Invoice clicked");
+  const handleUploadClick = async () => {
+    if (!imageUpload) {
+      alert("Please select a file before uploading.");
+      return;
+    }
+  
+    try {
+      const imageRef = ref(storage, `images/${imageUpload.name + v4()}`);
+      const snapshot = await uploadBytes(imageRef, imageUpload);
+      const url = await getDownloadURL(snapshot.ref);
+      
+      setImageUrls((prev) => [...prev, url]);
+      
+      alert("Image uploaded successfully!");
+    } catch (error) {
+      console.error("Upload failed:", error);
+      alert("Upload failed, please try again.");
+    }
   };
 
   return (
     <div className={styles.pageContainer}>
       {/* Top Bar */}
       <div className={styles.topBar}>Submit Invoice</div>
-
-      {/* Upload Invoice Button */}
+      
+      {/* Upload Image Button at the Top */}
       <button className={styles.uploadBar} onClick={handleUploadClick}>
         Upload Invoice (pdf, png, jpg)
       </button>
-
+      
       {/* Form Container */}
       <div className={styles.formContainer}>
         <form onSubmit={handleSubmit}>
@@ -237,10 +225,16 @@ const SubmitInvoice = () => {
             </div>
           </div>
 
-          {/* Submit Invoice */}
-          <button type="submit" className={styles.submitBtn}>
-            Submit Invoice
-          </button>
+          {/* Bottom Row: File Input and Submit Invoice Button */}
+          <div className={styles.buttonRow}>
+            <input
+              type="file"
+              onChange={(event) => setImageUpload(event.target.files[0])}
+            />
+            <button type="submit" className={styles.submitBtn}>
+              Submit Invoice
+            </button>
+          </div>
         </form>
       </div>
     </div>
@@ -248,4 +242,3 @@ const SubmitInvoice = () => {
 };
 
 export default SubmitInvoice;
-
