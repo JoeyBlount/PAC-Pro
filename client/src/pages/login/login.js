@@ -14,33 +14,40 @@ import { getFirestore, doc, getDoc } from "firebase/firestore"; // Firebase Fire
 const Login = () => {
   React.useEffect(() => {
     document.title = "PAC Pro - Login";
+
   }, []); // Used to change the title.
 
   const navigate = useNavigate(); // Hook for navigation
   const user = auth.currentUser;
   const { instance } = useMsal(); // MSAL instance
+  const db = getFirestore(); // Initialize Firestore
 
   const handleMicrosoftLogin = async () => {
     try {
       const response = await instance.loginPopup(loginRequest);
-      localStorage.setItem("user", JSON.stringify(response.account));
-      const userEmail = result.username; // Get the email from Google sign-in result
+      console.log(response)
+      const userEmail = response.account.username; // Get the email from Google sign-in result
       console.log(userEmail)
 
       // Check if the email exists in the database (Firestore in this case)
-      const db = getFirestore(); // Initialize Firestore
+
       const userRef = doc(db, "users", userEmail); // Assuming 'users' collection where emails are stored
       const userDoc = await getDoc(userRef); // Get the document
+      console.log("hi")
 
-      if (userDoc.exists()) {
-        console.log("User exists in the database:", userEmail);
-        navigate("/navi/dashboard"); // Navigate to dashboard if email is in DB
-      } else {
-        console.log("Email not found in the database:", userEmail);
-        navigate("/not-allowed"); // Navigate to 'not allowed' page if email is not in DB
+      try {
+        const userRef = doc(db, "users", userEmail);
+        const userDoc = await getDoc(userRef);
+        console.log("User document:", userDoc.exists());
+        if (userDoc.exists()) {
+          navigate("/navi/dashboard");
+        } else {
+          navigate("/not-allowed");
+        }
+      } catch (firestoreError) {
+        console.error("Firestore error:", firestoreError);
       }
-      console.log("google login result: ", result);
-      localStorage.setItem("user", JSON.stringify(result.user));
+      localStorage.setItem("user", JSON.stringify(response.account.username));
     } catch (error) {
       console.error("Microsoft login error:", error);
     }
