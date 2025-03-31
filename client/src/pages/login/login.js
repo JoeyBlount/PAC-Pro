@@ -60,7 +60,6 @@ const Login = () => {
       }
       console.log("google login result: ", result);
       localStorage.setItem("user", JSON.stringify(result.user));
-      navigate("/navi/dashboard");
     } catch (error) {
       console.error("Google Login Error:", error);
     }
