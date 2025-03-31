@@ -7,25 +7,27 @@ import MicrosoftIcon from "@mui/icons-material/Microsoft";
 //import { auth } from "../../config/firebaseConfigEmail";
 import { useMsal } from "@azure/msal-react"; // Import useMsal hook
 import { loginRequest } from "../../authconfig";
-import { auth, googleAuthProvider } from "../../config/firebaseConfigEmail";
 import { auth, googleAuthProvider } from "../../config/firebase";
 import { signInWithPopup } from "firebase/auth";
 import { getFirestore, doc, getDoc } from "firebase/firestore"; // Firebase Firestore functions
 
 const Login = () => {
+  React.useEffect(() => {
+    document.title = "PAC Pro - Login";
+  }, []); // Used to change the title.
+
   const navigate = useNavigate(); // Hook for navigation
   const user = auth.currentUser;
   const { instance } = useMsal(); // MSAL instance
 
-  const handleMicrosoftLogin = () => {
-    instance
-      .loginRedirect(loginRequest)
-      .then(() => {
-        // After successful login, store user session and navigate
-        localStorage.setItem("user", JSON.stringify(auth.currentUser));
-        navigate("/navi/dashboard");
-      })
-      .catch((error) => console.error("Microsoft login error:", error));
+  const handleMicrosoftLogin = async () => {
+    try {
+      const response = await instance.loginPopup(loginRequest);
+      localStorage.setItem("user", JSON.stringify(response.account));
+      navigate("/navi/dashboard");
+    } catch (error) {
+      console.error("Microsoft login error:", error);
+    }
   };
 
   //for debugging to see if user is actually logged out or not

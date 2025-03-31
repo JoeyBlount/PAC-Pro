@@ -5,7 +5,7 @@ import { onAuthStateChanged } from "firebase/auth";
 
 // Private route component to check authentication
 function PrivateRoute({ element }) {
-    const [user, setUser] = useState(null);
+    const [user, setUser] = useState(undefined);
     const [loading, setLoading] = useState(true);
   
     useEffect(() => {

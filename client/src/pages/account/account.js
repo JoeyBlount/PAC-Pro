@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { Container, Typography, Button, TextField, Box } from "@mui/material";
-import { db, auth } from "../../config/firebaseConfigEmail";
+import { db, auth } from "../../config/firebase-config";
 import { getDocs, collection, query, where } from 'firebase/firestore';
 import { signOut, updatePassword } from "firebase/auth";
 
 const Account = () => {
+  React.useEffect(() => {
+    document.title = "PAC Pro - Account";
+  }, []); // Used to change the title.
+
   const [currentUser, setCurrentUser] = useState(null);
   const [storeAssignments, setStoreAssignments] = useState([]);
   const [newPassword, setNewPassword] = useState("");
