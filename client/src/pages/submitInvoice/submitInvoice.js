@@ -1,9 +1,51 @@
+import { Container } from "@mui/material";
+import "./submitInvoice.css";
+import { storage } from "../../config/firebase-config"; // Import initialized Firebase storage
+import { v4 } from "uuid"; // UUID for unique image names
+import { useState, useEffect } from "react";
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  listAll,
+} from "firebase/storage";
 import React, { useState } from "react";
 import { collection, doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "../../config/firebaseConfig"; // Adjust the path as needed
 import styles from "./submitInvoice.module.css";
 
 const SubmitInvoice = () => {
+  const [imageUpload, setImageUpload] = useState(null);
+  const [imageUrls, setImageUrls] = useState([]);
+
+  const imagesListRef = ref(storage, "images/");
+
+  const uploadFile = async () => {
+    if (!imageUpload) {
+      alert("Please select a file before uploading.");
+      return;
+    }
+  
+    try {
+      const imageRef = ref(storage, `images/${imageUpload.name + v4()}`);
+      const snapshot = await uploadBytes(imageRef, imageUpload);
+      const url = await getDownloadURL(snapshot.ref);
+      
+      setImageUrls((prev) => [...prev, url]);
+      
+      alert("Image uploaded successfully!");
+    } catch (error) {
+      console.error("Upload failed:", error);
+      alert("Upload failed, please try again.");
+    }
+  };
+  
+
+ 
+  useEffect(() => {
+    document.title = "PAC Pro - Submit Invoice";
+  }, []); // Used to change title
+
   // State variables for each form field
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [company, setCompany] = useState("");
@@ -206,3 +248,4 @@ const SubmitInvoice = () => {
 };
 
 export default SubmitInvoice;
+
