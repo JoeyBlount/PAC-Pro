@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { db } from "../../config/firebase-config";
+import { collection, addDoc } from "firebase/firestore";
 import { Container, Tabs, Tab, Table, TableHead, TableRow, TableCell, TableBody, Paper, TableContainer, TextField, Button, Select, MenuItem } from "@mui/material";
 import './pac.css';
 
@@ -15,7 +17,39 @@ const PAC = () => {
   const [month, setMonth] = useState("January");
   const [savedData, setSavedData] = useState({});
   const [projections, setProjections] = useState([]);
-  
+
+  // State variables for Generate tab
+  const pacGenRef = collection(db, "pacGen");
+  const [productNetSales, setProductNetSales] = useState(0);
+  const [cash, setCash] = useState(0);
+  const [promo, setPromo] = useState(0);
+  const [allNetSales, setAllNetSales] = useState(0);
+  const [advertising, setAdvertising] = useState(0);
+
+  const [crewLabor, setCrewLabor] = useState(0);
+  const [totalLabor, setTotalLabor] = useState(0);
+  const [payrollTax, setPayrollTax] = useState(0);
+
+  const [completeWaste, setCompleteWaste] = useState(0);
+  const [rawWaste, setRawWaste] = useState(0);
+  const [condiment, setCondiment] = useState(0);
+  const [variance, setVariance] = useState(0);
+  const [unexplained, setUnexplained] = useState(0);
+  const [discounts, setDiscounts] = useState(0);
+  const [baseFood, setBaseFood] = useState(0);
+
+  const [startingFood, setStartingFood] = useState(0);
+  const [startingCondiment, setStartingCondiment] = useState(0);
+  const [startingPaper, setStartingPaper] = useState(0);
+  const [startingNonProduct, setStartingNonProduct] = useState(0);
+
+  const [endingFood, setEndingFood] = useState(0);
+  const [endingCondiment, setEndingCondiment] = useState(0);
+  const [endingPaper, setEndingPaper] = useState(0);
+  const [endingNonProduct, setEndingNonProduct] = useState(0);
+
+
+
   useEffect(() => {
     document.title = "PAC Pro - PAC";
   }, []);
@@ -79,6 +113,81 @@ const PAC = () => {
     }));
   };
 
+
+
+  const handleGenerate = async (e) => {
+    if (!productNetSales ||
+      !cash ||
+      !promo ||
+      !allNetSales ||
+      !advertising ||
+
+      !crewLabor ||
+      !totalLabor ||
+      !payrollTax ||
+
+      !completeWaste ||
+      !rawWaste ||
+      !condiment ||
+      !variance ||
+      !unexplained ||
+      !discounts ||
+      !baseFood ||
+
+      !startingFood ||
+      !startingCondiment ||
+      !startingPaper ||
+      !startingNonProduct ||
+
+      !endingFood ||
+      !endingCondiment ||
+      !endingPaper ||
+      !endingNonProduct
+    ) {
+      alert("You must fill out all fields before submitting.");
+    }
+
+    else {
+      try {
+        await addDoc(pacGenRef, {
+          ProductNetSales: productNetSales,
+          Cash: cash,
+          Promo: promo,
+          AllNetSales: allNetSales,
+          Advertising: advertising,
+
+          CrewLabor: crewLabor,
+          TotalLabor: totalLabor,
+          PayrollTax: payrollTax,
+
+          CompleteWaste: completeWaste,
+          RawWaste: rawWaste,
+          Condiment: condiment,
+          Variance: variance,
+          Unexplained: unexplained,
+          Discounts: discounts,
+          BaseFood: baseFood,
+
+          StartingFood: startingFood,
+          StartingCondiment: startingCondiment,
+          StartingPaper: startingPaper,
+          StartingNonProduct: startingNonProduct,
+
+          EndingFood: endingFood,
+          EndingCondiment: endingCondiment,
+          EndingPaper: endingPaper,
+          EndingNonProduct: endingNonProduct
+        });
+        alert("Report generated successfully.");
+      } catch (error) {
+        console.error("Error saving report:", error);
+        alert("Failed to generate.");
+      }
+    }
+
+  };
+
+
   return (
     <Container sx={{ textAlign: "center", marginTop: 5, overflowX: "auto", paddingX: "20px" }}>
       <div className="topBar">
@@ -138,7 +247,221 @@ const PAC = () => {
             </TableBody>
           </Table>
         </TableContainer>
-      )}
+      )} {/* end of Projections page */}
+
+      {tabIndex === 1 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px", marginTop: "20px" }}>
+          {/* Sales */}
+          <div className="pac-section sales-section">
+            <h4>Sales</h4>
+            <div className="input-row"><label className="input-label">Product Net Sales ($)</label>
+              <input
+                type="number"
+                value={productNetSales}
+                onChange={(e) => setProductNetSales(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Cash +/- ($)</label>
+              <input
+                type="number"
+                value={cash}
+                onChange={(e) => setCash(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Promo ($)</label>
+              <input
+                type="number"
+                value={promo}
+                onChange={(e) => setPromo(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">All Net Sales ($)</label>
+              <input
+                type="number"
+                value={allNetSales}
+                onChange={(e) => setAllNetSales(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Advertising ($)</label>
+              <input
+                type="number"
+                value={advertising}
+                onChange={(e) => setAdvertising(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Labor */}
+          <div className="pac-section labor-section">
+            <h4>Labor</h4>
+            <div className="input-row"><label className="input-label">Crew Labor %</label>
+              <input
+                type="number"
+                value={crewLabor}
+                onChange={(e) => setCrewLabor(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Total Labor %</label>
+              <input
+                type="number"
+                value={totalLabor}
+                onChange={(e) => setTotalLabor(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Payroll Tax ($)</label>
+              <input
+                type="number"
+                value={payrollTax}
+                onChange={(e) => setPayrollTax(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Food */}
+          <div className="pac-section food-section">
+            <h4>Food</h4>
+            <div className="input-row"><label className="input-label">Complete Waste %</label>
+              <input
+                type="number"
+                value={completeWaste}
+                onChange={(e) => setCompleteWaste(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Raw Waste %</label>
+              <input
+                type="number"
+                value={rawWaste}
+                onChange={(e) => setRawWaste(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Condiment %</label>
+              <input
+                type="number"
+                value={condiment}
+                onChange={(e) => setCondiment(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Variance Stat %</label>
+              <input
+                type="number"
+                value={variance}
+                onChange={(e) => setVariance(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Unexplained %</label>
+              <input
+                type="number"
+                value={unexplained}
+                onChange={(e) => setUnexplained(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Discounts %</label>
+              <input
+                type="number"
+                value={discounts}
+                onChange={(e) => setDiscounts(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Base Food %</label>
+              <input
+                type="number"
+                value={baseFood}
+                onChange={(e) => setBaseFood(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Starting Inventory */}
+          <div className="pac-section starting-inventory-section">
+            <h4>Starting Inventory</h4>
+            <div className="input-row"><label className="input-label">Food ($)</label>
+              <input
+                type="number"
+                value={startingFood}
+                onChange={(e) => setStartingFood(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Condiment ($)</label>
+              <input
+                type="number"
+                value={startingCondiment}
+                onChange={(e) => setStartingCondiment(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Paper ($)</label>
+              <input
+                type="number"
+                value={startingPaper}
+                onChange={(e) => setStartingPaper(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Non Product ($)</label>
+              <input
+                type="number"
+                value={startingNonProduct}
+                onChange={(e) => setStartingNonProduct(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Ending Inventory */}
+          <div className="pac-section ending-inventory-section">
+            <h4>Ending Inventory</h4>
+            <div className="input-row"><label className="input-label">Food ($)</label>
+              <input
+                type="number"
+                value={endingFood}
+                onChange={(e) => setEndingFood(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Condiment ($)</label>
+              <input
+                type="number"
+                value={endingCondiment}
+                onChange={(e) => setEndingCondiment(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Paper ($)</label>
+              <input
+                type="number"
+                value={endingPaper}
+                onChange={(e) => setEndingPaper(e.target.value)}
+              />
+            </div>
+            <div className="input-row"><label className="input-label">Non Product ($)</label>
+              <input
+                type="number"
+                value={endingNonProduct}
+                onChange={(e) => setEndingNonProduct(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <Button
+            variant="contained"
+            color="primary"
+            size="large"
+            sx={{
+              marginTop: 2,
+              marginBottom: 8,
+              width: "250px",
+              alignSelf: "center",
+              backgroundColor: "#1976d2",
+              "&:hover": {
+                backgroundColor: "#42a5f5",
+              }
+            }}
+            onClick={handleGenerate}
+          >
+            Generate Report
+          </Button>
+
+
+        </div>
+      )}  {/* end of Generate page */}
+
+
+
     </Container>
   );
 };

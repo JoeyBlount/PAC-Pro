@@ -4,3 +4,64 @@
     font-size: 30px;
     color: #000000;
   }
+
+  /* Section Containers */
+.pac-section {
+  padding: 8px;
+  border-radius: 6px;
+}
+
+/* Section Headings */
+.pac-section h4 {
+  margin: 4px 0 8px;
+  font-size: 18px;
+}
+
+/* Specific Section Colors */
+.sales-section {
+  background-color: #ffe0e9;
+}
+
+.labor-section {
+  background-color: #e0ffe0;
+}
+
+.food-section {
+  background-color: #e0f0ff;
+}
+
+.starting-inventory-section {
+  background-color: #fff9d6;
+}
+
+.ending-inventory-section {
+  background-color: #ffe6cc;
+}
+
+/* Labels and Buttons */
+.input-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+  width: 90%;
+  text-align: left;
+}
+
+.input-label {
+  width: 180px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  margin-right: 8px;
+  text-align: right;
+}
+
+.input-field .MuiInputBase-root {
+  font-size: 12px;
+  padding: 4px 8px;
+  height: 32px;
+}
+
+.input-field .MuiInputLabel-root {
+  font-size: 12px;
+}
