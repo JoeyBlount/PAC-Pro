@@ -1,0 +1,32 @@
+/* Table styling */
+.table {
+    margin: 0 auto;
+    border-collapse: collapse;
+    width: 80%;
+  }
+  
+  /* Header cells */
+  .headerCell {
+    border: 1px solid #ccc;
+    padding: 8px;
+    background-color: #f0f0f0;
+    text-align: left;
+  }
+  
+  /* Data cells */
+  .cell {
+    border: 1px solid #ccc;
+    padding: 8px;
+  }
+  
+  /* Edit button */
+  .editButton {
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: #0078d7;
+    padding: 4px 8px;
+  }
+  .editButton:hover {
+    text-decoration: underline;
+  }
