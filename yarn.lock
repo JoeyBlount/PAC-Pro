@@ -2,22 +2,22 @@
 # yarn lockfile v1
 
 
-"@azure/msal-browser@^4.7.0":
-  version "4.7.0"
-  resolved "https://registry.npmjs.org/@azure/msal-browser/-/msal-browser-4.7.0.tgz"
-  integrity sha512-H4AIPhIQVe1qW4+BJaitqod6UGQiXE3juj7q2ZBsOPjuZicQaqcbnBp2gCroF/icS0+TJ9rGuyCBJbjlAqVOGA==
+"@azure/msal-browser@^4.10.0":
+  version "4.10.0"
+  resolved "https://registry.npmjs.org/@azure/msal-browser/-/msal-browser-4.10.0.tgz"
+  integrity sha512-48X2VwOtHk8A1CI00E8tAqko0+3qQh53u5bOPySzdojL3T/Ad4GgRnN0c0oLJ1/PcTm4D4QybHYG3LBOX0l3/g==
   dependencies:
-    "@azure/msal-common" "15.2.1"
+    "@azure/msal-common" "15.5.0"
 
-"@azure/msal-common@15.2.1":
-  version "15.2.1"
-  resolved "https://registry.npmjs.org/@azure/msal-common/-/msal-common-15.2.1.tgz"
-  integrity sha512-eZHtYE5OHDN0o2NahCENkczQ6ffGc0MoUSAI3hpwGpZBHJXaEQMMZPWtIx86da2L9w7uT+Tr/xgJbGwIkvTZTQ==
+"@azure/msal-common@15.5.0":
+  version "15.5.0"
+  resolved "https://registry.npmjs.org/@azure/msal-common/-/msal-common-15.5.0.tgz"
+  integrity sha512-u97AJ6m4PB24/Plms9e9iydRcOaxxrHWkan1px5GeWGJfakY1D/r1DmY1+Typ8zWC/5JbNzH1GYpXrorPymz5g==
 
-"@azure/msal-react@^3.0.6":
-  version "3.0.6"
-  resolved "https://registry.npmjs.org/@azure/msal-react/-/msal-react-3.0.6.tgz"
-  integrity sha512-UioBknkXgg22JGl0H4fUKF9m8ngvVEvGsmYW2I9lR4dGB9NsRxv5DMwBIWHR4akp/2BFTAPy/LjujrzkFehoLQ==
+"@azure/msal-react@^3.0.9":
+  version "3.0.9"
+  resolved "https://registry.npmjs.org/@azure/msal-react/-/msal-react-3.0.9.tgz"
+  integrity sha512-im4F/MIYn6RbkfbKs8XA6Zs4FDo6EflfBIgmlUlYls8orpYECtsaRzCEZxPomMRNjzwo1Lm54TlY/Mtj0+SAaA==
 
 "@firebase/analytics-compat@0.2.18":
   version "0.2.18"
