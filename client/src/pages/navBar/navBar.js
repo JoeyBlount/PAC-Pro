@@ -1,7 +1,7 @@
-import React, { useState, useContext, useEffect } from 'react';
-import { useNavigate, Outlet } from 'react-router-dom';
+import React, { useState, useContext, useEffect } from "react";
+import { useNavigate, Outlet } from "react-router-dom";
 import { TiThMenu } from "react-icons/ti";
-import './navBar.css';
+import "./navBar.css";
 import { auth } from "../../config/firebase-config";
 import { signOut } from "firebase/auth";
 import {
@@ -28,6 +28,9 @@ import {
   Dashboard,
 } from "@mui/icons-material";
 import { StoreContext } from "../../context/storeContext"; // Import StoreContext
+// Import Firestore functions
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "../../config/firebase-config";
 
 export function NavBar() {
   const navigate = useNavigate();
@@ -42,17 +45,31 @@ export function NavBar() {
   // Get global selected store from context
   const { selectedStore, setSelectedStore } = useContext(StoreContext);
 
-  // Fetch data from JSON file
+  // Fetch user and stores data from Firestore
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
-        const response = await fetch("/navBarTest.json");
-        const data = await response.json();
-        setUserData(data.userData);
-        setStores(data.stores);
-        setLoading(false);
+        // Get the current user from Firebase Auth
+        const user = auth.currentUser;
+        if (user) {
+          // Query the "users" collection for the current user's data
+          const userQuery = query(
+            collection(db, "users"),
+            where("uid", "==", user.uid)
+          );
+          const userSnapshot = await getDocs(userQuery);
+          if (!userSnapshot.empty) {
+            setUserData(userSnapshot.docs[0].data());
+          }
+        }
+        // Get all stores from Firestore
+        const storesSnapshot = await getDocs(collection(db, "stores"));
+        const storesData = storesSnapshot.docs.map((doc) => doc.data());
+        setStores(storesData);
       } catch (error) {
-        console.error("Error loading data:", error);
+        console.error("Error loading data from Firestore:", error);
+      } finally {
         setLoading(false);
       }
     };
@@ -67,11 +84,11 @@ export function NavBar() {
     // Optionally, trigger refresh of data in other components here
   };
 
-  // Update store text getter
+  // Update store text getter to use storeId
   const getSelectedStoreText = () => {
-    const selected = stores.find((s) => s.storeNum === selectedStore);
+    const selected = stores.find((s) => s.storeId === selectedStore);
     return selected
-      ? `${selected.storeNum} - ${selected.subName}`
+      ? `${selected.storeId} - ${selected.subName}`
       : "Select Store";
   };
 
@@ -139,8 +156,8 @@ export function NavBar() {
                 renderValue={() => getSelectedStoreText()}
               >
                 {stores.map((store) => (
-                  <MenuItem key={store.storeNum} value={store.storeNum}>
-                    {store.storeNum} - {store.subName}
+                  <MenuItem key={store.storeId} value={store.storeId}>
+                    {store.storeId} - {store.subName}
                   </MenuItem>
                 ))}
               </Select>

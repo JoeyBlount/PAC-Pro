@@ -162,3 +162,12 @@ body {
   white-space: normal;
   word-break: break-word;
 }
+
+.invoice-row {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.invoice-row:hover {
+  background-color: #f0f0f0;
+}
