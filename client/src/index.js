@@ -13,6 +13,7 @@ import App from "./App";
 import Dashboard from "./pages/dashboard/dashboard";
 import InvoiceLogs from "./pages/invoiceLogs/invoiceLogs";
 import SubmitInvoice from "./pages/submitInvoice/submitInvoice";
+import InvoiceUploader from "./pages/submitInvoice/invoiceuploader";
 import Reports from "./pages/reports/reports";
 import Settings from "./pages/settings/settings";
 import PAC from "./pages/pac/pac";
@@ -41,6 +42,8 @@ const router = createBrowserRouter([
       { path: "dashboard", element: <Dashboard /> },
       { path: "invoiceLogs", element: <InvoiceLogs /> },
       { path: "submitInvoice", element: <SubmitInvoice /> },
+      { path: "InvoiceUploader", element: <InvoiceUploader /> },
+
       { path: "reports", element: <Reports /> },
       { path: "settings", element: <Settings /> },
       { path: "pac", element: <PAC /> },
