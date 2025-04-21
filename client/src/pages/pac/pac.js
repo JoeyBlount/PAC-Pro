@@ -17,6 +17,9 @@ const PAC = () => {
   const [month, setMonth] = useState("January");
   const [savedData, setSavedData] = useState({});
   const [projections, setProjections] = useState([]);
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 11 }, (_, i) => currentYear - i);
+  const [year, setYear] = useState(currentYear);
 
   // State variables for Generate tab
   const pacGenRef = collection(db, "pacGen");
@@ -42,11 +45,13 @@ const PAC = () => {
   const [startingCondiment, setStartingCondiment] = useState(0);
   const [startingPaper, setStartingPaper] = useState(0);
   const [startingNonProduct, setStartingNonProduct] = useState(0);
+  const [startingOpsSupplies, setStartingOpsSupplies] = useState(0);
 
   const [endingFood, setEndingFood] = useState(0);
   const [endingCondiment, setEndingCondiment] = useState(0);
   const [endingPaper, setEndingPaper] = useState(0);
   const [endingNonProduct, setEndingNonProduct] = useState(0);
+  const [endingOpsSupplies, setEndingOpsSupplies] = useState(0);
 
 
 
@@ -114,7 +119,7 @@ const PAC = () => {
   };
 
 
-
+  // this function saves all the user input data from the generate page into the database
   const handleGenerate = async (e) => {
     if (!productNetSales ||
       !cash ||
@@ -138,11 +143,13 @@ const PAC = () => {
       !startingCondiment ||
       !startingPaper ||
       !startingNonProduct ||
+      !startingOpsSupplies ||
 
       !endingFood ||
       !endingCondiment ||
       !endingPaper ||
-      !endingNonProduct
+      !endingNonProduct ||
+      !endingOpsSupplies
     ) {
       alert("You must fill out all fields before submitting.");
     }
@@ -150,33 +157,35 @@ const PAC = () => {
     else {
       try {
         await addDoc(pacGenRef, {
-          ProductNetSales: productNetSales,
-          Cash: cash,
-          Promo: promo,
-          AllNetSales: allNetSales,
-          Advertising: advertising,
+          ProductNetSales: parseFloat(productNetSales),
+          Cash: parseFloat(cash),
+          Promo: parseFloat(promo),
+          AllNetSales: parseFloat(allNetSales),
+          Advertising: parseFloat(advertising),
 
-          CrewLabor: crewLabor,
-          TotalLabor: totalLabor,
-          PayrollTax: payrollTax,
+          CrewLabor: parseFloat(crewLabor),
+          TotalLabor: parseFloat(totalLabor),
+          PayrollTax: parseFloat(payrollTax),
 
-          CompleteWaste: completeWaste,
-          RawWaste: rawWaste,
-          Condiment: condiment,
-          Variance: variance,
-          Unexplained: unexplained,
-          Discounts: discounts,
-          BaseFood: baseFood,
+          CompleteWaste: parseFloat(completeWaste),
+          RawWaste: parseFloat(rawWaste),
+          Condiment: parseFloat(condiment),
+          Variance: parseFloat(variance),
+          Unexplained: parseFloat(unexplained),
+          Discounts: parseFloat(discounts),
+          BaseFood: parseFloat(baseFood),
 
-          StartingFood: startingFood,
-          StartingCondiment: startingCondiment,
-          StartingPaper: startingPaper,
-          StartingNonProduct: startingNonProduct,
+          StartingFood: parseFloat(startingFood),
+          StartingCondiment: parseFloat(startingCondiment),
+          StartingPaper: parseFloat(startingPaper),
+          StartingNonProduct: parseFloat(startingNonProduct),
+          StartingOpsSupplies: parseFloat(startingOpsSupplies),
 
-          EndingFood: endingFood,
-          EndingCondiment: endingCondiment,
-          EndingPaper: endingPaper,
-          EndingNonProduct: endingNonProduct
+          EndingFood: parseFloat(endingFood),
+          EndingCondiment: parseFloat(endingCondiment),
+          EndingPaper: parseFloat(endingPaper),
+          EndingNonProduct: parseFloat(endingNonProduct),
+          EndingOpsSupplies: parseFloat(endingOpsSupplies)
         });
         alert("Report generated successfully.");
       } catch (error) {
@@ -194,9 +203,16 @@ const PAC = () => {
         <h1 className="Header">PAC</h1>
         <div className="topBarControls">
           <div className="filterDropdowns" style={{ display: "flex", alignItems: "center" }}>
+            {/* Month Dropdown */}
             <Select value={month} onChange={(e) => setMonth(e.target.value)} sx={{ width: 200, marginRight: 2 }}>
               {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(m => (
                 <MenuItem key={m} value={m}>{m}</MenuItem>
+              ))}
+            </Select>
+            {/* Year Dropdown */}
+            <Select value={year} onChange={(e) => setYear(e.target.value)} sx={{ width: 120, marginRight: 2 }}>
+              {years.map(y => (
+                <MenuItem key={y} value={y}>{y}</MenuItem>
               ))}
             </Select>
             <Tabs
@@ -402,6 +418,13 @@ const PAC = () => {
                 onChange={(e) => setStartingNonProduct(e.target.value)}
               />
             </div>
+            <div className="input-row"><label className="input-label"> Office Supplies ($)</label>
+              <input
+                type="number"
+                value={startingOpsSupplies}
+                onChange={(e) => setStartingOpsSupplies(e.target.value)}
+              />
+            </div>
           </div>
 
           {/* Ending Inventory */}
@@ -435,8 +458,16 @@ const PAC = () => {
                 onChange={(e) => setEndingNonProduct(e.target.value)}
               />
             </div>
+            <div className="input-row"><label className="input-label"> Office Supplies ($)</label>
+              <input
+                type="number"
+                value={endingOpsSupplies}
+                onChange={(e) => setEndingOpsSupplies(e.target.value)}
+              />
+            </div>
           </div>
 
+          {/* This button calls the handleGenerate function */}
           <Button
             variant="contained"
             color="primary"
