@@ -1,66 +1,158 @@
-/* Navigation Bar on the Left Side */
-.left-nav {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 20px;
-    background-color: #052a3b;
-    position: fixed;
-    top: 8vh;
-    left: 0;
-    height: 100vh; /* Full height */
-    width: 250px; /* Sidebar width */
-    transition: transform 0.3s ease-in-out;
+/* --- TOP NAV BAR --- */
+.topNavBar {
+  background: linear-gradient(to right, #2196f3, #0d47a1);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 1200;
 }
 
-.left-nav button {
-    width: 100%;
-    padding: 15px 20px;
-    font-size: 20px;
-    color: #ffffff;
-    background-color: transparent;
-    border: none;
-    cursor: pointer;
-    margin-bottom: 10px;
-    text-align: left;
+.topNavLeft {
+  display: flex;
+  align-items: center;
 }
 
-.left-nav button:hover {
-    background-color: #f01f53;
+/* Adjusted spacing for hamburger icon */
+.hamburgerButton {
+  color: #fff;
+  margin-right: 20px;
 }
 
-/* Hamburger Menu */
-.hamburger {
-    display: flex;
-    padding: 10px;
-    position: fixed;
-    top: 5px;
-    left: 5px;
-    z-index: 1000;
+/* --- Store Selector --- */
+.storeSelectorWrapper {
+  display: flex;
+  align-items: center;
+  margin-left: 20px; /* Moved right to align with main content */
 }
 
-.hamburger button {
-    border: none;
-    justify-content: center;
-    align-items: center;
-    font-size: 30px;
-    width: 50px;
-    height: 50px;
-    border-radius: 100%;
-    background-color: #535353;
-    color: #ffffff;
-    cursor: pointer;
+.storeSelectorWrapper .MuiInputBase-root {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
 }
 
-.hamburger button:hover {
-    background-color: #4e99ca;
+.storeSelectorWrapper .MuiOutlinedInput-notchedOutline {
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
-.account-section {
-    display: flex;
-    padding: 10px;
-    position: fixed;
-    top: 5px;
-    right: 5px;
-    z-index: 1000;
+/* Spacer to push account button to the far right */
+.spacer {
+  flex-grow: 1;
+}
+
+/* --- Account Button --- */
+.accountButton {
+  display: flex;
+  align-items: center;
+  margin-right: 16px;
+}
+
+.accountBtn {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.5) !important;
+  border-radius: 4px;
+  text-transform: none;
+  font-weight: 400;
+  padding: 8px 16px;
+  min-width: 120px;
+  height: 40px;
+  transition: all 0.2s ease;
+}
+
+.accountBtn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.accountBtn .MuiButton-startIcon {
+  margin-right: 10px;
+  color: #000000;
+}
+
+.accountBtn .MuiButton-startIcon svg {
+  font-size: 24px;
+}
+
+/* --- COLLAPSIBLE LEFT NAV BAR --- */
+.leftNavBar {
+  position: fixed;
+  top: 64px;
+  left: 0;
+  height: calc(100% - 64px);
+  width: 80px; /* Collapsed width */
+  background-color: #fff;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  transition: width 0.3s ease;
+  z-index: 1100;
+}
+
+.leftNavBar.open {
+  width: 240px; /* Expanded width */
+}
+
+.sideNavContent {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Main icons container */
+.sideNavMain {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+  gap: 4px; /* Consistent spacing between items */
+}
+
+/* Bottom container for Settings & Logout */
+.sideNavBottom {
+  padding: 8px 0;
+  border-top: 1px solid #ddd;
+  display: flex;
+  flex-direction: column;
+  gap: 4px; /* Consistent spacing between items */
+}
+
+/* --- Nav Item Styles --- */
+.navItem {
+  justify-content: flex-start;
+  color: #0d47a1;
+  text-transform: none;
+  font-weight: 500;
+  width: 100%;
+  border-radius: 0;
+  padding: 8px 16px; /* Reduced padding for better alignment */
+  margin: 0;
+  text-align: left;
+  min-height: 48px;
+  display: flex;
+  align-items: center; /* Center items vertically */
+}
+
+.navItem .MuiButton-startIcon {
+  margin: 0 16px 0 8px; /* Consistent spacing */
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.navItem .MuiButton-startIcon svg {
+  font-size: 24px;
+}
+
+.navItem span.MuiButton-label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: auto;
 }
