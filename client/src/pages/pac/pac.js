@@ -113,6 +113,84 @@ const PAC = () => {
     }));
   };
 
+  const [storeNumber, setStoreNumber] = useState("Store 123"); // You might want to make this dynamic
+const [actualData, setActualData] = useState({}); // Will hold actual data from invoices
+const [hoverInfo, setHoverInfo] = useState(null);
+
+// Categories for visual grouping
+const categories = {
+  'Product Sales': ['Product Sales'],
+  'Food & Paper': ['Base Food', 'Employee Meal', 'Condiment', 'Total Waste', 'Paper'],
+  'Labor': ['Crew Labor', 'Management Labor', 'Payroll Tax'],
+  'Purchases': ['Advertising', 'Travel', 'Adv Other', 'Promotion', 'Outside Services',
+                'Linen', 'OP. Supply', 'Maint. & Repair', 'Small Equipment', 
+                'Utilities', 'Office', 'Cash +/-', 'Misc: CR/TR/D&S']
+};
+
+// Calculate category sums
+const calculateCategorySums = (data, type) => {
+  const sums = {};
+  for (const [category, items] of Object.entries(categories)) {
+    sums[category] = items.reduce((acc, item) => {
+      const expense = data.find(e => e.name === item);
+      if (expense) {
+        const dollar = parseFloat(expense[`${type}Dollar`]) || 0;
+        const percent = parseFloat(expense[`${type}Percent`]) || 0;
+        return {
+          dollar: acc.dollar + dollar,
+          percent: acc.percent + percent
+        };
+      }
+      return acc;
+    }, { dollar: 0, percent: 0 });
+  }
+  return sums;
+};
+
+// Helper functions
+const getCategoryColor = (category) => {
+  const colors = {
+    'Product Sales': '#e3f2fd',
+    'Food & Paper': '#e8f5e9',
+    'Labor': '#fff3e0',
+    'Purchases': '#f3e5f5'
+  };
+  return colors[category] || '#ffffff';
+};
+
+const getProductSales = () => {
+  const productSales = projections.find(e => e.name === 'Product Sales');
+  return parseFloat(productSales?.historicalDollar) || 0;
+};
+
+const calculateTotalControllable = (type) => {
+  let total = 0;
+  ['Food & Paper', 'Labor', 'Purchases'].forEach(category => {
+    categories[category].forEach(item => {
+      const expense = projections.find(e => e.name === item);
+      if (expense) {
+        total += parseFloat(expense[`${type}Dollar`]) || 0;
+      }
+    });
+  });
+  return total;
+};
+
+const calculatePac = (type) => {
+  const productSales = getProductSales();
+  const totalControllable = calculateTotalControllable(type);
+  return productSales - totalControllable;
+};
+
+const calculatePercentage = (value, total) => {
+  return total > 0 ? ((value / total) * 100).toFixed(2) + '%' : '0.00%';
+};
+
+const isPacPositive = () => {
+  const actualPac = calculatePac('historical');
+  const projectedPac = calculatePac('projected');
+  return actualPac >= projectedPac;
+};
 
 
   const handleGenerate = async (e) => {
@@ -460,6 +538,126 @@ const PAC = () => {
         </div>
       )}  {/* end of Generate page */}
 
+{tabIndex === 2 && (
+  <div style={{ marginTop: '20px' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+      <h3>{storeNumber} - {month} {new Date().getFullYear()}</h3>
+      <Button 
+        variant="contained" 
+        onClick={() => window.print()}
+        sx={{ backgroundColor: '#1976d2', color: 'white' }}
+      >
+        Print Report
+      </Button>
+    </div>
+
+    <TableContainer component={Paper}>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableCell width="25%"><strong>Account</strong></TableCell>
+            <TableCell align="right" width="15%"><strong>Actual $</strong></TableCell>
+            <TableCell align="right" width="15%"><strong>Actual %</strong></TableCell>
+            <TableCell align="right" width="15%"><strong>Projected $</strong></TableCell>
+            <TableCell align="right" width="15%"><strong>Projected %</strong></TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {Object.entries(categories).map(([category, items]) => (
+            <React.Fragment key={category}>
+              <TableRow 
+                hover 
+                onMouseEnter={() => {
+                  const actualSums = calculateCategorySums(projections, 'historical');
+                  const projectedSums = calculateCategorySums(projections, 'projected');
+                  setHoverInfo({
+                    category,
+                    actual: actualSums[category],
+                    projected: projectedSums[category]
+                  });
+                }}
+                onMouseLeave={() => setHoverInfo(null)}
+                sx={{ backgroundColor: getCategoryColor(category) }}
+              >
+                <TableCell colSpan={5}><strong>{category}</strong></TableCell>
+              </TableRow>
+              
+              {items.map(item => {
+                const expense = projections.find(e => e.name === item);
+                return expense ? (
+                  <TableRow key={item}>
+                    <TableCell>{item}</TableCell>
+                    <TableCell align="right">{expense.historicalDollar || '-'}</TableCell>
+                    <TableCell align="right">
+                      {item === 'Product Sales' ? '-' : (expense.historicalPercent || '-')}
+                    </TableCell>
+                    <TableCell align="right">{expense.projectedDollar || '-'}</TableCell>
+                    <TableCell align="right">{expense.projectedPercent || '-'}</TableCell>
+                  </TableRow>
+                ) : null;
+              })}
+            </React.Fragment>
+          ))}
+
+          {/* Total Controllable Row */}
+          <TableRow sx={{ backgroundColor: '#f0f0f0' }}>
+            <TableCell><strong>Total Controllable</strong></TableCell>
+            <TableCell align="right">
+              {calculateTotalControllable('historical').toFixed(2)}
+            </TableCell>
+            <TableCell align="right">
+              {calculatePercentage(calculateTotalControllable('historical'), getProductSales())}
+            </TableCell>
+            <TableCell align="right">
+              {calculateTotalControllable('projected').toFixed(2)}
+            </TableCell>
+            <TableCell align="right">
+              {calculatePercentage(calculateTotalControllable('projected'), getProductSales())}
+            </TableCell>
+          </TableRow>
+
+          {/* P.A.C. Row */}
+          <TableRow sx={{ 
+            backgroundColor: isPacPositive() ? 'rgba(0, 255, 0, 0.1)' : 'rgba(255, 0, 0, 0.1)',
+            fontWeight: 'bold'
+          }}>
+            <TableCell><strong>P.A.C.</strong></TableCell>
+            <TableCell align="right">
+              {calculatePac('historical').toFixed(2)}
+            </TableCell>
+            <TableCell align="right">
+              {calculatePercentage(calculatePac('historical'), getProductSales())}
+            </TableCell>
+            <TableCell align="right">
+              {calculatePac('projected').toFixed(2)}
+            </TableCell>
+            <TableCell align="right">
+              {calculatePercentage(calculatePac('projected'), getProductSales())}
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </TableContainer>
+
+    {/* Hover Popup */}
+    {hoverInfo && (
+      <Paper 
+        elevation={3} 
+        sx={{
+          position: 'absolute',
+          padding: '10px',
+          backgroundColor: 'white',
+          zIndex: 1000,
+          pointerEvents: 'none'
+        }}
+      >
+        <div><strong>{hoverInfo.category} Summary</strong></div>
+        <div>Actual: ${hoverInfo.actual.dollar.toFixed(2)} ({hoverInfo.actual.percent.toFixed(2)}%)</div>
+        <div>Projected: ${hoverInfo.projected.dollar.toFixed(2)} ({hoverInfo.projected.percent.toFixed(2)}%)</div>
+      </Paper>
+    )}
+  </div>
+)}
 
 
     </Container>
