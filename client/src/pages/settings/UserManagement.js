@@ -17,7 +17,7 @@ import {
   InputLabel,
   FormControl,
 } from "@mui/material";
-import { collection, getDocs, addDoc, deleteDoc, doc } from "firebase/firestore";
+import { collection, getDocs, addDoc, deleteDoc, doc, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "../../config/firebase-config";
 import CloseIcon from "@mui/icons-material/Close";
 import AddIcon from "@mui/icons-material/Add";
