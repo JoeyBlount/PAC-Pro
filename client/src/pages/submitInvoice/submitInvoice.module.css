@@ -6,7 +6,7 @@
   box-sizing: border-box;
 }
 
-/* Top Bar: "Submit Invoice" */
+/* Top Bar */
 .topBar {
   background-color: #000;
   color: #fff;
@@ -18,24 +18,7 @@
   border-radius: 4px;
 }
 
-/* Upload Invoice Button (Red) */
-.uploadBar {
-  display: block;
-  width: 100%;
-  max-width: 400px;
-  margin: 0 auto 20px;
-  background-color: #f44336;
-  color: #fff;
-  font-size: 16px;
-  font-weight: bold;
-  padding: 10px;
-  border: none;
-  border-radius: 4px;
-  text-align: center;
-  cursor: pointer;
-}
-
-/* Form Container (White box) */
+/* Form Container */
 .formContainer {
   background-color: #fff;
   max-width: 600px;
@@ -45,7 +28,7 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-/* Each Form Group (label + input/select) */
+/* Form Group */
 .formGroup {
   display: flex;
   flex-direction: column;
@@ -57,14 +40,26 @@
   margin-bottom: 5px;
 }
 
-/* Row for Category & Amount */
+/* Button next to category (unchanged location) */
+.addBtn {
+  margin-top: 8px;
+  align-self: flex-start;
+  background-color: #0078d7;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Input Row for Category & Amount */
 .inputRow {
   display: flex;
   gap: 10px;
   margin-bottom: 15px;
 }
 
-/* Default styling for inputs and selects */
+/* Default inputs/selects */
 input,
 select {
   padding: 8px;
@@ -73,7 +68,7 @@ select {
   flex: 1;
 }
 
-/* Wrapper for the Amount input with dollar sign */
+/* Dollar wrapper */
 .amountInputWrapper {
   display: flex;
   align-items: center;
@@ -90,13 +85,12 @@ select {
   padding: 8px;
 }
 
-/* Dollar sign styling */
 .dollarSign {
   margin-right: 5px;
   font-size: 16px;
 }
 
-/* Button Row for File Input and Submit Button */
+/* Button Row */
 .buttonRow {
   display: flex;
   align-items: center;
@@ -104,26 +98,20 @@ select {
   margin-top: 15px;
 }
 
-/* "+ Add Another" Button */
-.addAnotherBtn {
-  display: inline-block;
-  background-color: #e0e0e0;
-  color: #000;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-bottom: 15px;
-}
-
-/* "Submit Invoice" Button */
+/* Submit Button */
 .submitBtn {
-  display: inline-block;
   background-color: #0078d7;
   color: #fff;
   border: none;
   padding: 10px 16px;
   border-radius: 4px;
   cursor: pointer;
+  font-weight: bold;
+}
+
+/* Checkmark */
+.checkmark {
+  color: green;
+  margin-left: 8px;
   font-weight: bold;
 }

@@ -4,13 +4,15 @@ import { db } from "../../config/firebase-config";
 import { Container, Typography } from "@mui/material";
 import styles from "./InvoiceSettings.module.css";
 
+//exporting list of invoice categories so submitInvoice.js can access it
+export const invoiceCatList = ["FOOD", "CONDIMENT", "NONPRODUCT", "PAPER", "TRAVEL"];
+
 const InvoiceSettings = () => {
   const [categories, setCategories] = useState([]);
   const [editingId, setEditingId]     = useState(null);
   const [editValue, setEditValue]     = useState("");
 
   const invoiceCatRef  = collection(db, "invoiceCategories");
-  const invoiceCatList = ["FOOD", "CONDIMENT", "NONPRODUCT", "PAPER", "TRAVEL"];
 
   const getCategories = async () => {
     const categoryData = [];
