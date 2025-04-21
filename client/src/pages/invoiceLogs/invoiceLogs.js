@@ -1,13 +1,21 @@
 import React, { useEffect, useState, useContext } from "react";
-import { Container } from "@mui/material";
+import {
+  Container,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  IconButton,
+} from "@mui/material";
+import { ZoomIn, ZoomOut, GetApp, Close } from "@mui/icons-material";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 import "./invoiceLogs.css";
-// Import Firebase Firestore functions and your db instance
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../config/firebase-config";
-// Import global store context
 import { StoreContext } from "../../context/storeContext";
 
-// List of monetary columns as before
 const monetaryColumns = [
   "FOOD",
   "CONDIMENT",
@@ -28,14 +36,12 @@ const monetaryColumns = [
 ];
 
 const InvoiceLogs = () => {
-  // Set page title
   useEffect(() => {
     document.title = "PAC Pro - Invoice Logs";
   }, []);
 
-  // Local state for invoice data and UI interactions
+  // Local state
   const [data, setData] = useState(null);
-  const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [activeSearchColumn, setActiveSearchColumn] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState({
@@ -44,20 +50,24 @@ const InvoiceLogs = () => {
   });
   const [selectedMonth, setSelectedMonth] = useState("");
   const [selectedYear, setSelectedYear] = useState("");
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
-  // Get the selected store from the global StoreContext
+  // New state for invoice details dialog
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [invoiceImage, setInvoiceImage] = useState(null);
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
+
+  // Global store
   const { selectedStore } = useContext(StoreContext);
 
-  // Instead of fetching from a JSON file, fetch invoices from Firestore whenever the selected store changes.
+  // Fetch invoices from Firestore
   useEffect(() => {
     if (!selectedStore) {
       setData(null);
       return;
     }
-
     const fetchInvoices = async () => {
       try {
-        // Query invoices collection where the "storeId" matches the selected store.
         const q = query(
           collection(db, "invoices"),
           where("storeId", "==", selectedStore)
@@ -67,77 +77,116 @@ const InvoiceLogs = () => {
           id: doc.id,
           ...doc.data(),
         }));
-
-        // For demonstration, compute dummy totals and budgets.
-        // In your real app, you may have these stored separately or computed dynamically.
+        // Compute totals directly from top-level monetary fields
         const computedTotal = {};
         monetaryColumns.forEach((col) => {
           computedTotal[col] = invoices.reduce((acc, curr) => {
-            // Assume each invoice has the monetary column stored as an array (or adjust as needed)
-            const values = curr[col] || [];
-            return acc + values.reduce((sum, num) => sum + num, 0);
+            const catValue = curr[col] != null ? curr[col] : 0;
+            const values = Array.isArray(catValue) ? catValue : [catValue];
+            return acc + values.reduce((sum, num) => sum + Number(num), 0);
           }, 0);
         });
         const computedBudget = {};
         monetaryColumns.forEach((col) => {
-          computedBudget[col] = 1000; // Dummy value; replace with your logic or stored budget data.
+          computedBudget[col] = 1000;
         });
-
-        // You might also have a location stored on the store document; here we set a dummy value.
         setData({
           invoices,
           total: computedTotal,
           budget: computedBudget,
-          location: "Store Location", // Replace with actual store location if available
         });
       } catch (error) {
         console.error("Error loading invoices: ", error);
       }
     };
-
     fetchInvoices();
   }, [selectedStore]);
 
-  // Handler for selecting an invoice row.
-  const handleInvoiceSelect = (invoice) => {
-    if (selectedInvoice?.invoiceNumber === invoice.invoiceNumber) {
-      setSelectedInvoice(null);
-    } else {
-      setSelectedInvoice(invoice);
+  // Export functions for full table export
+  const handleExportPDF = async () => {
+    try {
+      const tableElem = document.querySelector(".contentWrapper .customTable");
+      if (!tableElem) return;
+      const canvas = await html2canvas(tableElem);
+      const imgData = canvas.toDataURL("image/png");
+      // Create jsPDF with landscape orientation
+      const pdf = new jsPDF({ orientation: "landscape" });
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      pdf.save("invoices.pdf");
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+    }
+    setExportDialogOpen(false);
+  };
+
+  const handleExportExcel = () => {
+    const tableElem = document.querySelector(".contentWrapper .customTable");
+    if (!tableElem) return;
+    const escapeCSV = (value) => {
+      return `"${String(value).replace(/"/g, '""')}"`;
+    };
+    let csvContent = "data:text/csv;charset=utf-8,";
+    const headers = [];
+    tableElem.querySelectorAll("thead th").forEach((th) => {
+      headers.push(escapeCSV(th.textContent.trim()));
+    });
+    csvContent += headers.join(",") + "\n";
+    tableElem.querySelectorAll("tbody tr").forEach((tr) => {
+      const rowData = [];
+      tr.querySelectorAll("td").forEach((td) => {
+        rowData.push(escapeCSV(td.textContent.trim()));
+      });
+      csvContent += rowData.join(",") + "\n";
+    });
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "invoices.csv");
+    document.body.appendChild(link);
+    link.click();
+    setExportDialogOpen(false);
+  };
+
+  // Handler for clicking an invoice row:
+  // Now use imageUrl field from the invoice DB entry.
+  const handleRowClick = (invoice) => {
+    setSelectedInvoice(invoice);
+    // Use the field "imageUrl" from the invoice object.
+    setInvoiceImage(invoice.imageUrl || null);
+    setInvoiceDialogOpen(true);
+  };
+
+  // Export the invoice image as PDF from the dialog
+  const handleExportInvoicePDF = async () => {
+    if (!invoiceImage) return;
+    try {
+      const img = new Image();
+      img.crossOrigin = "anonymous"; // <-- Added this line
+      img.src = invoiceImage;
+      await new Promise((resolve) => {
+        img.onload = resolve;
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "landscape" });
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`invoice-${selectedInvoice.invoiceNumber}.pdf`);
+    } catch (error) {
+      console.error("Error exporting invoice PDF:", error);
     }
   };
 
-  // Print function remains unchanged.
-  const handlePrint = () => {
-    if (!selectedInvoice) {
-      alert("Please select an invoice to print.");
-      return;
-    }
-    const printWindow = window.open("", "_blank");
-    printWindow.document.write(
-      `<html><head><title>Invoice ${selectedInvoice.invoiceNumber}</title></head><body>`
-    );
-    printWindow.document.write(
-      `<h2>Invoice Number: ${selectedInvoice.invoiceNumber}</h2>`
-    );
-    printWindow.document.write(`<p>Location: ${data?.location || ""}</p>`);
-    printWindow.document.write(
-      `<p>Company Name: ${selectedInvoice.companyName}</p>`
-    );
-    printWindow.document.write(
-      `<p>Date Submitted: ${selectedInvoice.dateSubmitted}</p>`
-    );
-    printWindow.document.write(
-      `<p>Invoice Date: ${selectedInvoice.invoiceDate}</p>`
-    );
-    printWindow.document.write(`<p>Amount: ${selectedInvoice.totalAmount}</p>`);
-    printWindow.document.write("</body></html>");
-    printWindow.document.close();
-    printWindow.print();
-    printWindow.close();
-  };
-
-  // Sorting & search logic remains similar to your original code.
+  // Table rendering functions
   const handleSort = (column) => {
     let direction = "asc";
     if (sortConfig.column === column && sortConfig.direction === "asc") {
@@ -184,7 +233,6 @@ const InvoiceLogs = () => {
   const renderHeader = () => {
     if (!data) return null;
     const fixedHeaders = [
-      "Select",
       "Location",
       "Date Submitted",
       "Invoice Date",
@@ -216,8 +264,8 @@ const InvoiceLogs = () => {
       let aVal, bVal;
       const col = sortConfig.column;
       if (col === "Location") {
-        aVal = data.location || "";
-        bVal = data.location || "";
+        aVal = a.storeId;
+        bVal = b.storeId;
       } else if (col === "Date Submitted") {
         aVal = new Date(a.dateSubmitted);
         bVal = new Date(b.dateSubmitted);
@@ -231,9 +279,12 @@ const InvoiceLogs = () => {
         aVal = parseInt(a.invoiceNumber);
         bVal = parseInt(b.invoiceNumber);
       } else if (monetaryColumns.includes(col)) {
-        // Assume each monetary column is stored as an array of numbers
-        aVal = (a[col] || []).reduce((acc, cur) => acc + cur, 0);
-        bVal = (b[col] || []).reduce((acc, cur) => acc + cur, 0);
+        aVal = Array.isArray(a[col])
+          ? a[col].reduce((acc, cur) => acc + cur, 0)
+          : a[col] || 0;
+        bVal = Array.isArray(b[col])
+          ? b[col].reduce((acc, cur) => acc + cur, 0)
+          : b[col] || 0;
       } else {
         aVal = a[col];
         bVal = b[col];
@@ -248,48 +299,59 @@ const InvoiceLogs = () => {
     if (!data)
       return (
         <tr>
-          <td colSpan={monetaryColumns.length + 6}>
+          <td colSpan={monetaryColumns.length + 5}>
             {selectedStore ? "No invoices found." : "Please select a store."}
           </td>
         </tr>
       );
     const filteredInvoices = filterInvoices(data.invoices);
     const sortedInvoices = sortInvoices(filteredInvoices);
-    const loc = data.location || "";
     return sortedInvoices.map((row, i) => {
       const fixedCells = (
         <>
-          <td>
-            <input
-              type="checkbox"
-              checked={selectedInvoice?.invoiceNumber === row.invoiceNumber}
-              onChange={() => handleInvoiceSelect(row)}
-            />
+          <td className="tableCell">{row.storeId}</td>
+          <td className="tableCell" style={{ whiteSpace: "nowrap" }}>
+            {new Date(row.dateSubmitted).toLocaleDateString("en-US", {
+              month: "2-digit",
+              day: "2-digit",
+              year: "numeric",
+            })}
           </td>
-          <td className="tableCell">{loc}</td>
-          <td className="tableCell">{row.dateSubmitted}</td>
-          <td className="tableCell">{row.invoiceDate}</td>
+          <td className="tableCell" style={{ whiteSpace: "nowrap" }}>
+            {new Date(row.invoiceDate).toLocaleDateString("en-US", {
+              month: "2-digit",
+              day: "2-digit",
+              year: "numeric",
+            })}
+          </td>
           <td className="tableCell">{row.companyName}</td>
           <td className="tableCell">{row.invoiceNumber}</td>
         </>
       );
+
       const monetaryCells = monetaryColumns.map((col, j) => {
-        // Assume that each invoice's monetary column is stored as an array of numbers.
-        const values = row[col] || [];
-        const sum = values.reduce((acc, value) => acc + value, 0);
+        const catValue = row[col] != null ? row[col] : 0;
+        const values = Array.isArray(catValue) ? catValue : [catValue];
+        const sum = values.reduce((acc, value) => acc + Number(value), 0);
+        const rounded = Math.round(sum);
         return (
           <td key={j} className="tableCell">
-            {sum === 0
-              ? ""
-              : sum.toLocaleString("en-US", {
-                  style: "currency",
-                  currency: "USD",
-                })}
+            {rounded.toLocaleString("en-US", {
+              style: "currency",
+              currency: "USD",
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+            })}
           </td>
         );
       });
       return (
-        <tr key={i}>
+        <tr
+          key={i}
+          className="invoice-row"
+          style={{ cursor: "pointer" }}
+          onClick={() => handleRowClick(row)}
+        >
           {fixedCells}
           {monetaryCells}
         </tr>
@@ -301,7 +363,6 @@ const InvoiceLogs = () => {
     if (!data) return null;
     const totalRow = data.total;
     const budgetRow = data.budget;
-
     const totalCells = (
       <>
         <td
@@ -313,22 +374,24 @@ const InvoiceLogs = () => {
         </td>
         {monetaryColumns.map((col, i) => {
           const value = totalRow[col] || 0;
+          const rounded = Math.round(value);
           return (
             <td
               key={i}
               className="tableCell summaryCell"
               style={{ fontWeight: "bold", color: "black" }}
             >
-              {value.toLocaleString("en-US", {
+              {rounded.toLocaleString("en-US", {
                 style: "currency",
                 currency: "USD",
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
               })}
             </td>
           );
         })}
       </>
     );
-
     const budgetCells = (
       <>
         <td
@@ -338,21 +401,25 @@ const InvoiceLogs = () => {
         >
           BUDGET
         </td>
-        {monetaryColumns.map((col, i) => (
-          <td
-            key={i}
-            className="tableCell summaryCell"
-            style={{ fontWeight: "bold" }}
-          >
-            {budgetRow[col].toLocaleString("en-US", {
-              style: "currency",
-              currency: "USD",
-            })}
-          </td>
-        ))}
+        {monetaryColumns.map((col, i) => {
+          const rounded = Math.round(budgetRow[col]);
+          return (
+            <td
+              key={i}
+              className="tableCell summaryCell"
+              style={{ fontWeight: "bold" }}
+            >
+              {rounded.toLocaleString("en-US", {
+                style: "currency",
+                currency: "USD",
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+              })}
+            </td>
+          );
+        })}
       </>
     );
-
     const differenceCells = (
       <>
         <td
@@ -366,15 +433,21 @@ const InvoiceLogs = () => {
           const totalValue = totalRow[col] || 0;
           const budgetValue = budgetRow[col] || 0;
           const diff = budgetValue - totalValue;
+          const rounded = Math.round(diff);
           return (
             <td
               key={i}
               className="tableCell summaryCell"
-              style={{ fontWeight: "bold", color: diff >= 0 ? "green" : "red" }}
+              style={{
+                fontWeight: "bold",
+                color: rounded >= 0 ? "green" : "red",
+              }}
             >
-              {diff.toLocaleString("en-US", {
+              {rounded.toLocaleString("en-US", {
                 style: "currency",
                 currency: "USD",
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
               })}
             </td>
           );
@@ -389,6 +462,44 @@ const InvoiceLogs = () => {
       </>
     );
   };
+
+  // Invoice details dialog (for photo display)
+  const InvoiceDialog = () => (
+    <Dialog
+      open={invoiceDialogOpen}
+      onClose={() => setInvoiceDialogOpen(false)}
+      maxWidth="lg"
+    >
+      <DialogTitle>
+        Invoice {selectedInvoice?.invoiceNumber}
+        <IconButton
+          style={{ position: "absolute", right: 10, top: 10 }}
+          onClick={() => setInvoiceDialogOpen(false)}
+        >
+          <Close />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent>
+        {invoiceImage ? (
+          <img
+            src={invoiceImage}
+            alt={`Invoice ${selectedInvoice.invoiceNumber}`}
+            style={{ width: "100%", whiteSpace: "nowrap" }}
+          />
+        ) : (
+          <p>Loading image...</p>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handleExportInvoicePDF} color="primary">
+          Export as PDF
+        </Button>
+        <Button onClick={() => setInvoiceDialogOpen(false)} color="secondary">
+          Close
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
 
   const months = [
     { value: "1", label: "January" },
@@ -409,6 +520,23 @@ const InvoiceLogs = () => {
     { value: "2024", label: "2024" },
     { value: "2025", label: "2025" },
   ];
+
+  const ExportDialog = () => (
+    <Dialog open={exportDialogOpen} onClose={() => setExportDialogOpen(false)}>
+      <DialogTitle>Export Invoices</DialogTitle>
+      <DialogContent>
+        <p>Select an export option:</p>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handleExportExcel} color="secondary">
+          Export as Excel
+        </Button>
+        <Button onClick={handleExportPDF} color="primary">
+          Export as PDF
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
 
   return (
     <Container
@@ -442,7 +570,14 @@ const InvoiceLogs = () => {
                 </option>
               ))}
             </select>
-            <button onClick={handlePrint}>Print Selected Invoice</button>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => setExportDialogOpen(true)}
+              startIcon={<GetApp />}
+            >
+              Export
+            </Button>
           </div>
         </div>
       </div>
@@ -479,6 +614,8 @@ const InvoiceLogs = () => {
           </tbody>
         </table>
       </div>
+      <ExportDialog />
+      <InvoiceDialog />
     </Container>
   );
 };
