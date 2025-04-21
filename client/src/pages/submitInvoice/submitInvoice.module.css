@@ -1,0 +1,117 @@
+/* Page Container */
+.pageContainer {
+  background-color: #f7f7f7;
+  min-height: 100vh;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+/* Top Bar */
+.topBar {
+  background-color: #000;
+  color: #fff;
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  padding: 15px;
+  margin-bottom: 20px;
+  border-radius: 4px;
+}
+
+/* Form Container */
+.formContainer {
+  background-color: #fff;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 20px;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Form Group */
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 15px;
+}
+
+.formGroup label {
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+/* Button next to category (unchanged location) */
+.addBtn {
+  margin-top: 8px;
+  align-self: flex-start;
+  background-color: #0078d7;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Input Row for Category & Amount */
+.inputRow {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+/* Default inputs/selects */
+input,
+select {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  flex: 1;
+}
+
+/* Dollar wrapper */
+.amountInputWrapper {
+  display: flex;
+  align-items: center;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding-left: 5px;
+  flex: 1;
+}
+
+.amountInputWrapper input {
+  border: none;
+  outline: none;
+  flex: 1;
+  padding: 8px;
+}
+
+.dollarSign {
+  margin-right: 5px;
+  font-size: 16px;
+}
+
+/* Button Row */
+.buttonRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+/* Submit Button */
+.submitBtn {
+  background-color: #0078d7;
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+/* Checkmark */
+.checkmark {
+  color: green;
+  margin-left: 8px;
+  font-weight: bold;
+}

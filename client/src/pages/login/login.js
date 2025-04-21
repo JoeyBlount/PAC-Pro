@@ -1,45 +1,88 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Container, Button, Box, Typography, useColorScheme } from "@mui/material";
+import { Container, Button, Box, Typography } from "@mui/material";
 import GoogleIcon from "@mui/icons-material/Google";
 import EmailIcon from '@mui/icons-material/Email';
 import MicrosoftIcon from "@mui/icons-material/Microsoft";
 //import { auth } from "../../config/firebaseConfigEmail";
 import { useMsal } from "@azure/msal-react"; // Import useMsal hook
 import { loginRequest } from "../../authconfig";
-import { auth, googleAuthProvider } from "../../config/firebaseConfigEmail";
+import { auth, googleAuthProvider } from "../../config/firebase-config";
 import { signInWithPopup } from "firebase/auth";
+import { getFirestore, doc, getDoc } from "firebase/firestore"; // Firebase Firestore functions
 
 const Login = () => {
+  React.useEffect(() => {
+    document.title = "PAC Pro - Login";
+
+  }, []); // Used to change the title.
+
   const navigate = useNavigate(); // Hook for navigation
   const user = auth.currentUser;
   const { instance } = useMsal(); // MSAL instance
+  const db = getFirestore(); // Initialize Firestore
 
-  const handleMicrosoftLogin = () => {
-    instance
-      .loginRedirect(loginRequest)
-      .then(() => {
-        // After successful login, store user session and navigate
-        localStorage.setItem("user", "true");
-        navigate("/navi/dashboard");
-      })
-      .catch((error) => console.error("Microsoft login error:", error));
+  const handleMicrosoftLogin = async () => {
+    try {
+      const response = await instance.loginPopup(loginRequest);
+      console.log(response)
+      const userEmail = response.account.username; // Get the email from Google sign-in result
+      console.log(userEmail)
+
+      // Check if the email exists in the database (Firestore in this case)
+
+      const userRef = doc(db, "users", userEmail); // Assuming 'users' collection where emails are stored
+      const userDoc = await getDoc(userRef); // Get the document
+      console.log("hi")
+
+      try {
+        const userRef = doc(db, "users", userEmail);
+        const userDoc = await getDoc(userRef);
+        console.log("User document:", userDoc.exists());
+        if (userDoc.exists()) {
+          navigate("/navi/dashboard");
+        } else {
+          navigate("/not-allowed");
+        }
+      } catch (firestoreError) {
+        console.error("Firestore error:", firestoreError);
+      }
+      localStorage.setItem("user", JSON.stringify(response.account.username));
+    } catch (error) {
+      console.error("Microsoft login error:", error);
+    }
   };
 
   //for debugging to see if user is actually logged out or not
+
+  // For debugging to see if the user is logged out or not
   if (user) {
-    console.log(user.displayName)
-  }else {
-    console.log("No one logged in looks like sign out works")
+    console.log(user.displayName);
+  } else {
+    console.log("No one logged in, looks like sign out works");
   }
-  
-  // Function to handle login
+
+  // Function to handle Google login
   const handleGoogleLogin = async () => {
     try {
-      console.log("attempting to sign in with google...");
+      console.log("Attempting to sign in with Google...");
       const result = await signInWithPopup(auth, googleAuthProvider);
+      const userEmail = result.user.email; // Get the email from Google sign-in result
+
+      // Check if the email exists in the database (Firestore in this case)
+      const db = getFirestore(); // Initialize Firestore
+      const userRef = doc(db, "users", userEmail); // Assuming 'users' collection where emails are stored
+      const userDoc = await getDoc(userRef); // Get the document
+
+      if (userDoc.exists()) {
+        console.log("User exists in the database:", userEmail);
+        navigate("/navi/dashboard"); // Navigate to dashboard if email is in DB
+      } else {
+        console.log("Email not found in the database:", userEmail);
+        navigate("/not-allowed"); // Navigate to 'not allowed' page if email is not in DB
+      }
       console.log("google login result: ", result);
-      navigate("/navi/dashboard");
+      localStorage.setItem("user", JSON.stringify(result.user));
     } catch (error) {
       console.error("Google Login Error:", error);
     }
@@ -78,23 +121,6 @@ const Login = () => {
         <Button
           variant="contained"
           fullWidth
-          startIcon={<EmailIcon />}
-          sx={{
-            backgroundColor: "#000",
-            color: "white",
-            fontSize: "1.2rem",
-            padding: "12px",
-            "&:hover": { backgroundColor: "#333" },
-            marginBottom: 2,
-          }}
-          onClick={handleLoginEmail} // ✅ Calls the function to store user & navigate
-        >
-          Login/Sign Up with Email
-        </Button>
-
-        <Button
-          variant="contained"
-          fullWidth
           startIcon={<GoogleIcon />}
           sx={{
             backgroundColor: "#000",
@@ -102,9 +128,8 @@ const Login = () => {
             fontSize: "1.2rem",
             padding: "12px",
             "&:hover": { backgroundColor: "#333" },
-            marginBottom: 2,
           }}
-          onClick={handleGoogleLogin} // ✅ Calls the function to store user & navigate
+          onClick={handleGoogleLogin} // Calls the function for Google login
         >
           Login with Google
         </Button>
