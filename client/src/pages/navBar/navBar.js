@@ -86,9 +86,9 @@ export function NavBar() {
 
   // Update store text getter to use storeId
   const getSelectedStoreText = () => {
-    const selected = stores.find((s) => s.storeId === selectedStore);
+    const selected = stores.find((s) => s.storeID === selectedStore);
     return selected
-      ? `${selected.storeId} - ${selected.subName}`
+      ? `${selected.storeID} - ${selected.subName}`
       : "Select Store";
   };
 
@@ -156,8 +156,8 @@ export function NavBar() {
                 renderValue={() => getSelectedStoreText()}
               >
                 {stores.map((store) => (
-                  <MenuItem key={store.storeId} value={store.storeId}>
-                    {store.storeId} - {store.subName}
+                  <MenuItem key={store.storeID} value={store.storeID}>
+                    {store.storeID} - {store.subName}
                   </MenuItem>
                 ))}
               </Select>
