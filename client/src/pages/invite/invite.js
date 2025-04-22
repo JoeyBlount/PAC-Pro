@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../../config/firebase";
 import { collection, getDocs, addDoc, setDoc, doc, query, where } from "firebase/firestore"; // Import required Firestore methods
+import { ROLES } from '../../constants/roles';
+import { useAuth } from '../../context/AuthContext';
 
 const Invite = () => {
+  const { userRole } = useAuth(); // Get user role from context
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
-    email: ""
+    email: "",
+    role: ""
   });
 
   const [error, setError] = useState("");
@@ -44,6 +48,18 @@ const Invite = () => {
     e.preventDefault();
     setError("");
     setSuccessMessage("");
+
+    // --- Role Validation ---
+    if (!formData.role) {
+      setError("Please select a role for the user.");
+      return;
+    }
+    // Prevent non-Admins from creating other Admins (optional security)
+    // if (formData.role === ROLES.ADMIN && userRole !== ROLES.ADMIN) {
+    //   setError("You do not have permission to create Admin users.");
+    //   return;
+    // }
+    // --- End Role Validation ---
 
     try {
       // Check if the email already exists in the "users" collection
