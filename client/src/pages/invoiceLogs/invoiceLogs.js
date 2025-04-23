@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState, useContext, useRef } from "react";
 import {
   Container,
   Dialog,
@@ -12,11 +12,18 @@ import { GetApp, Close } from "@mui/icons-material";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import "./invoiceLogs.css";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import { db } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext";
+import { getAuth } from "firebase/auth";
+import { useAuth } from "../../context/AuthContext";
 
 const InvoiceLogs = () => {
+  // const { currentUser, userRole } = useAuth();
+  // console.log("Logged in user:", currentUser?.email);
+  // console.log("User role:", userRole);
+
+
   useEffect(() => {
     document.title = "PAC Pro - Invoice Logs";
   }, []);
@@ -44,6 +51,11 @@ const InvoiceLogs = () => {
   // Global store
   const { selectedStore } = useContext(StoreContext);
 
+  //editing invoice data
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  //useState(null);
+  const [editInvoiceData, setEditInvoiceData] = useState(null);
+
   // Helper function to get a category amount from an invoice.
   // It now reads from the top-level of the invoice document using field.
   const getCategoryValue = (inv, categoryId) => {
@@ -60,6 +72,54 @@ const InvoiceLogs = () => {
 
     return 0;
   };
+
+//this function makes sure we can only edit/delete the current month in the invoice. 
+  const isCurrentMonth = (dateStr) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    return (
+      date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth()
+    );
+  };
+  const handleDelete = async (invoiceId) => {
+    const confirm = window.confirm("Are you sure you want to delete this invoice?");
+    if (!confirm) return;
+    try {
+      await deleteDoc(doc(db, "invoices", invoiceId));
+      alert("Invoice deleted.");
+      // Refresh invoices
+      setData(prev => ({
+        ...prev,
+        invoices: prev.invoices.filter(inv => inv.id !== invoiceId),
+      }));
+    } catch (err) {
+      console.error("Failed to delete invoice:", err);
+      alert("Error deleting invoice.");
+    }
+  };
+  
+  const handleEdit = (invoice) => {
+    setEditInvoiceData({ ...invoice }); // clone it so we can modify safely
+    setEditDialogOpen(true);
+  };
+
+
+  const submitEdit = async (updatedInvoice) => {
+    try {
+      const invoiceRef = doc(db, "invoices", updatedInvoice.id);
+      const { id, ...invoiceDataToUpdate } = updatedInvoice;
+      await updateDoc(invoiceRef, invoiceDataToUpdate);
+      alert("Invoice updated successfully!");
+      setEditDialogOpen(false);
+      fetchInvoices(); // refresh from Firestore
+    } catch (error) {
+      console.error("Error updating invoice:", error);
+      alert("Failed to update invoice.");
+    }
+  };
+  
+  
 
   // Fetch invoice categories from "invoiceCategories" collection
   useEffect(() => {
@@ -81,46 +141,43 @@ const InvoiceLogs = () => {
 
   // Fetch invoices from Firestore
   useEffect(() => {
-    if (!selectedStore) {
-      setData(null);
-      return;
-    }
-    async function fetchInvoices() {
-      try {
-        const q = query(
-          collection(db, "invoices"),
-          where("storeID", "==", selectedStore)
-        );
-        const snapshot = await getDocs(q);
-        const invoices = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-
-        // Compute totals using the category amounts stored in the categories map.
-        const totals = {};
-        monetaryColumns.forEach((col) => {
-          const categoryId = col.id; // This matches the document ID from invoiceCategories
-          totals[categoryId] = invoices.reduce((sum, inv) => {
-            return sum + getCategoryValue(inv, categoryId);
-          }, 0);
-        });
-
-        // Use each invoiceCategories doc's budget field for the budget row.
-        const budgets = {};
-        monetaryColumns.forEach((col) => {
-          budgets[col.id] = Number(col.budget) || 0;
-        });
-
-        setData({ invoices, total: totals, budget: budgets });
-      } catch (err) {
-        console.error("Error loading invoices:", err);
-      }
-    }
     if (selectedStore && monetaryColumns.length > 0) {
       fetchInvoices();
     }
   }, [selectedStore, monetaryColumns]);
+
+  async function fetchInvoices() {
+    try {
+      const q = query(
+        collection(db, "invoices"),
+        where("storeID", "==", selectedStore)
+      );
+      const snapshot = await getDocs(q);
+      const invoices = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Compute totals using the category amounts stored in the categories map.
+      const totals = {};
+      monetaryColumns.forEach((col) => {
+        const categoryId = col.id; // This matches the document ID from invoiceCategories
+        totals[categoryId] = invoices.reduce((sum, inv) => {
+          return sum + getCategoryValue(inv, categoryId);
+        }, 0);
+      });
+
+      // Use each invoiceCategories doc's budget field for the budget row.
+      const budgets = {};
+      monetaryColumns.forEach((col) => {
+        budgets[col.id] = Number(col.budget) || 0;
+      });
+
+      setData({ invoices, total: totals, budget: budgets });
+    } catch (err) {
+      console.error("Error loading invoices:", err);
+    }
+  }
 
   // Export functions remain unchanged
   const handleExportPDF = async () => {
@@ -357,38 +414,101 @@ const InvoiceLogs = () => {
     const filtered = filterInvoices(data.invoices);
     const sorted = sortInvoices(filtered);
 
-    return sorted.map((inv, i) => (
-      <tr key={i} className="invoice-row" onClick={() => handleRowClick(inv)}>
-        <td className="tableCell">{inv.storeID}</td>
-        <td className="tableCell dateCell">
-          {new Date(inv.dateSubmitted).toLocaleDateString("en-US")}
-        </td>
-        <td className="tableCell dateCell">
-          {new Date(inv.invoiceDate).toLocaleDateString("en-US")}
-        </td>
-        <td className="tableCell">{inv.companyName}</td>
-        <td className="tableCell invoiceNumberCell">{inv.invoiceNumber}</td>
-        {monetaryColumns.map((col, j) => {
-          // Use the document ID instead of name to find matching category
-          const categoryId = col.id;
-          const amount = getCategoryValue(inv, categoryId);
 
-          return (
-            <td key={j} className="tableCell categoryCell">
-              {amount !== 0 && !isNaN(amount)
-                ? amount.toLocaleString("en-US", {
-                    style: "currency",
-                    currency: "USD",
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0,
-                  })
-                : ""}
-            </td>
-          );
-        })}
-      </tr>
-    ));
-  };
+    return sorted.map((inv, i) => {
+      const canEdit = isCurrentMonth(inv.invoiceDate);
+    
+      return (
+        <tr key={i} className="invoice-row" onClick={() => handleRowClick(inv)}>
+          <td className="tableCell">{inv.storeID}</td>
+          <td className="tableCell dateCell">
+            {new Date(inv.dateSubmitted).toLocaleDateString("en-US")}
+          </td>
+          <td className="tableCell dateCell">
+            {new Date(inv.invoiceDate).toLocaleDateString("en-US")}
+          </td>
+          <td className="tableCell">{inv.companyName}</td>
+          <td className="tableCell invoiceNumberCell">{inv.invoiceNumber}</td>
+    
+          {monetaryColumns.map((col, j) => {
+            const categoryId = col.id;
+            const amount = getCategoryValue(inv, categoryId);
+    
+            return (
+              <td key={j} className="tableCell categoryCell">
+                {amount !== 0 && !isNaN(amount)
+                  ? amount.toLocaleString("en-US", {
+                      style: "currency",
+                      currency: "USD",
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    })
+                  : ""}
+              </td>
+            );
+          })}
+    
+          <td className="tableCell">
+          {canEdit && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation(); 
+                  handleEdit(inv);
+                  // console.log(inv)
+                }}
+              >
+                Edit
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation(); 
+                  handleDelete(inv.id);
+                  
+                }}
+              >
+                Delete
+              </button>
+            </>
+          )}
+        </td>
+        </tr>
+      );
+    });
+  }
+
+  //   return sorted.map((inv, i) => (      
+  //     <tr key={i} className="invoice-row" onClick={() => handleRowClick(inv)}>
+  //       <td className="tableCell">{inv.storeID}</td>
+  //       <td className="tableCell dateCell">
+  //         {new Date(inv.dateSubmitted).toLocaleDateString("en-US")}
+  //       </td>
+  //       <td className="tableCell dateCell">
+  //         {new Date(inv.invoiceDate).toLocaleDateString("en-US")}
+  //       </td>
+  //       <td className="tableCell">{inv.companyName}</td>
+  //       <td className="tableCell invoiceNumberCell">{inv.invoiceNumber}</td>
+  //       {monetaryColumns.map((col, j) => {
+  //         // Use the document ID instead of name to find matching category
+  //         const categoryId = col.id;
+  //         const amount = getCategoryValue(inv, categoryId);
+
+  //         return (
+  //           <td key={j} className="tableCell categoryCell">
+  //             {amount !== 0 && !isNaN(amount)
+  //               ? amount.toLocaleString("en-US", {
+  //                   style: "currency",
+  //                   currency: "USD",
+  //                   minimumFractionDigits: 0,
+  //                   maximumFractionDigits: 0,
+  //                 })
+  //               : ""}
+  //           </td>
+  //         );
+  //       })}
+  //     </tr>
+  //   ));
+  // };
 
   // Render summary rows
   const renderSummaryRows = () => {
@@ -469,6 +589,68 @@ const InvoiceLogs = () => {
       </DialogActions>
     </Dialog>
   );
+  const formRef = useRef(null); // place this at the top of your component
+
+  const EditDialog = React.memo(() => (
+    <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
+      <DialogTitle>Edit Invoice</DialogTitle>
+      <DialogContent dividers>
+        {editInvoiceData && (
+          <form ref={formRef} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <input
+              name="companyName"
+              type="text"
+              placeholder="Company Name"
+              defaultValue={editInvoiceData.companyName}
+            />
+            <input
+              name="invoiceNumber"
+              type="text"
+              placeholder="Invoice Number"
+              defaultValue={editInvoiceData.invoiceNumber}
+            />
+            {Object.entries(editInvoiceData.categories).map(([key, value]) => (
+              <div key={key}>
+                <label>{key}</label>
+                <input
+                  name={key}
+                  type="number"
+                  defaultValue={value[0]}
+                />
+              </div>
+            ))}
+          </form>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setEditDialogOpen(false)} color="secondary">Cancel</Button>
+        <Button
+          onClick={() => {
+            if (formRef.current) {
+              const formData = new FormData(formRef.current);
+              const updated = {
+                ...editInvoiceData,
+                companyName: formData.get("companyName"),
+                invoiceNumber: formData.get("invoiceNumber"),
+                categories: Object.fromEntries(
+                  Object.entries(editInvoiceData.categories).map(([key]) => [
+                    key,
+                    [Number(formData.get(key)) || 0]
+                  ])
+                )
+              };
+              setEditInvoiceData(updated);
+              submitEdit(updated);
+            }
+          }}
+          color="primary"
+        >
+          Save Changes
+        </Button>
+      </DialogActions>
+    </Dialog>
+  ));
+  
 
   // Export choice dialog
   const ExportDialog = () => (
@@ -593,8 +775,11 @@ const InvoiceLogs = () => {
 
       <ExportDialog />
       <InvoiceDialog />
+      <EditDialog />
     </Container>
   );
+
+  
 };
 
 export default InvoiceLogs;
