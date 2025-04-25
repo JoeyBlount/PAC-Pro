@@ -76,15 +76,27 @@ npm start
 
 <p align="right"> (<a href="#top">Back to Top</a>) </p>
 
-## Usage
+## Project Timeline
 
-<!-- How to use text below -->
+<!-- Insert Timeline for 191. Assignment Requirement. -->
 
 <p align="right"> (<a href="#top">Back to Top</a>) </p>
 
-## Support
+## Testing
 
-<!-- Support text below -->
+<!-- Reserve for 191 -->
+
+<p align="right"> (<a href="#top">Back to Top</a>) </p>
+
+## Deloyment
+
+<!-- Reserve for 191 -->
+
+<p align="right"> (<a href="#top">Back to Top</a>) </p>
+
+## Developer Instructions
+
+<!-- Reserve for 191 -->
 
 <p align="right"> (<a href="#top">Back to Top</a>) </p>
 
