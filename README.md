@@ -33,7 +33,7 @@ Feel free to modify for your actual front-end or API.
 
 <div align="center">
   <a href="https://github.com/JoeyBlount/PAC-Pro">
-    <img src="./PACProGenericLogo.png" width="250" />
+    <img src="./readme_images/PACProGenericLogo.png" width="250" />
   </a>
 </div>
 
@@ -47,6 +47,10 @@ Feel free to modify for your actual front-end or API.
 ### Built with 
 <!-- List tools used for this project -->
 
+
+### Screenshots
+<!-- Inset example Screens images -->
+
 <p align="right"> (<a href="#top">Back to Top</a>) </p>
 
 ## Getting Started
@@ -56,6 +60,8 @@ Feel free to modify for your actual front-end or API.
 Node.js is required to run this project. It can be found at the following link: https://nodejs.org/en
 
 ### Setting Up
+The following instructions are for someone using VS Code. If you are not using VS Code, some extra steps may be required. Those extra steps will have to be determined by yourself and your development set up.
+
 1. Change to client directory
 ```sh
 cd client
