@@ -22,6 +22,8 @@ const InvoiceLogs = () => {
   // const { currentUser, userRole } = useAuth();
   // console.log("Logged in user:", currentUser?.email);
   // console.log("User role:", userRole);
+  const { userRole } = useAuth();
+  console.log("USer role from invoicelogs is: ", userRole)
 
 
   useEffect(() => {
@@ -102,6 +104,24 @@ const InvoiceLogs = () => {
   const handleEdit = (invoice) => {
     setEditInvoiceData({ ...invoice }); // clone it so we can modify safely
     setEditDialogOpen(true);
+  };
+
+  const lockInvoice = async (invoiceID) => {
+    try {
+      const invoiceRef = doc(db, "invoices", invoiceID);
+      await updateDoc(invoiceRef, {
+        locked: true,
+      })
+      alert("Invoice locked.")
+     
+      fetchInvoices(); // refresh from Firestore
+    } catch (error) {
+      console.error("Error locking invoice:", error);
+      alert("Failed to lock invoice.");
+    }
+
+
+
   };
 
 
@@ -416,7 +436,8 @@ const InvoiceLogs = () => {
 
 
     return sorted.map((inv, i) => {
-      const canEdit = isCurrentMonth(inv.invoiceDate);
+      const canEdit = isCurrentMonth(inv.invoiceDate) && !inv.locked;
+      
     
       return (
         <tr key={i} className="invoice-row" onClick={() => handleRowClick(inv)}>
@@ -449,7 +470,7 @@ const InvoiceLogs = () => {
           })}
     
           <td className="tableCell">
-          {canEdit && (
+          {(canEdit || userRole === "Supervisor" || userRole === "Admin") && (
             <>
               <button
                 onClick={(e) => {
@@ -468,6 +489,15 @@ const InvoiceLogs = () => {
                 }}
               >
                 Delete
+              </button>
+              <button
+                onClick={(e) => {
+                  console.log(e)
+                  e.stopPropagation(); 
+                  lockInvoice(inv.id);  
+                }}
+              >
+                Lock
               </button>
             </>
           )}
