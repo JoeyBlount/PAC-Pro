@@ -220,7 +220,7 @@ const SubmitInvoice = () => {
       const snapshot = await uploadBytes(imageRef, imageUpload);
       const url = await getDownloadURL(snapshot.ref);
       setImageUrls(prev => [...prev, url]);
-      alert("Image uploaded successfully!");
+      // alert("Image uploaded successfully!");
     } catch (error) {
       console.error("Upload failed:", error);
       alert("Upload failed, please try again.");

@@ -8,11 +8,11 @@ import {
   Button,
   IconButton,
 } from "@mui/material";
-import { GetApp, Close } from "@mui/icons-material";
+import { GetApp, Close, AccessibilityNewSharp } from "@mui/icons-material";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import "./invoiceLogs.css";
-import { collection, query, where, getDocs, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, setDoc } from "firebase/firestore";
 import { db } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext";
 import { getAuth } from "firebase/auth";
@@ -22,6 +22,8 @@ const InvoiceLogs = () => {
   // const { currentUser, userRole } = useAuth();
   // console.log("Logged in user:", currentUser?.email);
   // console.log("User role:", userRole);
+  const { userRole } = useAuth();
+  console.log("USer role from invoicelogs is: ", userRole)
 
 
   useEffect(() => {
@@ -42,6 +44,8 @@ const InvoiceLogs = () => {
   const [selectedYear, setSelectedYear] = useState("");
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [showRecentlyDeleted, setShowRecentlyDeleted] = useState(false);
+  const [recentlyDeleted, setRecentlyDeleted] = useState([])
 
   // Invoice dialog state
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -82,26 +86,104 @@ const InvoiceLogs = () => {
       date.getMonth() === now.getMonth()
     );
   };
-  const handleDelete = async (invoiceId) => {
+  const handleDelete = async (invoice) => {
     const confirm = window.confirm("Are you sure you want to delete this invoice?");
     if (!confirm) return;
+  
     try {
-      await deleteDoc(doc(db, "invoices", invoiceId));
-      alert("Invoice deleted.");
-      // Refresh invoices
+      // 1. Move the invoice to 'recentlyDeleted' collection
+      const deletedRef = doc(db, "recentlyDeleted", invoice.id);
+      await setDoc(deletedRef, invoice);
+  
+      // 2. Now delete it from the 'invoices' collection
+      await deleteDoc(doc(db, "invoices", invoice.id));
+  
+      alert("Invoice moved to Recently Deleted.");
+  
+      // 3. Refresh invoices on the page
       setData(prev => ({
         ...prev,
-        invoices: prev.invoices.filter(inv => inv.id !== invoiceId),
+        invoices: prev.invoices.filter(inv => inv.id !== invoice.id),
       }));
+  
     } catch (err) {
-      console.error("Failed to delete invoice:", err);
+      console.error("Failed to move invoice to Recently Deleted:", err);
       alert("Error deleting invoice.");
     }
   };
+
+  const handleRestore = async (invoice) => {
+    const confirm = window.confirm("Are you sure you want to restore this invoice?");
+    if (!confirm) return;
+    try {
+      // 1. Copy back to "invoices"
+      const restoredRef = doc(db, "invoices", invoice.id);
+      await setDoc(restoredRef, invoice);
+  
+      // 2. Then delete from "recentlyDeleted"
+      await deleteDoc(doc(db, "recentlyDeleted", invoice.id));
+  
+      alert("Invoice restored successfully!");
+  
+      // Optionally refresh your page or re-fetch data here
+      fetchInvoices();
+      fetchRecentlyDeleted();
+    } catch (err) {
+      console.error("Failed to restore invoice:", err);
+      alert("Error restoring invoice.");
+    }
+  };
+
+  const handlePermanentDelete = async (invoice) => {
+    const confirm = window.confirm("Are you sure you want to delete this invoice from recently deleted");
+    if (!confirm) return;
+    try {
+      await deleteDoc(doc(db, "recentlyDeleted", invoice.id));
+      alert("Invoice Deleted!");
+      fetchInvoices();
+      fetchRecentlyDeleted();
+    }catch(err) {
+      console.log("failed to delete the invoice from recentlydeleted, ", err)
+      alert("failed to delete the invoice")
+    }
+  };
+  
   
   const handleEdit = (invoice) => {
     setEditInvoiceData({ ...invoice }); // clone it so we can modify safely
     setEditDialogOpen(true);
+  };
+
+  const lockInvoice = async (invoiceID) => {
+    try {
+      const invoiceRef = doc(db, "invoices", invoiceID);
+      await updateDoc(invoiceRef, {
+        locked: true,
+      })
+      alert("Invoice locked.")
+     
+      fetchInvoices(); // refresh from Firestore
+    } catch (error) {
+      console.error("Error locking invoice:", error);
+      alert("Failed to lock invoice.");
+    }
+
+
+
+  };
+
+  const unlockInvoice = async (invoiceID) => {
+    try{
+      const invoiceRef = doc(db, "invoices", invoiceID);
+      await updateDoc(invoiceRef, {
+        locked: false,
+      })
+      alert("Invoice unlocked.")
+
+    }catch(error) {
+      console.error("Error unlocking invoice:", error);
+      alert("Failed to unlock invoice.");
+    }
   };
 
 
@@ -178,6 +260,19 @@ const InvoiceLogs = () => {
       console.error("Error loading invoices:", err);
     }
   }
+
+  const fetchRecentlyDeleted = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, "recentlyDeleted"));
+      const deleted = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setRecentlyDeleted(deleted);
+    } catch (error) {
+      console.error("Error loading recently deleted invoices:", error);
+    }
+  };
 
   // Export functions remain unchanged
   const handleExportPDF = async () => {
@@ -416,7 +511,8 @@ const InvoiceLogs = () => {
 
 
     return sorted.map((inv, i) => {
-      const canEdit = isCurrentMonth(inv.invoiceDate);
+      const canEdit = isCurrentMonth(inv.invoiceDate) && !inv.locked;
+      
     
       return (
         <tr key={i} className="invoice-row" onClick={() => handleRowClick(inv)}>
@@ -449,7 +545,7 @@ const InvoiceLogs = () => {
           })}
     
           <td className="tableCell">
-          {canEdit && (
+          {(canEdit || userRole === "Supervisor" || userRole === "Admin") && (
             <>
               <button
                 onClick={(e) => {
@@ -463,11 +559,29 @@ const InvoiceLogs = () => {
               <button
                 onClick={(e) => {
                   e.stopPropagation(); 
-                  handleDelete(inv.id);
+                  handleDelete(inv);
                   
                 }}
               >
                 Delete
+              </button>
+              <button
+                onClick={(e) => {
+                  console.log(e)
+                  e.stopPropagation(); 
+                  lockInvoice(inv.id);  
+                }}
+              >
+                Lock
+              </button>
+              <button
+                onClick={(e) => {
+                  console.log(e)
+                  e.stopPropagation(); 
+                  unlockInvoice(inv.id);  
+                }}
+              >
+                Unlock
               </button>
             </>
           )}
@@ -724,6 +838,29 @@ const InvoiceLogs = () => {
             >
               Export
             </Button>
+            <Button
+            variant="contained"
+            style={{
+              backgroundColor: "#ff5252", 
+              color: "white",
+              fontWeight: "bold",
+              fontSize: "12px",
+              padding: "2%",
+              borderRadius: "8px",
+              width: "auto",
+              minWidth: "150px",
+              textTransform: "none", 
+              boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.2)",
+            }}
+            onClick={() => {
+              setShowRecentlyDeleted(true);
+              fetchRecentlyDeleted()
+              // Handle open modal or navigate to Recently Deleted
+              console.log("Open Recently Deleted Modal");
+            }}
+          >
+            Recently Deleted
+          </Button>
           </div>
         </div>
       </div>
@@ -776,6 +913,73 @@ const InvoiceLogs = () => {
       <ExportDialog />
       <InvoiceDialog />
       <EditDialog />
+      {showRecentlyDeleted && (
+      <div style={{
+        position: "fixed",
+        top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        zIndex: 9999,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center"
+      }}>
+        <div style={{
+          background: "white",
+          padding: "30px",
+          borderRadius: "10px",
+          minWidth: "300px",
+          textAlign: "center",
+          position: "relative"
+        }}>
+          <h2>Recently Deleted</h2>
+          {recentlyDeleted.length === 0 ? (
+          <p>No recently deleted invoices.</p>
+            ) : (
+          <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+            {recentlyDeleted.map((inv) => (
+              <div key={inv.id} style={{
+                padding: "10px",
+                borderBottom: "1px solid #ddd",
+                textAlign: "left"
+              }}>
+                <strong>{inv.companyName || "Unnamed Invoice"}</strong>
+                <div style={{ fontSize: "0.8rem", color: "gray" }}>
+                  {inv.invoiceNumber ? `Invoice #${inv.invoiceNumber}` : ""}
+                </div>
+                <div style={{ marginTop: "5px" }}>
+                  <Button
+                    variant="outlined"
+                    style={{ marginRight: "10px", fontSize: "10px" }}
+                    onClick={() => handleRestore(inv)}
+                  >
+                    Restore
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    style={{ fontSize: "10px" }}
+                    onClick={() => handlePermanentDelete(inv)}
+                  >
+                    Delete Permanently
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+          <p>Invoices here will be deleted after 14 days (Not yet working)</p>
+          {/* Later you can map the deleted invoices here */}
+          <Button 
+            variant="contained" 
+            style={{ marginTop: "20px", backgroundColor: "#6A39FE", color: "white" }}
+            onClick={() => setShowRecentlyDeleted(false)}
+          >
+            Close
+          </Button>
+        </div>
+      </div>
+    )}
+      
     </Container>
   );
 
