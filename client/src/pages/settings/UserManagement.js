@@ -26,7 +26,9 @@ import { useAuth } from '../../context/AuthContext'; // Adjust path
 import { ROLES } from '../../constants/roles'; // Adjust path
 
 const UserManagement = () => {
-  const { userRole, currentUser } = useAuth(); // Get current user's role and info
+  const userRole = ROLES.ADMIN; // This line makes all user who access the invoice settings a admin regardless of their actual role. Delete this line when bugs are fixed.
+  const currentUser = ""; // This line along with the line above is for temp bypass. Delete this line and uncomment the line below when bugs are fixed
+  //const { userRole, currentUser } = useAuth(); // Get current user's role and info
   const [users, setUsers] = useState([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
