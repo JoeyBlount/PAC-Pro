@@ -27,9 +27,22 @@ const InvoiceSettings = () => {
 
   const invoiceCatRef = collection(db, "invoiceCategories");
 
-  /*  Broken code needs to be fixed.
+  //prev broken code flagged here
   const getCategories = async () => {
-    // ... (logic remains the same)
+    const categoryData = [];
+    try {
+      for (const id of invoiceCatList) {
+        const docRef  = doc(invoiceCatRef, id);
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+          throw new Error("doc for " + id + " does not exist");
+        }
+        categoryData.push({ id, ...docSnap.data() });
+      }
+    } catch (error) {
+      console.error("Failure querying database for categories:", error);
+    }
+    return categoryData;
   };
 
   useEffect(() => {
@@ -39,10 +52,22 @@ const InvoiceSettings = () => {
         .catch(err => console.error(err));
     }
   }, [canActuallyView]); // Re-run if view permission changes
-  */
+  //broken code unflagged here?
 
   const editDoc = async (id, newAccount) => {
-    // ... (logic remains the same, but it will only be called if canEditSettings is true)
+    try{
+      if(isNaN(newAccount)){
+        throw new Error("account number must be numeric");
+      }
+      const ref = doc(invoiceCatRef, id);
+      await updateDoc(ref, { bankAccountNum: newAccount });
+      //document is now updated, now re-set the local array to hold the updated value:
+      const updatedData = await getCategories();
+      setCategories(updatedData);
+    } catch (error) {
+      console.error("Error: ", error);
+      alert("Failure changing bankAccountNum: " + error.message);
+    }
   };
 
   // Render Access Denied if user doesn't have view permission
