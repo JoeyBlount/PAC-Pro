@@ -52,9 +52,7 @@ Feel free to modify for your actual front-end or API.
 ### Screenshots
 <!-- Inset example Screens images -->
 
-<img src="./readme_images/2025-04-26_21-09-46.png" width="250"/> 
-<img src="./readme_images/2025-04-27_20-03-30.png" width="250"/>
-<img src="./readme_images/2025-04-27_20-08-47.png" width="250"/>
+<img src="./readme_images/2025-04-26_21-09-46.png" width="250"/> &nbsp; <img src="./readme_images/2025-04-27_20-03-30.png" width="250"/> &nbsp; <img src="./readme_images/2025-04-27_20-08-47.png" width="250"/>
 
 <p align="right"> (<a href="#top">Back to Top</a>) </p>
 
