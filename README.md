@@ -99,17 +99,17 @@ npm start
     <tr>
       <td>Sprint 5</td>
       <td>Sep 29 – Oct 12</td>
-      <td>Work on connecting PAC page to database, finalize database, make sure all roles have their intended permissions</td>
+      <td>Connect all PAC pages to database, finalize database, Invoice OCR/AI Scanner Feature, Finish implementing all P.A.C. Calculations, Rework Projections Page</td>
     </tr>
     <tr>
       <td>Sprint 6</td>
       <td>Oct 13 – Oct 26</td>
-      <td>Implement user data visualization (charts, tables); test Firebase features</td>
+      <td>Complete Locking functionality for finalized Months, Connect Dashboard to Database, Complete Roles and Permissions, Rework Account Page</td>
     </tr>
     <tr>
       <td>Sprint 7</td>
       <td>Oct 27 – Nov 9</td>
-      <td>Complete additional features (e.g., darkmode, announcements, deadlines, etc.); finalize styling</td>
+      <td>Complete additional features (e.g., darkmode, announcements, deadlines, etc.); finalize styling, Complete Testing on all previous features, Website Security/Data protection</td>
     </tr>
     <tr>
       <td>Sprint 8</td>
