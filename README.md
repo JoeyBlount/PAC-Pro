@@ -141,6 +141,21 @@ npm start
 
 ## Contributors
 
-<!-- Contributors below -->
+<h3>StackHats</h3>
+
+<p><strong>Team Leader:</strong> Joseph Blount</p>
+
+<p><strong>Developers:</strong></p>
+<ul>
+  <li>Joseph Blount</li>
+  <li>Pavel Prokhorov</li>
+  <li>Michelle Erickson</li>
+  <li>Majd Hameed</li>
+  <li>Chris Bozionelos</li>
+  <li>Jamal Stanackzai</li>
+  <li>Jason He</li>
+  <li>Dylan Khon</li>
+  <li>Kaden Bettencourt</li>
+</ul>
 
 <p align="right"> (<a href="#top">Back to Top</a>) </p>
