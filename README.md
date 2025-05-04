@@ -87,7 +87,37 @@ npm start
 
 ## Project Timeline
 
-<!-- Insert Timeline for 191. Assignment Requirement. -->
+<table>
+  <thead>
+    <tr>
+      <th>Sprint</th>
+      <th>Dates</th>
+      <th>Goals / Deliverables</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Sprint 5</td>
+      <td>Sep 29 – Oct 12</td>
+      <td>Work on connecting PAC page to database, finalize database, make sure all roles have their intended permissions</td>
+    </tr>
+    <tr>
+      <td>Sprint 6</td>
+      <td>Oct 13 – Oct 26</td>
+      <td>Implement user data visualization (charts, tables); test Firebase features</td>
+    </tr>
+    <tr>
+      <td>Sprint 7</td>
+      <td>Oct 27 – Nov 9</td>
+      <td>Complete additional features (e.g., darkmode, announcements, deadlines, etc.); finalize styling</td>
+    </tr>
+    <tr>
+      <td>Sprint 8</td>
+      <td>Nov 10 – Nov 24</td>
+      <td>Conduct final bug fixes, polish UI/UX, and prepare presentation/demo</td>
+    </tr>
+  </tbody>
+</table>
 
 <p align="right"> (<a href="#top">Back to Top</a>) </p>
 
