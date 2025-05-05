@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ROLES } from '../constants/roles';
+import NotAllowed from '../pages/notAllowed/notAllowed';
 
 // Component to protect routes based on role
 // allowedRoles is an array of roles that can access the route
@@ -9,25 +10,30 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     const { userRole, currentUser, loading } = useAuth();
     const location = useLocation();
 
+    // Show loading state while auth is being checked
     if (loading) {
-        // Optional: Show a loading indicator while auth state is resolving
         return <div>Loading...</div>;
     }
 
+    // If not logged in, redirect to login
     if (!currentUser) {
-        // Not logged in, redirect to login page, saving the current location
-        return <Navigate to="/login" state={{ from: location }} replace />;
+        return <Navigate to="/" state={{ from: location }} replace />;
     }
 
+    // If no roles specified, allow access
     if (!allowedRoles || !Array.isArray(allowedRoles) || allowedRoles.length === 0) {
-        // If no roles are specified for the route, maybe allow all logged-in users?
-        // Or deny all? Let's assume allow all logged-in users for this case.
-        console.warn("ProtectedRoute used without specific allowedRoles. Allowing access for logged-in user.");
-    } else if (!allowedRoles.includes(userRole)) {
-        // Role not allowed, redirect to an unauthorized page or dashboard
-        console.log(`Access Denied: Role "${userRole}" not in allowed roles [${allowedRoles.join(', ')}] for path ${location.pathname}`);
-        // You might want a dedicated '/unauthorized' page
-        return <Navigate to="/navi/dashboard" state={{ from: location }} replace />; // Or redirect to '/unauthorized'
+        return children;
+    }
+
+    // Check if user's role is allowed
+    if (!allowedRoles.includes(userRole)) {
+        // Show NotAllowed page for General Manager and Supervisor trying to access settings
+        if (location.pathname.includes('/settings') && 
+            [ROLES.GENERAL_MANAGER, ROLES.SUPERVISOR].includes(userRole)) {
+            return <NotAllowed />;
+        }
+        // For other roles, redirect to dashboard
+        return <Navigate to="/navi/dashboard" replace />;
     }
 
     // User is logged in and has an allowed role
@@ -45,17 +51,25 @@ export const AdminOrOmRoute = ({ children }) => (
 );
 
 export const SettingsViewRoute = ({ children }) => (
-    // Example: Who can VIEW settings pages like InvoiceSettings
-    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.OFFICE_MANAGER, ROLES.ACCOUNTANT]}>{children}</ProtectedRoute>
+    // Admin and Accountant can view settings
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.ACCOUNTANT]}>{children}</ProtectedRoute>
+);
+
+export const StoreManagementRoute = ({ children }) => (
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.ACCOUNTANT]}>{children}</ProtectedRoute>
+);
+
+export const UserManagementRoute = ({ children }) => (
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.ACCOUNTANT]}>{children}</ProtectedRoute>
+);
+
+export const ViewOnlyRoute = ({ children }) => (
+    // All authenticated users can access view-only pages
+    <ProtectedRoute allowedRoles={Object.values(ROLES)}>{children}</ProtectedRoute>
 );
 
 export const AllAuthenticatedUsersRoute = ({ children }) => (
-    <ProtectedRoute allowedRoles={Object.values(ROLES)}>{children}</ProtectedRoute> // Allow any defined role
-    // Or simply check if currentUser exists without checking role array:
-    // const { currentUser, loading } = useAuth();
-    // if (loading) return <div>Loading...</div>;
-    // if (!currentUser) return <Navigate to="/login" state={{ from: location }} replace />;
-    // return children;
+    <ProtectedRoute allowedRoles={Object.values(ROLES)}>{children}</ProtectedRoute>
 );
 
 

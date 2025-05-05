@@ -17,44 +17,46 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            setCurrentUser(user);
-            if (user) {
-                // User is signed in, fetch their role from Firestore
-                const userRef = doc(db, 'users', user.email); // Using email as doc ID based on your code
-                try {
+            try {
+                if (user) {
+                    setCurrentUser(user);
+                    // User is signed in, fetch their role from Firestore
+                    const userRef = doc(db, 'users', user.email);
                     const userDoc = await getDoc(userRef);
+                    
                     if (userDoc.exists()) {
-                        setUserRole(userDoc.data().role); // Assuming 'role' field exists
-                        console.log('User Role:', userDoc.data().role);
+                        const role = userDoc.data().role;
+                        setUserRole(role);
+                        console.log('User Role:', role);
                     } else {
-                        console.log('User document not found in Firestore, role unknown.');
-                        setUserRole(null); // Or handle as appropriate
-                        // Maybe sign out the user if they MUST have a Firestore entry?
-                        // auth.signOut();
+                        console.log('User document not found in Firestore');
+                        setUserRole(null);
                     }
-                } catch (error) {
-                    console.error('Error fetching user role:', error);
+                } else {
+                    setCurrentUser(null);
                     setUserRole(null);
                 }
-            } else {
-                // User is signed out
+            } catch (error) {
+                console.error('Error in auth state change:', error);
+                setCurrentUser(null);
                 setUserRole(null);
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         });
 
-        return unsubscribe; // Cleanup subscription on unmount
+        return () => unsubscribe();
     }, [db]);
 
     const value = {
         currentUser,
         userRole,
-        loading, // You can use this to show a loading spinner while auth state is resolving
+        loading
     };
 
     return (
         <AuthContext.Provider value={value}>
-            {!loading && children}
+            {children}
         </AuthContext.Provider>
     );
 };

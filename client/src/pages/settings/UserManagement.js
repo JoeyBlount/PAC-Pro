@@ -26,26 +26,25 @@ import { useAuth } from '../../context/AuthContext'; // Adjust path
 import { ROLES } from '../../constants/roles'; // Adjust path
 
 const UserManagement = () => {
-  const userRole = ROLES.ADMIN; // This line makes all user who access the invoice settings a admin regardless of their actual role. Delete this line when bugs are fixed.
-  const currentUser = ""; // This line along with the line above is for temp bypass. Delete this line and uncomment the line below when bugs are fixed
-  //const { userRole, currentUser } = useAuth(); // Get current user's role and info
+  const { userRole, currentUser } = useAuth(); // Get current user's role and info
   const [users, setUsers] = useState([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false); // State for edit dialog
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [newUser, setNewUser] = useState({ firstName: "", lastName: "", email: "", role: "" });
-  const [editingUser, setEditingUser] = useState({ id: null, role: "" }); // State for user being edited
+  const [editingUser, setEditingUser] = useState({ id: null, role: "" });
 
-  // Permissions check
+  // Permissions check based on role hierarchy
   const canManageUsers = userRole === ROLES.ADMIN || userRole === ROLES.OFFICE_MANAGER;
   const isAdmin = userRole === ROLES.ADMIN;
+  const canViewUsers = userRole === ROLES.ADMIN || userRole === ROLES.OFFICE_MANAGER || userRole === ROLES.ACCOUNTANT;
 
   useEffect(() => {
-    if (canManageUsers) { // Only fetch if user has permission
+    if (canViewUsers) {
       fetchUsers();
     }
-  }, [canManageUsers]); // Re-run if permission changes (e.g., on login)
+  }, [canViewUsers]);
 
   const fetchUsers = async () => {
     // ... (fetchUsers logic remains the same)
@@ -82,17 +81,15 @@ const UserManagement = () => {
       return;
     }
 
-    // Check if email already exists (client-side check, add Firestore rule too)
+    // Check if email already exists
     const emailExists = users.some(user => user.email === newUser.email);
     if (emailExists) {
       alert("A user with this email already exists.");
       return;
     }
 
-
     if (newUser.firstName && newUser.lastName && newUser.email && newUser.role) {
       try {
-        // Use email as doc ID for consistency with invite.js and login.js
         const userRef = doc(db, "users", newUser.email);
         await setDoc(userRef, {
           firstName: newUser.firstName,
@@ -100,17 +97,18 @@ const UserManagement = () => {
           email: newUser.email,
           role: newUser.role,
           createdAt: new Date().toISOString(),
-          acceptState: false, // Or set based on requirements
+          acceptState: false,
         });
-        // Re-fetch users to include the new one
         fetchUsers();
+        setAddDialogOpen(false);
+        setNewUser({ firstName: "", lastName: "", email: "", role: "" });
       } catch (error) {
         console.error("Error adding user:", error);
         alert("Error adding user.");
       }
+    } else {
+      alert("Please fill in all fields.");
     }
-    setAddDialogOpen(false);
-    setNewUser({ firstName: "", lastName: "", email: "", role: "" });
   };
 
   // --- Edit Role Handlers (Admin Only) ---
@@ -160,7 +158,7 @@ const UserManagement = () => {
 
 
   // --- Render Logic ---
-  if (!canManageUsers) {
+  if (!canViewUsers) {
     return (
       <Container sx={{ textAlign: "center", marginTop: 10 }}>
         <Typography variant="h4">User Management</Typography>
@@ -176,7 +174,6 @@ const UserManagement = () => {
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
         <Typography variant="h4">User Management</Typography>
-        {/* Add User Button - Conditionally Rendered */}
         {canManageUsers && (
           <Button variant="contained" startIcon={<AddIcon />} onClick={handleAddUserClick}>
             Add User
@@ -188,24 +185,22 @@ const UserManagement = () => {
       <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
         {users.map((user) => (
           <Paper
-            key={user.id} // Use Firestore document ID if available and unique
+            key={user.id}
             elevation={3}
-            sx={{ /* ... existing styles ... */ }}
+            sx={{ width: "100%", p: 2, mb: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}
           >
             <Box>
-              {/* ... user details ... */}
-              <Typography variant="body2">Role: {user.role || 'Not Assigned'}</Typography> {/* Display Role */}
-              {/* ... other details ... */}
+              <Typography variant="h6">{user.firstName} {user.lastName}</Typography>
+              <Typography variant="body2">Email: {user.email}</Typography>
+              <Typography variant="body2">Role: {user.role || 'Not Assigned'}</Typography>
             </Box>
-            <Box> {/* Container for buttons */}
-              {/* Edit Button (Admin Only) */}
-              {isAdmin && user.email !== currentUser?.email && ( // Show edit button if Admin and not editing self
+            <Box>
+              {isAdmin && user.email !== currentUser?.email && (
                 <IconButton onClick={() => handleEditClick(user)} sx={{ color: "blue" }} size="small">
                   <EditIcon />
                 </IconButton>
               )}
-              {/* Delete Button (Admin/OM, with checks) */}
-              {canManageUsers && user.email !== currentUser?.email && ( // Don't show delete for self
+              {canManageUsers && user.email !== currentUser?.email && (
                 <IconButton onClick={() => handleDeleteClick(user)} sx={{ color: "red" }} size="small">
                   <CloseIcon />
                 </IconButton>
@@ -215,27 +210,40 @@ const UserManagement = () => {
         ))}
       </Box>
 
-      {/* Delete Confirmation Dialog (keep as is) */}
-      {/* ... Delete Dialog ... */}
-
       {/* Add User Dialog */}
       <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)}>
         <DialogTitle>Add New User</DialogTitle>
         <DialogContent>
-          {/* ... TextFields for firstName, lastName, email ... */}
-          <TextField /* ... firstName ... */ />
-          <TextField /* ... lastName ... */ />
-          <TextField /* ... email ... */ />
-
+          <TextField
+            autoFocus
+            margin="dense"
+            label="First Name"
+            fullWidth
+            value={newUser.firstName}
+            onChange={(e) => setNewUser({ ...newUser, firstName: e.target.value })}
+          />
+          <TextField
+            margin="dense"
+            label="Last Name"
+            fullWidth
+            value={newUser.lastName}
+            onChange={(e) => setNewUser({ ...newUser, lastName: e.target.value })}
+          />
+          <TextField
+            margin="dense"
+            label="Email"
+            type="email"
+            fullWidth
+            value={newUser.email}
+            onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+          />
           <FormControl fullWidth margin="dense">
             <InputLabel>Role</InputLabel>
             <Select
-              name="role" // Add name attribute
               value={newUser.role}
               onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
             >
               <MenuItem value="" disabled>Select Role</MenuItem>
-              {/* Use ROLES constants and add conditional Admin role */}
               {isAdmin && <MenuItem value={ROLES.ADMIN}>Admin</MenuItem>}
               <MenuItem value={ROLES.GENERAL_MANAGER}>General Manager</MenuItem>
               <MenuItem value={ROLES.OFFICE_MANAGER}>Office Manager</MenuItem>
@@ -245,11 +253,12 @@ const UserManagement = () => {
           </FormControl>
         </DialogContent>
         <DialogActions>
-          {/* ... cancel/add buttons ... */}
+          <Button onClick={() => setAddDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleAddUserSubmit} color="primary">Add User</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Edit Role Dialog (Admin Only) */}
+      {/* Edit Role Dialog */}
       <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)}>
         <DialogTitle>Edit Role for {selectedUser?.firstName} {selectedUser?.lastName}</DialogTitle>
         <DialogContent>
@@ -262,8 +271,7 @@ const UserManagement = () => {
               value={editingUser.role}
               onChange={handleEditRoleChange}
             >
-              {/* Ensure all roles are available for Admin to assign */}
-              <MenuItem value={ROLES.ADMIN}>Admin</MenuItem>
+              {isAdmin && <MenuItem value={ROLES.ADMIN}>Admin</MenuItem>}
               <MenuItem value={ROLES.GENERAL_MANAGER}>General Manager</MenuItem>
               <MenuItem value={ROLES.OFFICE_MANAGER}>Office Manager</MenuItem>
               <MenuItem value={ROLES.SUPERVISOR}>Supervisor</MenuItem>
@@ -277,6 +285,19 @@ const UserManagement = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete {selectedUser?.firstName} {selectedUser?.lastName}?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleDeleteConfirm} color="error">Delete</Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

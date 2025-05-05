@@ -21,9 +21,13 @@ import {
   Typography as MuiTypography,
   Select,
   MenuItem,
+  Alert,
 } from "@mui/material";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import CancelIcon from "@mui/icons-material/Cancel";
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import { useAuth } from '../../context/AuthContext';
+import { ROLES } from '../../constants/roles';
 
 import { db } from "../../config/firebase-config";
 import {
@@ -43,6 +47,8 @@ const months = [
 const currentMonth = months[new Date().getMonth()];
 
 const StoreManagement = () => {
+  const { userRole } = useAuth();
+  const isAccountant = userRole === ROLES.ACCOUNTANT;
   const [rows, setRows] = useState([]);
   const [prevRows, setPrevRows] = useState([]);
   const [hasChanges, setHasChanges] = useState(false);
@@ -76,7 +82,11 @@ const StoreManagement = () => {
     fetchStores();
   }, []);
 
-  const handleOpen = () => setOpen(true);
+  const handleOpen = () => {
+    if (isAccountant) return;
+    setOpen(true);
+  };
+
   const handleClose = () => {
     setOpen(false);
     setNewStore({ subName: "", address: "", storeID: "", entity: "", startMonth: currentMonth });
@@ -84,11 +94,13 @@ const StoreManagement = () => {
 
   //Change store data.
   const handleChange = (e) => {
+    if (isAccountant) return;
     setNewStore({ ...newStore, [e.target.name]: e.target.value });
   };
 
   //Save changes my by user in edit/modify mode.
   const handleSave = async () => {
+    if (isAccountant) return;
     const { subName, address, storeID, entity, startMonth } = newStore;
     if (subName && address && storeID && entity && startMonth) {
       await addDoc(storeCollection, newStore);
@@ -99,6 +111,7 @@ const StoreManagement = () => {
 
   //Deletes store and its data, able to restore in a set amount of time in edit mode.
   const handleDelete = (index) => {
+    if (isAccountant) return;
     const store = rows[index];
     const updatedRows = [...rows];
     updatedRows.splice(index, 1);
@@ -115,14 +128,16 @@ const StoreManagement = () => {
 
   //Restores deleted table. 
   const handleRestore = (row) => {
+    if (isAccountant) return;
     setRows((prev) => [...prev, row]);
     clearTimeout(row.timerId);
     setDeletedRows((prev) => prev.filter((item) => item.id !== row.id));
     setHasChanges(true);
   };
 
-  //Eneter Editing or Modify mode.
+  //Enter Editing or Modify mode.
   const handleModifyToggle = () => {
+    if (isAccountant) return;
     if (modifyMode) {
       if (hasChanges) {
         setConfirmChangesDialog(true);
@@ -137,12 +152,13 @@ const StoreManagement = () => {
 
   //Only able to modify when in editing mode.
   const handleCellClick = (rowIndex, field) => {
-    if (!modifyMode) return;
+    if (isAccountant || !modifyMode) return;
     if (["storeID", "startMonth"].includes(field)) return;
     setEditingCell({ row: rowIndex, field });
   };
 
   const handleEditChange = (e, rowIndex) => {
+    if (isAccountant) return;
     const updated = [...rows];
     updated[rowIndex][editingCell.field] = e.target.value;
     setRows(updated);
@@ -154,6 +170,7 @@ const StoreManagement = () => {
 
   //Confirm data changes made by user.
   const handleConfirmSave = async () => {
+    if (isAccountant) return;
     for (const row of rows) {
       await updateDoc(doc(db, "stores", row.id), {
         subName: row.subName,
@@ -172,6 +189,7 @@ const StoreManagement = () => {
 
   //Avoid changes made by user in editing mode, restore prior data.
   const handleCancelSave = () => {
+    if (isAccountant) return;
     setRows(prevRows);
     setModifyMode(false);
     setEditingCell({ row: null, field: null });
@@ -196,31 +214,47 @@ const StoreManagement = () => {
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#f5f5f5", padding: 2, borderRadius: 2, boxShadow: 1, marginBottom: 3 }}>
         <Typography variant="h5" sx={{ fontWeight: "bold", textTransform: "uppercase" }}>
           Store Management
+          {isAccountant && (
+            <VisibilityIcon 
+              sx={{ 
+                ml: 1,
+                color: 'text.secondary',
+                fontSize: 24
+              }}
+            />
+          )}
         </Typography>
-        <Box>
-          <Button
-            variant="contained"
-            sx={{
-              backgroundColor: modifyMode ? hasChanges ? "green" : "#d3d3d3" : "green",
-              color: "white",
-              marginRight: 2,
-              "&:hover": {
-                backgroundColor: modifyMode ? hasChanges ? "#007f00" : "#c0c0c0" : "#007f00",
-              },
-            }}
-            onClick={handleModifyToggle}
-          >
-            {modifyMode ? "Save" : "Modify"}
-          </Button>
-          <Tooltip title="Add Store">
-            <IconButton color="primary" onClick={handleOpen}>
-              <AddCircleOutlineIcon fontSize="large" />
-            </IconButton>
-          </Tooltip>
-        </Box>
+        {!isAccountant && (
+          <Box>
+            <Button
+              variant="contained"
+              sx={{
+                backgroundColor: modifyMode ? hasChanges ? "green" : "#d3d3d3" : "green",
+                color: "white",
+                marginRight: 2,
+                "&:hover": {
+                  backgroundColor: modifyMode ? hasChanges ? "#007f00" : "#c0c0c0" : "#007f00",
+                },
+              }}
+              onClick={handleModifyToggle}
+            >
+              {modifyMode ? "Save" : "Modify"}
+            </Button>
+            <Tooltip title="Add Store">
+              <IconButton color="primary" onClick={handleOpen}>
+                <AddCircleOutlineIcon fontSize="large" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
       </Box>
 
-      {/* Main store data table */}
+      {isAccountant && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          You are in view-only mode. You can view all store information but cannot make changes.
+        </Alert>
+      )}
+
       <TableContainer component={Paper}>
         <Table sx={{ minWidth: 700 }}>
           <TableHead>
@@ -230,7 +264,7 @@ const StoreManagement = () => {
               <TableCell><strong>Store ID</strong></TableCell>
               <TableCell><strong>Entity</strong></TableCell>
               <TableCell><strong>Start Month</strong></TableCell>
-              {modifyMode && <TableCell />}
+              {modifyMode && !isAccountant && <TableCell />}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -241,8 +275,8 @@ const StoreManagement = () => {
                     key={field}
                     onClick={() => handleCellClick(rowIndex, field)}
                     sx={{
-                      cursor: modifyMode && !["storeID", "startMonth"].includes(field) ? "pointer" : "default",
-                      color: modifyMode && ["storeID", "startMonth"].includes(field) ? "text.disabled" : "text.primary",
+                      cursor: !isAccountant && modifyMode && !["storeID", "startMonth"].includes(field) ? "pointer" : "default",
+                      color: !isAccountant && modifyMode && ["storeID", "startMonth"].includes(field) ? "text.disabled" : "text.primary",
                     }}
                   >
                     {editingCell.row === rowIndex && editingCell.field === field ? (
@@ -252,13 +286,14 @@ const StoreManagement = () => {
                         onBlur={handleEditBlur}
                         size="small"
                         autoFocus
+                        disabled={isAccountant}
                       />
                     ) : (
                       row[field]
                     )}
                   </TableCell>
                 ))}
-                {modifyMode && (
+                {modifyMode && !isAccountant && (
                   <TableCell>
                     <IconButton onClick={() => handleDelete(rowIndex)}>
                       <CancelIcon sx={{ color: "red" }} />
@@ -271,8 +306,7 @@ const StoreManagement = () => {
         </Table>
       </TableContainer>
 
-      {/*Table showing user recently deleted stores (only viewable when in editing mode.) */}
-      {modifyMode && deletedRows.length > 0 && (
+      {modifyMode && !isAccountant && deletedRows.length > 0 && (
         <Box mt={4}>
           <Typography variant="h6">Recently Deleted (Restorable within 1 day)</Typography>
           <TableContainer component={Paper} sx={{ mt: 1 }}>
@@ -312,7 +346,6 @@ const StoreManagement = () => {
         </Box>
       )}
 
-      {/* Pop up asking user to enter data in field texts to add a new store. Start month uses set months . */}
       <Dialog open={open} onClose={handleClose}>
         <DialogTitle>Add New Store</DialogTitle>
         <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
@@ -332,7 +365,6 @@ const StoreManagement = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Pop up that Asks user to confirm changes made to data. */}
       <Dialog open={confirmChangesDialog} onClose={() => setConfirmChangesDialog(false)}>
         <DialogTitle>Confirm Save Changes</DialogTitle>
         <DialogContent>
