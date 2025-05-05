@@ -33,6 +33,7 @@ import InvoiceSettings from "./pages/settings/InvoiceSettings";
 
 import { StoreProvider } from "./context/storeContext";
 import { AuthProvider } from './context/AuthContext';
+import { AdminRoute, AdminOrOmRoute, SettingsViewRoute, StoreManagementRoute, UserManagementRoute, ViewOnlyRoute, AllAuthenticatedUsersRoute } from './routes/ProtectedRoute';
 
 const msalInstance = new PublicClientApplication(msalConfig);
 
@@ -47,23 +48,21 @@ const router = createBrowserRouter([
   },
   {
     path: "/navi",
-    element: <PrivateRoute element={<App />} />,
+    element: <PrivateRoute><App /></PrivateRoute>,
     children: [
-      { path: "dashboard", element: <Dashboard /> },
-      { path: "invoiceLogs", element: <InvoiceLogs /> },
-      { path: "submitInvoice", element: <SubmitInvoice /> },
-      { path: "reports", element: <Reports /> },
-      { path: "settings", element: <Settings /> },
-      { path: "pac", element: <PAC /> },
-      { path: "account", element: <Account /> },
-      // 404 page for unmatched nested routes
-      { path: "*", element: <h1>404 - Page Not Found</h1> },
+      { path: "dashboard", element: <ViewOnlyRoute><Dashboard /></ViewOnlyRoute> },
+      { path: "invoiceLogs", element: <ViewOnlyRoute><InvoiceLogs /></ViewOnlyRoute> },
+      { path: "submitInvoice", element: <ViewOnlyRoute><SubmitInvoice /></ViewOnlyRoute> },
+      { path: "reports", element: <ViewOnlyRoute><Reports /></ViewOnlyRoute> },
+      { path: "settings", element: <SettingsViewRoute><Settings /></SettingsViewRoute> },
+      { path: "pac", element: <ViewOnlyRoute><PAC /></ViewOnlyRoute> },
+      { path: "account", element: <AllAuthenticatedUsersRoute><Account /></AllAuthenticatedUsersRoute> },
 
-      // Settings sub-pages
-      { path: "settings/user-management", element: <UserManagement /> },
-      { path: "settings/store-management", element: <StoreManagement /> },
-      { path: "settings/notifications", element: <Notifications /> },
-      { path: "settings/invoice-settings", element: <InvoiceSettings /> },
+      // Settings sub-pages with role-based access
+      { path: "settings/user-management", element: <UserManagementRoute><UserManagement /></UserManagementRoute> },
+      { path: "settings/store-management", element: <StoreManagementRoute><StoreManagement /></StoreManagementRoute> },
+      { path: "settings/notifications", element: <SettingsViewRoute><Notifications /></SettingsViewRoute> },
+      { path: "settings/invoice-settings", element: <AdminRoute><InvoiceSettings /></AdminRoute> },
     ],
   },
   {
