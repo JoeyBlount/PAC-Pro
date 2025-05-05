@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ROLES } from '../constants/roles';
+import NotAllowed from '../pages/notAllowed/notAllowed';
 
 // Component to protect routes based on role
 // allowedRoles is an array of roles that can access the route
@@ -26,7 +27,12 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
     // Check if user's role is allowed
     if (!allowedRoles.includes(userRole)) {
-        // Redirect to dashboard if role not allowed
+        // Show NotAllowed page for General Manager and Supervisor trying to access settings
+        if (location.pathname.includes('/settings') && 
+            [ROLES.GENERAL_MANAGER, ROLES.SUPERVISOR].includes(userRole)) {
+            return <NotAllowed />;
+        }
+        // For other roles, redirect to dashboard
         return <Navigate to="/navi/dashboard" replace />;
     }
 
@@ -45,20 +51,21 @@ export const AdminOrOmRoute = ({ children }) => (
 );
 
 export const SettingsViewRoute = ({ children }) => (
-    // Example: Who can VIEW settings pages like InvoiceSettings
-    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.OFFICE_MANAGER, ROLES.ACCOUNTANT]}>{children}</ProtectedRoute>
+    // Admin and Accountant can view settings
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.ACCOUNTANT]}>{children}</ProtectedRoute>
 );
 
 export const StoreManagementRoute = ({ children }) => (
-    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.OFFICE_MANAGER]}>{children}</ProtectedRoute>
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.ACCOUNTANT]}>{children}</ProtectedRoute>
 );
 
 export const UserManagementRoute = ({ children }) => (
-    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.OFFICE_MANAGER]}>{children}</ProtectedRoute>
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.ACCOUNTANT]}>{children}</ProtectedRoute>
 );
 
 export const ViewOnlyRoute = ({ children }) => (
-    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.OFFICE_MANAGER, ROLES.ACCOUNTANT, ROLES.GENERAL_MANAGER, ROLES.SUPERVISOR]}>{children}</ProtectedRoute>
+    // All authenticated users can access view-only pages
+    <ProtectedRoute allowedRoles={Object.values(ROLES)}>{children}</ProtectedRoute>
 );
 
 export const AllAuthenticatedUsersRoute = ({ children }) => (
