@@ -1,25 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { Navigate } from "react-router-dom";
-import { auth } from "../config/firebase-config"; // Adjust path if needed
-import { onAuthStateChanged } from "firebase/auth";
+import { useAuth } from "../context/AuthContext";
 
 // Private route component to check authentication
-function PrivateRoute({ element }) {
-    const [user, setUser] = useState(undefined);
-    const [loading, setLoading] = useState(true);
+function PrivateRoute({ children }) {
+    const { currentUser, loading } = useAuth();
   
-    useEffect(() => {
-      const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-        setUser(firebaseUser);
-        setLoading(false);
-      });
+    if (loading) {
+        return <div>Loading...</div>;
+    }
   
-      return () => unsubscribe(); // Cleanup on unmount
-    }, []);
-  
-    if (loading) return <div>Loading...</div>;
-  
-    return user ? element : <Navigate to="/" replace />;
-  }
+    return currentUser ? children : <Navigate to="/" replace />;
+}
 
-  export default PrivateRoute;
+export default PrivateRoute;
