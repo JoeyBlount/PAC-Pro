@@ -1,0 +1,54 @@
+{
+  "collections": {
+    "stores": {
+      "description": "Store information and metadata",
+      "fields": {
+        "id": "string - unique store identifier",
+        "name": "string - store display name",
+        "city": "string - store city",
+        "state": "string - store state"
+      }
+    },
+    "pac_input_data": {
+      "description": "PAC calculation input data by store and month",
+      "document_id_format": "{store_id}_{year_month}",
+      "fields": {
+        "store_id": "string - reference to store",
+        "year_month": "string - YYYYMM format",
+        "product_net_sales": "number - POS sales data",
+        "cash_adjustments": "number - cash over/short",
+        "promotions": "number - promotional discounts",
+        "manager_meals": "number - manager comps",
+        "crew_labor_percent": "number - crew labor percentage",
+        "total_labor_percent": "number - total labor percentage",
+        "payroll_tax_rate": "number - payroll tax rate",
+        "complete_waste_percent": "number - complete waste percentage",
+        "raw_waste_percent": "number - raw waste percentage",
+        "condiment_percent": "number - condiment percentage",
+        "beginning_inventory": "object - inventory at month start",
+        "ending_inventory": "object - inventory at month end",
+        "purchases": "object - purchase data by category",
+        "advertising_percent": "number - advertising percentage",
+        "created_at": "timestamp - record creation time",
+        "updated_at": "timestamp - last update time"
+      }
+    },
+    "pac_calculations": {
+      "description": "Calculated PAC results (optional - can be computed on-demand)",
+      "document_id_format": "{store_id}_{year_month}",
+      "fields": {
+        "store_id": "string - reference to store",
+        "year_month": "string - YYYYMM format",
+        "product_net_sales": "number - calculated result",
+        "all_net_sales": "number - calculated result",
+        "amount_used": "object - calculated amount used data",
+        "controllable_expenses": "object - calculated expense data",
+        "total_controllable_dollars": "number - calculated total",
+        "total_controllable_percent": "number - calculated percentage",
+        "pac_percent": "number - calculated PAC percentage",
+        "pac_dollars": "number - calculated PAC dollars",
+        "calculated_at": "timestamp - calculation time"
+      }
+    }
+  }
+}
