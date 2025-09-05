@@ -67,6 +67,11 @@ export function NavBar() {
         const storesSnapshot = await getDocs(collection(db, "stores"));
         const storesData = storesSnapshot.docs.map((doc) => doc.data());
         setStores(storesData);
+        
+        // Set default store if none selected and stores are available
+        if (!selectedStore && storesData.length > 0) {
+          setSelectedStore(storesData[0].id);
+        }
       } catch (error) {
         console.error("Error loading data from Firestore:", error);
       } finally {
@@ -86,10 +91,14 @@ export function NavBar() {
 
   // Update store text getter to use storeId
   const getSelectedStoreText = () => {
-    const selected = stores.find((s) => s.storeID === selectedStore);
-    return selected
-      ? `${selected.storeID} - ${selected.subName}`
-      : "Select Store";
+    if (!selectedStore || stores.length === 0) {
+      return "Select Store";
+    }
+    const selected = stores.find((s) => s.id === selectedStore);
+    if (!selected) {
+      return "Select Store";
+    }
+    return `${selected.storeID} - ${selected.subName}`;
   };
 
   // Add click outside handler
@@ -156,7 +165,7 @@ export function NavBar() {
                 renderValue={() => getSelectedStoreText()}
               >
                 {stores.map((store) => (
-                  <MenuItem key={store.storeID} value={store.storeID}>
+                  <MenuItem key={store.id} value={store.id}>
                     {store.storeID} - {store.subName}
                   </MenuItem>
                 ))}
