@@ -1,16 +1,18 @@
 """
-Tests for PAC calculation service
+Tests for PAC Calculation Service
 """
 import pytest
 from decimal import Decimal
+from services.pac_calculation_service import PacCalculationService
+from services.data_ingestion_service import DataIngestionService
+from services.account_mapping_service import AccountMappingService
 from models import PacInputData, InventoryData, PurchaseData
-from services import PacCalculationService, DataIngestionService, AccountMappingService
 
 
 class MockDataIngestionService(DataIngestionService):
     """Mock data ingestion service for testing"""
     
-    async def get_input_data(self, entity_id: str, year_month: str) -> PacInputData:
+    async def get_input_data(self, entity_id: str, year_month: str):
         """Return test input data"""
         return PacInputData(
             # POS / Sales Data
@@ -73,7 +75,7 @@ class MockDataIngestionService(DataIngestionService):
 class MockAccountMappingService(AccountMappingService):
     """Mock account mapping service for testing"""
     
-    def get_account_mapping(self) -> dict:
+    def get_account_mapping(self):
         """Return test account mapping"""
         return {
             "food": "food",
@@ -165,7 +167,7 @@ def test_input_data():
 
 
 @pytest.mark.asyncio
-async def test_calculate_pac_with_valid_input_returns_correct_results(pac_service):
+async def test_calculate_pac_async_with_valid_input_returns_correct_results(pac_service):
     """Test PAC calculation with valid input returns correct results"""
     # Arrange
     entity_id = "test_store"
@@ -182,6 +184,24 @@ async def test_calculate_pac_with_valid_input_returns_correct_results(pac_servic
     assert result.total_controllable_dollars > 0, "Total controllable should be positive"
 
 
+@pytest.mark.asyncio
+async def test_get_input_data_async(pac_service):
+    """Test getting input data"""
+    # Arrange
+    entity_id = "test_store"
+    year_month = "202401"
+    
+    # Act
+    result = await pac_service.get_input_data_async(entity_id, year_month)
+    
+    # Assert
+    assert result is not None
+    assert result.product_net_sales == Decimal('100000')
+    assert result.cash_adjustments == Decimal('500')
+    assert result.promotions == Decimal('2000')
+    assert result.manager_meals == Decimal('300')
+
+
 def test_calculate_amount_used_food_calculation_is_correct(pac_service, test_input_data):
     """Test amount used food calculation is correct"""
     # Act
@@ -192,6 +212,28 @@ def test_calculate_amount_used_food_calculation_is_correct(pac_service, test_inp
     # = 15000 + 45000 - 12000 - (600 + 90 + 1800 + 2500) = 48000 - 4990 = 43010
     expected_food = Decimal('43010')
     assert abs(result.food - expected_food) < Decimal('0.01')
+
+
+def test_calculate_amount_used_paper_calculation_is_correct(pac_service, test_input_data):
+    """Test amount used paper calculation is correct"""
+    # Act
+    result = pac_service.calculate_amount_used(test_input_data)
+    
+    # Assert
+    # Expected: 3000 + 2000 - 2500 = 2500
+    expected_paper = Decimal('2500')
+    assert abs(result.paper - expected_paper) < Decimal('0.01')
+
+
+def test_calculate_amount_used_condiment_calculation_is_correct(pac_service, test_input_data):
+    """Test amount used condiment calculation is correct"""
+    # Act
+    result = pac_service.calculate_amount_used(test_input_data)
+    
+    # Assert
+    # Expected: 2000 + 3000 - 1800 = 3200
+    expected_condiment = Decimal('3200')
+    assert abs(result.condiment - expected_condiment) < Decimal('0.01')
 
 
 def test_calculate_controllable_expenses_base_food_is_correct(pac_service, test_input_data):
@@ -364,22 +406,65 @@ def test_calculate_controllable_expenses_cash_adjustments_is_correct(pac_service
     assert abs(expenses.cash_adjustments.percent - expected_percent) < Decimal('0.01')
 
 
-def test_calculate_pac_totals_are_correct(pac_service, test_input_data):
-    """Test PAC totals calculation is correct"""
+def test_calculate_total_controllable_dollars(pac_service, test_input_data):
+    """Test total controllable dollars calculation"""
     # Arrange
     amount_used = pac_service.calculate_amount_used(test_input_data)
     S = test_input_data.product_net_sales
     
     # Act
     expenses = pac_service.calculate_controllable_expenses(test_input_data, amount_used, S)
-    result = pac_service.calculate_pac_totals(expenses, S)
+    total = pac_service.calculate_total_controllable_dollars(expenses)
     
     # Assert
-    assert result["total_controllable_dollars"] > 0
-    assert result["total_controllable_percent"] > 0
-    assert result["pac_percent"] > 0
-    assert result["pac_dollars"] > 0
+    assert total > 0
+    # Should be sum of all expense dollars
+    expected_total = (
+        expenses.base_food.dollars +
+        expenses.employee_meal.dollars +
+        expenses.condiment.dollars +
+        expenses.total_waste.dollars +
+        expenses.paper.dollars +
+        expenses.crew_labor.dollars +
+        expenses.management_labor.dollars +
+        expenses.payroll_tax.dollars +
+        expenses.travel.dollars +
+        expenses.advertising.dollars +
+        expenses.advertising_other.dollars +
+        expenses.promotion.dollars +
+        expenses.outside_services.dollars +
+        expenses.linen.dollars +
+        expenses.op_supply.dollars +
+        expenses.maintenance_repair.dollars +
+        expenses.small_equipment.dollars +
+        expenses.utilities.dollars +
+        expenses.office.dollars +
+        expenses.cash_adjustments.dollars +
+        expenses.misc_cr_tr_ds.dollars
+    )
+    assert abs(total - expected_total) < Decimal('0.01')
+
+
+def test_calculate_pac_totals(pac_service, test_input_data):
+    """Test PAC totals calculation"""
+    # Arrange
+    amount_used = pac_service.calculate_amount_used(test_input_data)
+    S = test_input_data.product_net_sales
+    
+    # Act
+    expenses = pac_service.calculate_controllable_expenses(test_input_data, amount_used, S)
+    totals = pac_service.calculate_pac_totals(expenses, S)
+    
+    # Assert
+    assert totals["total_controllable_dollars"] > 0
+    assert totals["total_controllable_percent"] > 0
+    assert totals["pac_percent"] > 0
+    assert totals["pac_dollars"] > 0
     
     # P.A.C. should be positive for this test data
-    assert result["pac_percent"] > 0, "P.A.C. should be positive"
-    assert result["pac_dollars"] > 0, "P.A.C. dollars should be positive"
+    assert totals["pac_percent"] > 0, "P.A.C. should be positive"
+    assert totals["pac_dollars"] > 0, "P.A.C. dollars should be positive"
+    
+    # Verify the relationship: P.A.C. % = 100 - Total Controllable %
+    expected_pac_percent = 100 - totals["total_controllable_percent"]
+    assert abs(totals["pac_percent"] - expected_pac_percent) < Decimal('0.01')

@@ -23,7 +23,7 @@ def initialize_firebase():
         # Initialize new app
         # You'll need to download your service account key and place it in the project
         # For now, we'll use a placeholder path
-        cred_path = "firebase-service-account.json"
+        cred_path = "../config/firebase-service-account.json"
         
         if os.path.exists(cred_path):
             cred = credentials.Certificate(cred_path)
@@ -31,7 +31,7 @@ def initialize_firebase():
             print("Firebase initialized with service account key")
         else:
             print("Warning: Firebase service account key not found. Using default credentials.")
-            print("Please add your firebase-service-account.json file to the project root.")
+            print("Please add your firebase-service-account.json file to the config directory.")
             # For development, you can use default credentials if running on GCP
             app = firebase_admin.initialize_app()
     
@@ -396,7 +396,7 @@ def main():
         print(f"Error initializing Firebase: {e}")
         print("Please ensure you have:")
         print("1. Firebase project set up")
-        print("2. Service account key downloaded as 'firebase-service-account.json'")
+        print("2. Service account key downloaded as 'firebase-service-account.json' and placed in config/")
         print("3. Firebase Admin SDK installed: pip install firebase-admin")
         return
     

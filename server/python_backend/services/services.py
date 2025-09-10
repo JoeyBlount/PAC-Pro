@@ -10,9 +10,9 @@ from models import (
 )
 
 # Import individual services
-from data_ingestion_service import DataIngestionService
-from account_mapping_service import AccountMappingService
-from pac_calculation_service import PacCalculationService
+from .data_ingestion_service import DataIngestionService
+from .account_mapping_service import AccountMappingService
+from .pac_calculation_service import PacCalculationService
 
 # Re-export services for backward compatibility
 __all__ = ['DataIngestionService', 'AccountMappingService', 'PacCalculationService']

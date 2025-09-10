@@ -4,7 +4,9 @@ FastAPI routers for PAC calculations
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from typing import Dict, Any
 from models import PacCalculationResult, PacInputData
-from services import PacCalculationService, DataIngestionService, AccountMappingService
+from services.pac_calculation_service import PacCalculationService
+from services.data_ingestion_service import DataIngestionService
+from services.account_mapping_service import AccountMappingService
 import httpx
 import base64
 import json
@@ -263,8 +265,8 @@ async def get_pac_projections(
             
             # Calculate PAC using the projections data
             # We need to create a temporary data ingestion service that uses projections data
-            from data_ingestion_service import DataIngestionService
-            from pac_calculation_service import PacCalculationService
+            from services.data_ingestion_service import DataIngestionService
+            from services.pac_calculation_service import PacCalculationService
             
             # Create a custom data ingestion service for projections
             class ProjectionsDataIngestionService(DataIngestionService):
@@ -327,7 +329,7 @@ async def get_pac_projections(
             
             # Create projections data ingestion service and calculate PAC
             projections_ingestion_service = ProjectionsDataIngestionService(projections_data)
-            from account_mapping_service import AccountMappingService
+            from services.account_mapping_service import AccountMappingService
             account_mapping_service = AccountMappingService()
             projections_pac_service = PacCalculationService(projections_ingestion_service, account_mapping_service)
             
