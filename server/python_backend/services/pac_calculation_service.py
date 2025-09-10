@@ -7,8 +7,8 @@ from models import (
     PacInputData, PacCalculationResult, AmountUsedData, 
     ControllableExpenses, ExpenseLine, InventoryData, PurchaseData
 )
-from data_ingestion_service import DataIngestionService
-from account_mapping_service import AccountMappingService
+from .data_ingestion_service import DataIngestionService
+from .account_mapping_service import AccountMappingService
 
 
 class PacCalculationService:

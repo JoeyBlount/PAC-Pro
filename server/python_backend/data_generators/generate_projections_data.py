@@ -15,7 +15,7 @@ def initialize_firebase():
         app = firebase_admin.get_app()
         print("Using existing Firebase app")
     except ValueError:
-        cred_path = "firebase-service-account.json"
+        cred_path = "../config/firebase-service-account.json"
         if os.path.exists(cred_path):
             cred = credentials.Certificate(cred_path)
             app = firebase_admin.initialize_app(cred)

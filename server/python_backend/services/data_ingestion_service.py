@@ -21,7 +21,7 @@ class DataIngestionService:
             self.db = firestore.client()
         except ValueError:
             # Initialize Firebase if not already initialized
-            cred_path = "firebase-service-account.json"
+            cred_path = "config/firebase-service-account.json"
             if os.path.exists(cred_path):
                 import firebase_admin
                 from firebase_admin import credentials

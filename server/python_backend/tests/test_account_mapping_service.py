@@ -2,7 +2,7 @@
 Tests for Account Mapping Service
 """
 import pytest
-from account_mapping_service import AccountMappingService
+from services.account_mapping_service import AccountMappingService
 
 
 @pytest.fixture

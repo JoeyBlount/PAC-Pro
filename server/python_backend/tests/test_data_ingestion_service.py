@@ -3,7 +3,7 @@ Tests for Data Ingestion Service
 """
 import pytest
 from decimal import Decimal
-from data_ingestion_service import DataIngestionService
+from services.data_ingestion_service import DataIngestionService
 from models import InventoryData, PurchaseData
 
 

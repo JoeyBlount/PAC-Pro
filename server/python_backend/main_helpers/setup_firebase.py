@@ -105,7 +105,7 @@ def check_firebase_setup():
     print("Checking Firebase setup...")
     
     # Check for service account key
-    service_account_path = "firebase-service-account.json"
+    service_account_path = "../config/firebase-service-account.json"
     if os.path.exists(service_account_path):
         print("✅ Service account key found")
         try:
