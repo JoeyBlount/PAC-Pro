@@ -114,7 +114,7 @@ The application uses the `PROJECT_ROOT` environment variable to locate Firebase 
 
 **Windows:**
 ```cmd
-set PROJECT_ROOT=C:\Users\jblou\OneDrive\Desktop\PAC-Pro
+set PROJECT_ROOT=C:\path\to\your\PAC-Pro
 ```
 
 **macOS/Linux:**
@@ -465,7 +465,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
     "system": "Windows",
     "architecture": "ARM64",
     "python_version": "3.12.10",
-    "project_root": "C:\\Users\\jblou\\OneDrive\\Desktop\\PAC-Pro"
+    "project_root": "C:\\path\\to\\your\\PAC-Pro"
   },
   "firebase": {
     "available": true,
