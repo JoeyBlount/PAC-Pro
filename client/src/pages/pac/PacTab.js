@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Container,
   Table,
@@ -91,11 +91,43 @@ const printStyles = `
       text-align: center;
     }
     
+    /* Section headers with colors matching main page */
     .print-section-header td {
-      background-color: #e0e0e0 !important;
       font-weight: bold;
       text-align: center;
       font-size: 10px;
+    }
+    
+    .print-sales-header td {
+      background-color: #e3f2fd !important;
+      color: #000;
+    }
+    
+    .print-food-paper-header td {
+      background-color: #e8f5e9 !important;
+      color: #000;
+    }
+    
+    .print-labor-header td {
+      background-color: #fff3e0 !important;
+      color: #000;
+    }
+    
+    .print-purchases-header td {
+      background-color: #f3e5f5 !important;
+      color: #000;
+    }
+    
+    .print-totals-header td {
+      background-color: #f5f5f5 !important;
+      color: #000;
+      border-top: 2px solid #ccc !important;
+    }
+    
+    .print-pac-header td {
+      background-color: #f5f5f5 !important;
+      color: #000;
+      border-top: 2px solid #ccc !important;
     }
     
     .text-red {
@@ -119,6 +151,15 @@ const printStyles = `
     
     .print-table tbody tr {
       page-break-inside: avoid;
+    }
+    
+    /* Alternating row colors for better readability */
+    .print-table tbody tr:nth-child(even) {
+      background-color: #f9f9f9 !important;
+    }
+    
+    .print-table tbody tr:nth-child(odd) {
+      background-color: #ffffff !important;
     }
   }
 `;
@@ -158,72 +199,115 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
 
     const getProjectedValueAsNumber = (expenseName) => {
       if (!projectionsData) return 0;
+      
+      // Map expense names to the correct backend field structure
       const expenseMap = {
         "Product Net Sales": projectionsData.product_net_sales,
         "All Net Sales": projectionsData.all_net_sales,
-        "Base Food": projectionsData.base_food,
-        "Employee Meal": projectionsData.employee_meal,
-        Condiment: projectionsData.condiment,
-        "Total Waste": projectionsData.total_waste,
-        Paper: projectionsData.paper,
-        "Crew Labor": projectionsData.crew_labor,
-        "Management Labor": projectionsData.management_labor,
-        "Payroll Tax": projectionsData.payroll_tax,
-        Travel: projectionsData.travel,
-        Advertising: projectionsData.advertising,
-        "Advertising Other": projectionsData.advertising_other,
-        Promotion: projectionsData.promotion,
-        "Outside Services": projectionsData.outside_services,
-        Linen: projectionsData.linen,
-        "Operating Supply": projectionsData.operating_supply,
-        "Maintenance & Repair": projectionsData.maintenance_repair,
-        "Small Equipment": projectionsData.small_equipment,
-        Utilities: projectionsData.utilities,
-        Office: projectionsData.office,
-        "Cash +/-": projectionsData.cash_adjustments,
-        "Misc: CR/TR/D&S": projectionsData.misc,
+        "Base Food": projectionsData.controllable_expenses?.base_food,
+        "Employee Meal": projectionsData.controllable_expenses?.employee_meal,
+        Condiment: projectionsData.controllable_expenses?.condiment,
+        "Total Waste": projectionsData.controllable_expenses?.total_waste,
+        Paper: projectionsData.controllable_expenses?.paper,
+        "Crew Labor": projectionsData.controllable_expenses?.crew_labor,
+        "Management Labor": projectionsData.controllable_expenses?.management_labor,
+        "Payroll Tax": projectionsData.controllable_expenses?.payroll_tax,
+        Travel: projectionsData.controllable_expenses?.travel,
+        Advertising: projectionsData.controllable_expenses?.advertising,
+        "Advertising Other": projectionsData.controllable_expenses?.advertising_other,
+        "Adv Other": projectionsData.controllable_expenses?.advertising_other, // Alternative naming
+        Promotion: projectionsData.controllable_expenses?.promotion,
+        "Outside Services": projectionsData.controllable_expenses?.outside_services,
+        Linen: projectionsData.controllable_expenses?.linen,
+        "Operating Supply": projectionsData.controllable_expenses?.op_supply,
+        "Maintenance & Repair": projectionsData.controllable_expenses?.maintenance_repair,
+        "Small Equipment": projectionsData.controllable_expenses?.small_equipment,
+        Utilities: projectionsData.controllable_expenses?.utilities,
+        Office: projectionsData.controllable_expenses?.office,
+        "Cash +/-": projectionsData.controllable_expenses?.cash_adjustments,
+        "Misc: CR/TR/D&S": projectionsData.controllable_expenses?.misc_cr_tr_ds,
+        "Total Controllable": projectionsData.total_controllable_dollars,
+        "P.A.C.": projectionsData.pac_dollars,
       };
-      return parseFloat(expenseMap[expenseName] || 0);
+      
+      const expenseData = expenseMap[expenseName];
+      if (!expenseData) return 0;
+      
+      // Handle different data structures
+      if (typeof expenseData === 'number') {
+        // Direct number (for sales, totals, P.A.C.)
+        return expenseData;
+      } else if (expenseData && typeof expenseData === 'object') {
+        // Object with dollars/percent structure
+        return parseFloat(expenseData.dollars || 0);
+      }
+      
+      return 0;
     };
 
     const getProjectedValue = (expenseName, type) => {
       if (!projectionsData) return "-";
+      
+      // Map expense names to the correct backend field structure
       const expenseMap = {
         "Product Net Sales": projectionsData.product_net_sales,
         "All Net Sales": projectionsData.all_net_sales,
-        "Base Food": projectionsData.base_food,
-        "Employee Meal": projectionsData.employee_meal,
-        Condiment: projectionsData.condiment,
-        "Total Waste": projectionsData.total_waste,
-        Paper: projectionsData.paper,
-        "Crew Labor": projectionsData.crew_labor,
-        "Management Labor": projectionsData.management_labor,
-        "Payroll Tax": projectionsData.payroll_tax,
-        Travel: projectionsData.travel,
-        Advertising: projectionsData.advertising,
-        "Advertising Other": projectionsData.advertising_other,
-        Promotion: projectionsData.promotion,
-        "Outside Services": projectionsData.outside_services,
-        Linen: projectionsData.linen,
-        "Operating Supply": projectionsData.operating_supply,
-        "Maintenance & Repair": projectionsData.maintenance_repair,
-        "Small Equipment": projectionsData.small_equipment,
-        Utilities: projectionsData.utilities,
-        Office: projectionsData.office,
-        "Cash +/-": projectionsData.cash_adjustments,
-        "Misc: CR/TR/D&S": projectionsData.misc,
+        "Base Food": projectionsData.controllable_expenses?.base_food,
+        "Employee Meal": projectionsData.controllable_expenses?.employee_meal,
+        Condiment: projectionsData.controllable_expenses?.condiment,
+        "Total Waste": projectionsData.controllable_expenses?.total_waste,
+        Paper: projectionsData.controllable_expenses?.paper,
+        "Crew Labor": projectionsData.controllable_expenses?.crew_labor,
+        "Management Labor": projectionsData.controllable_expenses?.management_labor,
+        "Payroll Tax": projectionsData.controllable_expenses?.payroll_tax,
+        Travel: projectionsData.controllable_expenses?.travel,
+        Advertising: projectionsData.controllable_expenses?.advertising,
+        "Advertising Other": projectionsData.controllable_expenses?.advertising_other,
+        "Adv Other": projectionsData.controllable_expenses?.advertising_other, // Alternative naming
+        Promotion: projectionsData.controllable_expenses?.promotion,
+        "Outside Services": projectionsData.controllable_expenses?.outside_services,
+        Linen: projectionsData.controllable_expenses?.linen,
+        "Operating Supply": projectionsData.controllable_expenses?.op_supply,
+        "Maintenance & Repair": projectionsData.controllable_expenses?.maintenance_repair,
+        "Small Equipment": projectionsData.controllable_expenses?.small_equipment,
+        Utilities: projectionsData.controllable_expenses?.utilities,
+        Office: projectionsData.controllable_expenses?.office,
+        "Cash +/-": projectionsData.controllable_expenses?.cash_adjustments,
+        "Misc: CR/TR/D&S": projectionsData.controllable_expenses?.misc_cr_tr_ds,
+        "Total Controllable": projectionsData.total_controllable_dollars,
+        "P.A.C.": projectionsData.pac_dollars,
       };
-      const value = expenseMap[expenseName];
+      
+      const expenseData = expenseMap[expenseName];
+      if (!expenseData) return "-";
+      
+      // Handle different data structures
+      let value;
+      if (typeof expenseData === 'number') {
+        // Direct number (for sales, totals, P.A.C.)
+        value = expenseData;
+      } else if (expenseData && typeof expenseData === 'object') {
+        // Object with dollars/percent structure
+        value = expenseData.dollars;
+      } else {
+        return "-";
+      }
+      
       if (value === null || value === undefined) return "-";
+      
       if (type === "dollar") {
         return formatCurrency(parseFloat(value));
       } else if (type === "percent") {
-        const projectedNetSales =
-          projectionsData.product_net_sales || projectionsData.all_net_sales;
-        if (!projectedNetSales || projectedNetSales === 0) return "-";
-        const percentage =
-          (parseFloat(value) / parseFloat(projectedNetSales)) * 100;
-        return formatPercentage(percentage);
+        // For percentage, use the percent from the object if available, otherwise calculate
+        if (expenseData && typeof expenseData === 'object' && expenseData.percent !== undefined) {
+          return formatPercentage(expenseData.percent);
+        } else {
+          // Calculate percentage based on net sales
+          const projectedNetSales = projectionsData.product_net_sales || projectionsData.all_net_sales;
+          if (!projectedNetSales || projectedNetSales === 0) return "-";
+          const percentage = (parseFloat(value) / parseFloat(projectedNetSales)) * 100;
+          return formatPercentage(percentage);
+        }
       }
       return "-";
     };
@@ -288,7 +372,7 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
         </thead>
         <tbody>
           <!-- Sales Section -->
-          <tr class="print-section-header">
+          <tr class="print-section-header print-sales-header">
             <td colspan="6">Sales</td>
           </tr>
           <tr>
@@ -327,7 +411,7 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
           </tr>
           
           <!-- Food & Paper Section -->
-          <tr class="print-food-paper">
+          <tr class="print-section-header print-food-paper-header">
             <td colspan="6">Food & Paper</td>
           </tr>
           <tr>
@@ -437,7 +521,7 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
           </tr>
           
           <!-- Labor Section -->
-          <tr class="print-labor">
+          <tr class="print-section-header print-labor-header">
             <td colspan="6">Labor</td>
           </tr>
           <tr>
@@ -505,7 +589,7 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
           </tr>
           
           <!-- Other Expenses Section -->
-          <tr class="print-other">
+          <tr class="print-section-header print-purchases-header">
             <td colspan="6">Other Expenses</td>
           </tr>
           <tr>
@@ -782,8 +866,31 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
     )}</td>
           </tr>
           
+          <!-- Add missing expense categories -->
+          <tr>
+            <td style="padding-left: 20px;">Adv Other</td>
+            <td class="${getColorClass(
+              pacData.controllableExpenses.advertisingOther?.dollars || 0,
+              getProjectedValueAsNumber("Adv Other")
+            )}">${formatCurrency(
+      pacData.controllableExpenses.advertisingOther?.dollars || 0
+    )}</td>
+            <td>${formatPercentage(
+              pacData.controllableExpenses.advertisingOther?.percent || 0
+            )}</td>
+            <td>${getProjectedValue("Adv Other", "dollar")}</td>
+            <td>${getProjectedValue("Adv Other", "percent")}</td>
+            <td class="${getDiffColorClass(
+              pacData.controllableExpenses.advertisingOther?.dollars || 0,
+              getProjectedValueAsNumber("Adv Other")
+            )}">${formatDifference(
+      pacData.controllableExpenses.advertisingOther?.dollars || 0,
+      getProjectedValueAsNumber("Adv Other")
+    )}</td>
+          </tr>
+          
           <!-- Totals -->
-          <tr class="print-totals">
+          <tr class="print-section-header print-totals-header">
             <td>Total Controllable</td>
             <td class="${getColorClass(
               pacData.totalControllableDollars,
@@ -807,7 +914,7 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
           </tr>
           
           <!-- P.A.C. -->
-          <tr class="print-pac">
+          <tr class="print-section-header print-pac-header">
             <td>P.A.C.</td>
             <td class="${getColorClass(
               pacData.pacDollars,
@@ -924,7 +1031,7 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
     }
   };
 
-  const fetchPacData = async () => {
+  const fetchPacData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -1137,13 +1244,13 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [storeId, year, month]);
 
   useEffect(() => {
     if (storeId && year && month) {
       fetchPacData();
     }
-  }, [storeId, year, month]);
+  }, [storeId, year, month, fetchPacData]);
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat("en-US", {
