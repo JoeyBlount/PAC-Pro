@@ -59,7 +59,7 @@ A complete Python FastAPI backend for calculating Profit and Controllable expens
 
 ### Documentation
 
-- **Swagger UI**: http://localhost:5140/docs
+- **Swagger UI**: t json http://localhost:5140/docs
 - **ReDoc**: http://localhost:5140/redoc
 
 ## Example Usage

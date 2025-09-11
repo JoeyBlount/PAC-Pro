@@ -1,443 +1,213 @@
-<a id="top"></a>
+# PAC-Pro: Profit and Controllable Expense Management
 
-<br />
+A full-stack web application for calculating and managing Profit and Controllable (PAC) expenses across multiple platforms.
 
-<!-- Project logo. -->
-<div align="center">
-  <a href="https://github.com/JoeyBlount/PAC-Pro">
-    <img src="./readme_images/logo_with_background.png" width="500" />
-  </a>
-</div>
+## 🏗️ Architecture
 
-<br />
+- **Frontend**: React.js (Port 3000)
+- **Backend**: Python FastAPI (Port 5140)
+- **Database**: Firebase Firestore (Optional - falls back to mock data)
+- **Platforms**: Windows (x86/ARM64), macOS (Intel/Apple Silicon), Linux (x86/ARM64)
 
-## About This Project
-
-<!-- About this project text below -->
-<p>PAC Pro is a web program which aims replaces the analog way invoicing that our client is currently using with a digital system. This program will help streamline invoice processing and help automatically generate profits after controllables based on the data. No more needing to juggle stacks of paper looking for a specific invoice and long wait times to see how store performing. The custom program mirrors the familiar paper based process allowing minimal retraining and simplicity for non-tech savvy staff members.</p>
-
-### Built with
-
-<!-- List tools used for this project -->
-
-![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB) &nbsp; ![Firebase](https://img.shields.io/badge/firebase-a08021?style=for-the-badge&logo=firebase&logoColor=ffcd34) &nbsp; ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54) &nbsp; ![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi) &nbsp; ![Material-UI](https://img.shields.io/badge/MUI-%230081CB.svg?style=for-the-badge&logo=mui&logoColor=white)
-
-### Screenshots
-
-<!-- Inset example Screens images -->
-
-<img src="./readme_images/2025-04-26_21-09-46.png" width="250"/> &nbsp; <img src="./readme_images/2025-04-27_20-03-30.png" width="250"/> &nbsp; <img src="./readme_images/2025-04-27_20-08-47.png" width="250"/>
-
-<p align="right"> (<a href="#top">Back to Top</a>) </p>
-
-## Getting Started
-
-<!-- How to set up text below -->
+## 🚀 Quick Start
 
 ### Prerequisites
+- **Node.js** 16+ (for frontend)
+- **Python** 3.8+ (for backend)
+- **Git** (for cloning)
 
-- **Node.js** (v16 or higher) - https://nodejs.org/en
-- **Python** (v3.11 or higher) - https://www.python.org/downloads/
-- **Firebase Project** with Firestore enabled
-- **Google Cloud Service Account** with Firestore permissions
-
-### System Architecture
-
-This project consists of:
-
-- **Frontend**: React application with Material-UI components
-- **Backend**: Python FastAPI server for PAC calculations and data processing
-- **Database**: Google Firestore for data storage
-- **Authentication**: Microsoft/Google OAuth integration
-
-### Setting Up
-
-#### 1. Clone the Repository
-
-```sh
-git clone https://github.com/JoeyBlount/PAC-Pro.git
+### 1. Clone the Repository
+```bash
+git clone <repository-url>
 cd PAC-Pro
 ```
 
-#### 2. Firebase Setup
-
-1. Create a Firebase project at https://console.firebase.google.com
-2. Enable Firestore Database
-3. Create a service account:
-   - Go to Project Settings > Service Accounts
-   - Click "Generate new private key"
-   - Download the JSON file
-4. Place the service account JSON file in the project root as `firebase-service-account.json`
-5. Update Firestore security rules to allow your application access
-
-#### 3. Backend Setup (Python FastAPI)
-
-```sh
-# Navigate to backend directory
-cd server/python_backend
-
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Install Firebase dependencies
-pip install -r firebase_requirements.txt
-
-# Start the backend server
-python -c "import uvicorn; uvicorn.run('main:app', host='127.0.0.1', port=5140, log_level='info')"
-```
-
-The backend will be available at `http://localhost:5140`
-
-#### 4. Frontend Setup (React)
-
-```sh
-# Navigate to client directory
-cd client
-
-# Install dependencies
-npm install --legacy-peer-deps
-
-# Start the development server
-npm start
-```
-
-The frontend will be available at `http://localhost:3000`
-
-#### 5. Generate Test Data (Optional)
-
-To populate the system with test data:
-
-```sh
-# From the python_backend directory
-python firebase_data_generator.py
-python generate_projections_data.py
-```
-
-This will create:
-
-- 8 test stores with complete information
-- 12 months of PAC actual data for 2025
-- 12 months of PAC projections data for 2025
-
-### Environment Configuration
-
-#### Frontend Environment Variables
-
-Create a `.env` file in the `client` directory:
-
-```env
-REACT_APP_FIREBASE_API_KEY=your_firebase_api_key
-REACT_APP_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-REACT_APP_FIREBASE_PROJECT_ID=your_project_id
-REACT_APP_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
-REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-REACT_APP_FIREBASE_APP_ID=your_app_id
-REACT_APP_MICROSOFT_CLIENT_ID=your_microsoft_client_id
-REACT_APP_BACKEND_URL=http://localhost:5140
-```
-
-#### Backend Configuration
-
-Ensure `firebase-service-account.json` is in the project root with proper Firestore permissions.
-
-### Key Features
-
-#### PAC Calculation System
-
-- **Actual vs Projected Analysis**: Compare actual performance against projections
-- **Color-coded Results**: Red for underperformance, green for overperformance
-- **Comprehensive Reporting**: Sales, Food & Paper, Labor, and Other Expenses
-- **Print Functionality**: Generate formatted reports for printing
-
-#### Data Management
-
-- **Store Management**: Multi-store support with individual tracking
-- **Monthly Data**: 12 months of historical and projected data
-- **Real-time Updates**: Live data synchronization with Firestore
-
-#### User Interface
-
-- **Responsive Design**: Works on desktop and mobile devices
-- **Material-UI Components**: Modern, accessible interface
-- **Store Selection**: Easy switching between different store locations
-- **Date Filtering**: Month and year selection for data analysis
-
-### API Endpoints
-
-#### PAC Data
-
-- `GET /api/pac/{entity_id}/{year_month}` - Get actual PAC data
-- `GET /api/projections/{entity_id}/{year_month}` - Get projected PAC data
-
-#### Store Management
-
-- `GET /api/stores` - Get all stores
-- `POST /api/stores` - Create new store
-- `PUT /api/stores/{store_id}` - Update store information
-
-### Troubleshooting
-
-#### Backend Issues
-
-- **Port 5140 in use**: Kill existing Python processes with `taskkill /F /IM python.exe`
-- **Firebase connection errors**: Verify service account JSON file and permissions
-- **Import errors**: Ensure all Python dependencies are installed
-
-#### Frontend Issues
-
-- **Build errors**: Try `npm install --legacy-peer-deps` and clear node_modules
-- **Authentication issues**: Verify Microsoft/Google OAuth configuration
-- **Data not loading**: Check backend server is running and accessible
-
-#### Common Solutions
-
-```sh
-# Clear npm cache
-npm cache clean --force
-
-# Reinstall dependencies
-rm -rf node_modules package-lock.json
-npm install --legacy-peer-deps
-
-# Restart backend
-taskkill /F /IM python.exe
-python -c "import uvicorn; uvicorn.run('main:app', host='127.0.0.1', port=5140, log_level='info')"
-```
-
-<p align="right"> (<a href="#top">Back to Top</a>) </p>
-
-## Project Timeline
-
-<table>
-  <thead>
-    <tr>
-      <th>Sprint</th>
-      <th>Dates</th>
-      <th>Goals / Deliverables</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Sprint 5</td>
-      <td>Sep 29 – Oct 12</td>
-      <td>Connect all PAC pages to database, finalize database, Invoice OCR/AI Scanner Feature, Finish implementing all P.A.C. Calculations, Rework Projections Page</td>
-    </tr>
-    <tr>
-      <td>Sprint 6</td>
-      <td>Oct 13 – Oct 26</td>
-      <td>Complete Locking functionality for finalized Months, Connect Dashboard to Database, Complete Roles and Permissions, Rework Account Page</td>
-    </tr>
-    <tr>
-      <td>Sprint 7</td>
-      <td>Oct 27 – Nov 9</td>
-      <td>Complete additional features (e.g., darkmode, announcements, deadlines, etc.); finalize styling, Complete Testing on all previous features, Website Security/Data protection</td>
-    </tr>
-    <tr>
-      <td>Sprint 8</td>
-      <td>Nov 10 – Nov 24</td>
-      <td>Conduct final bug fixes, polish UI/UX, and prepare presentation/demo</td>
-    </tr>
-  </tbody>
-</table>
-
-<p align="right"> (<a href="#top">Back to Top</a>) </p>
-
-## Testing
-
-<!-- Reserve for 191 -->
-
-<p align="right"> (<a href="#top">Back to Top</a>) </p>
-
-## Deployment
-
-<!-- Reserve for 191 -->
-
-<p align="right"> (<a href="#top">Back to Top</a>) </p>
-
-## Developer Instructions
-
-### Project Structure
+## 📁 Project Structure
 
 ```
 PAC-Pro/
-├── client/                     # React frontend
-│   ├── src/
-│   │   ├── pages/             # Main application pages
-│   │   │   ├── pac/           # PAC calculation pages
-│   │   │   ├── navBar/        # Navigation components
-│   │   │   └── ...
-│   │   ├── components/        # Reusable components
-│   │   └── contexts/          # React contexts (Auth, Store)
-│   ├── public/                # Static assets
+├── client/                    # React frontend application
+│   ├── src/                   # Source code
+│   ├── public/                # Public assets
 │   └── package.json           # Frontend dependencies
-├── server/
+├── server/                    # Backend services
 │   └── python_backend/        # Python FastAPI backend
-│       ├── main.py            # FastAPI application entry point
-│       ├── routers.py         # API route definitions
-│       ├── models.py          # Pydantic data models
+│       ├── main.py            # Main backend application
+│       ├── config/            # Configuration files
 │       ├── services/          # Business logic services
-│       │   ├── pac_calculation_service.py
-│       │   ├── data_ingestion_service.py
-│       │   └── account_mapping_service.py
-│       ├── firebase_data_generator.py      # Test data generator
-│       ├── generate_projections_data.py    # Projections data generator
-│       ├── requirements.txt                # Python dependencies
-│       └── firebase_requirements.txt       # Firebase-specific dependencies
-├── firebase-service-account.json           # Firebase credentials (gitignored)
-└── README.md
+│       └── scripts/           # Backend startup and setup scripts
+│           ├── setup-*.sh/bat # Platform-specific setup scripts
+│           └── start-server.* # Backend startup scripts
+├── scripts/                   # 🆕 Organized startup scripts
+│   ├── start-both-servers.bat     # Start both frontend and backend
+│   ├── start-frontend.bat         # Start frontend only
+│   ├── start-backend.bat          # Start backend only
+│   └── start-frontend-powershell.bat # Alternative frontend startup
+└── README.md                  # This file
 ```
 
-### Development Workflow
+## 🎯 Easy Startup Options
 
-#### 1. Setting Up Development Environment
+### Option 1: Start Both Servers (Recommended)
+```bash
+# From project root
+scripts\start-both-servers.bat
+```
+This will:
+- ✅ Start backend on `http://localhost:5140`
+- ✅ Start frontend on `http://localhost:3000`
+- ✅ Open both in separate windows
+- ✅ Handle all PATH and dependency issues
 
-```sh
-# Clone and setup
-git clone https://github.com/JoeyBlount/PAC-Pro.git
-cd PAC-Pro
+### Option 2: Start Servers Individually
 
-# Backend setup
-cd server/python_backend
-pip install -r requirements.txt
-pip install -r firebase_requirements.txt
-
-# Frontend setup
-cd ../../client
-npm install --legacy-peer-deps
+#### Frontend Only
+```bash
+scripts\start-frontend.bat
 ```
 
-#### 2. Running in Development Mode
+#### Backend Only
+```bash
+scripts\start-backend.bat
+```
 
-```sh
-# Terminal 1: Start backend
+#### Alternative Frontend (PowerShell)
+```bash
+scripts\start-frontend-powershell.bat
+```
+
+## 🔧 Manual Setup (If Needed)
+
+### Backend Setup
+
+#### Windows
+```cmd
+cd server\python_backend
+scripts\setup-windows.bat
+```
+
+#### macOS
+```bash
 cd server/python_backend
-python -c "import uvicorn; uvicorn.run('main:app', host='127.0.0.1', port=5140, log_level='info', reload=True)"
+chmod +x scripts/setup-macos.sh
+scripts/setup-macos.sh
+```
 
-# Terminal 2: Start frontend
+#### Linux
+```bash
+cd server/python_backend
+chmod +x scripts/setup-linux.sh
+scripts/setup-linux.sh
+```
+
+### Frontend Setup
+```bash
 cd client
+npm install
 npm start
 ```
 
-#### 3. Code Organization
+## 🌐 Access the Application
 
-##### Frontend (React)
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:5140
+- **API Documentation**: http://localhost:5140/docs
 
-- **Components**: Located in `client/src/pages/` and `client/src/components/`
-- **State Management**: Uses React Context API for global state
-- **Styling**: Material-UI components with custom CSS
-- **API Calls**: Centralized in service files
+## 🖨️ Print Functionality
 
-##### Backend (Python FastAPI)
+The application includes enhanced print functionality with:
+- ✅ **Color-coded sections** matching the main interface
+- ✅ **Complete projection data** for all expense categories
+- ✅ **Accurate difference calculations** (Actual - Projected)
+- ✅ **Professional formatting** suitable for business reports
+- ✅ **Cross-browser compatibility** with proper color printing
 
-- **Routes**: Defined in `routers.py`
-- **Models**: Pydantic models in `models.py`
-- **Services**: Business logic in `services/` directory
-- **Data Processing**: PAC calculations in `pac_calculation_service.py`
+### How to Print
+1. Navigate to the PAC tab in the application
+2. Click the "Print" button
+3. The print dialog will show a formatted report with:
+   - Sales section (light blue background)
+   - Food & Paper section (light green background)
+   - Labor section (light orange background)
+   - Other Expenses section (light purple background)
+   - Totals with proper calculations
 
-#### 4. Adding New Features
+## 🔧 Configuration
 
-##### Frontend Changes
+### Environment Variables
+- `PROJECT_ROOT`: Set to your project directory path (automatically handled by startup scripts)
 
-1. Create new components in appropriate directories
-2. Update routing in main App component
-3. Add API calls to backend services
-4. Update contexts if global state changes
+### Firebase Setup (Optional)
+1. Copy your Firebase service account JSON to `server/python_backend/config/firebase-service-account.json`
+2. The application will automatically use Firebase if available, otherwise falls back to mock data
 
-##### Backend Changes
+## 🐛 Troubleshooting
 
-1. Add new routes in `routers.py`
-2. Create/update Pydantic models in `models.py`
-3. Implement business logic in service files
-4. Update data ingestion if new data sources needed
+### Common Issues
 
-#### 5. Testing
+#### "npm is not recognized"
+- **Solution**: Use the PowerShell startup script: `scripts\start-frontend-powershell.bat`
 
-##### Frontend Testing
+#### "python is not recognized"
+- **Solution**: The startup scripts use full paths to Python executables
 
-```sh
+#### Backend won't start
+- **Solution**: Check that Python dependencies are installed using the setup scripts
+
+#### Print report missing data
+- **Solution**: Ensure backend is running and projections data is available
+
+### Getting Help
+- Check the console output in the terminal windows opened by the startup scripts
+- Verify both servers are running on their respective ports
+- Check the browser developer console for frontend errors
+
+## 🚀 Development
+
+### Adding New Features
+1. **Frontend**: Add components in `client/src/pages/`
+2. **Backend**: Add endpoints in `server/python_backend/main.py` or create new service files
+3. **Database**: Configure Firebase or extend mock data generators
+
+### Testing
+```bash
+# Backend tests
+cd server/python_backend
+python -m pytest
+
+# Frontend tests
 cd client
 npm test
 ```
 
-##### Backend Testing
+## 📝 Recent Updates
 
-```sh
-cd server/python_backend
-python -m pytest
-```
+### 🆕 Enhanced Print Functionality
+- Fixed missing projection numbers in print reports
+- Added color-coded sections matching main interface
+- Improved difference calculations and formatting
+- Enhanced cross-browser print compatibility
 
-#### 6. Data Management
+### 🆕 Organized Startup Scripts
+- Centralized all startup scripts in `scripts/` directory
+- Simplified startup process with single commands
+- Added multiple startup options for different use cases
+- Fixed PATH and quoting issues for reliable execution
 
-##### Adding New Stores
+### 🆕 Cross-Platform Compatibility
+- Windows (x86/ARM64) support
+- macOS (Intel/Apple Silicon) support  
+- Linux (x86/ARM64) support
+- Platform-specific setup and startup scripts
 
-1. Update `firebase_data_generator.py` with new store information
-2. Run the generator to add to Firestore
-3. Update frontend store selection if needed
+## 🤝 Contributing
 
-##### Modifying PAC Calculations
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test on your platform
+5. Submit a pull request
 
-1. Update calculation logic in `pac_calculation_service.py`
-2. Modify data models if new fields needed
-3. Update frontend display components
-4. Test with existing data
+## 📄 License
 
-#### 7. Deployment Considerations
-
-##### Environment Variables
-
-- Frontend: All environment variables must be prefixed with `REACT_APP_`
-- Backend: Firebase service account JSON file required
-- Production: Update CORS settings and authentication domains
-
-##### Security
-
-- Firebase service account JSON is gitignored
-- OAuth client IDs should be environment-specific
-- Firestore security rules should be properly configured
-
-### Common Development Tasks
-
-#### Adding a New PAC Calculation Field
-
-1. Update `models.py` to include new field
-2. Modify `pac_calculation_service.py` calculation logic
-3. Update `data_ingestion_service.py` to handle new data
-4. Add field to frontend display in `PacTab.js`
-5. Update print functionality if needed
-
-#### Modifying Store Data Structure
-
-1. Update store model in backend
-2. Modify `firebase_data_generator.py` for new structure
-3. Update frontend store context and components
-4. Regenerate test data if needed
-
-#### Adding New Authentication Provider
-
-1. Configure OAuth in Firebase console
-2. Update frontend authentication context
-3. Add provider-specific login components
-4. Update backend user validation if needed
-
-<p align="right"> (<a href="#top">Back to Top</a>) </p>
-
-## Contributors
-
-<h3>StackHats</h3>
-
-<p><strong>Team Leader:</strong> Joseph Blount</p>
-
-<p><strong>Developers:</strong></p>
-<ul>
-  <li>Joseph Blount</li>
-  <li>Pavel Prokhorov</li>
-  <li>Michelle Erickson</li>
-  <li>Majd Hameed</li>
-  <li>Chris Bozionelos</li>
-  <li>Jamal Stanackzai</li>
-  <li>Jason He</li>
-  <li>Dylan Khon</li>
-  <li>Kaden Bettencourt</li>
-</ul>
-
-<p align="right"> (<a href="#top">Back to Top</a>) </p>
+This project is licensed under the MIT License - see the LICENSE file for details.
