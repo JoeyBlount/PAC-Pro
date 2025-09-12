@@ -23,7 +23,8 @@ const InvoiceLogs = () => {
   // console.log("Logged in user:", currentUser?.email);
   // console.log("User role:", userRole);
   const { userRole } = useAuth();
-  console.log("USer role from invoicelogs is: ", userRole)
+  const isAdmin = (userRole || "").toLowerCase() === "admin";
+  const isSupervisor = (userRole || "").toLowerCase() === "supervisor";
 
 
   useEffect(() => {

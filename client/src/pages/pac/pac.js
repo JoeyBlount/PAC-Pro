@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from "react";
-import { db } from "../../config/firebase-config";
+import React, { useState, useEffect, useContext } from "react";
+import { auth, db, } from "../../config/firebase-config";
+import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { collection, addDoc } from "firebase/firestore";
 import { Container, Tabs, Tab, Table, TableHead, TableRow, TableCell, TableBody, Paper, TableContainer, TextField, Button, Select, MenuItem } from "@mui/material";
 import './pac.css';
+import { StoreContext } from "../../context/storeContext";
+import { useAuth } from "../../context/AuthContext";
 
 const expenseList = [
   "Product Sales", "All Net Sales", "Payroll Tax", "Advertising",
@@ -11,6 +14,11 @@ const expenseList = [
   "Linen", "OP. Supply", "Maint. & Repair", "Small Equipment", "Utilities", "Office", "Cash +/-", "Misc: CR/TR/D&S",
   "Total Controllable", "P.A.C.", "Δ P.A.C. $"
 ];
+
+
+const monthToNumber = (m) =>
+  ["January","February","March","April","May","June","July","August","September","October","November","December"]
+  .indexOf(m) + 1;
 
 const PAC = () => {
   const [tabIndex, setTabIndex] = useState(0);
@@ -53,11 +61,93 @@ const PAC = () => {
   const [endingNonProduct, setEndingNonProduct] = useState(0);
   const [endingOpsSupplies, setEndingOpsSupplies] = useState(0);
 
+  const [actualReport, setActualReport] = useState(null);   // pacGen doc
+  const [projectionReport, setProjectionReport] = useState(null); // pacProjections doc
+
+
+  const { selectedStore } = useContext(StoreContext);
+  const [lockInfo, setLockInfo] = useState({ locked: false, lockedAt: null, lockedBy: null });
+  const { userRole } = useAuth();
+
+const yyyymm = (y, monthLabel) => y * 100 + monthToNumber(monthLabel);
+const nowYYYYMM = (() => {
+  const d = new Date();
+  return d.getFullYear() * 100 + (d.getMonth() + 1);
+})();
+const isPastMonth = yyyymm(year, month) < nowYYYYMM;
+
+useEffect(() => {
+  if (!selectedStore) { setLockInfo({ locked: false }); return; }
+  const id = buildKey(selectedStore, year, month);
+
+  (async () => {
+    const snap = await getDoc(doc(db, "pacLocks", id));
+    if (snap.exists()) {
+      setLockInfo(snap.data());
+    } else {
+      setLockInfo({ locked: false });
+    }
+  })();
+}, [selectedStore, year, month]);
+
+const lockMonth = async () => {
+  if (!selectedStore) return;
+  const id = buildKey(selectedStore, year, month);
+  await setDoc(
+    doc(db, "pacLocks", id),
+    {
+      locked: true,
+      lockedAt: serverTimestamp(),
+      lockedBy: auth?.currentUser?.email || "system",
+      storeNumber: selectedStore,
+      year,
+      month,
+      monthNumber: monthToNumber(month),
+    },
+    { merge: true }
+  );
+  setLockInfo((p) => ({ ...p, locked: true }));
+  alert(`${month} ${year} locked.`);
+};
+
+const unlockMonth = async () => {
+  if (!selectedStore) return;
+  const id = buildKey(selectedStore, year, month);
+  await setDoc(
+    doc(db, "pacLocks", id),
+    { locked: false, unlockedAt: serverTimestamp(), unlockedBy: auth?.currentUser?.email || "system" },
+    { merge: true }
+  );
+  setLockInfo((p) => ({ ...p, locked: false }));
+  alert(`${month} ${year} unlocked.`);
+};
+const isLocked = !!lockInfo.locked;
+
 
 
   useEffect(() => {
     document.title = "PAC Pro - PAC";
+    console.log(userRole)
   }, []);
+
+  useEffect(() => {
+  if (!selectedStore) return;
+
+  const id = buildKey(selectedStore, year, month);
+
+  // Load actual (pacGen)
+  getDoc(doc(db, "pacGen", id)).then((snap) => {
+    if (snap.exists()) setActualReport(snap.data());
+    else setActualReport(null);
+  });
+
+  // Load projections (pacProjections)
+  getDoc(doc(db, "pacProjections", id)).then((snap) => {
+    if (snap.exists()) setProjectionReport(snap.data());
+    else setProjectionReport(null);
+  });
+}, [selectedStore, year, month]);
+
 
   useEffect(() => {
     const historicalData = getHistoricalData();
@@ -74,6 +164,41 @@ const PAC = () => {
       };
     }));
   }, [month, savedData]);
+
+  const calcActualPAC = () => {
+  if (!actualReport) return 0;
+  const sales = actualReport.ProductNetSales || 0;
+  const controllable =
+    (actualReport.BaseFood || 0) +
+    (actualReport.EmployeeMeal || 0) +
+    (actualReport.Condiment || 0) +
+    (actualReport.TotalWaste || 0) +
+    (actualReport.Paper || 0) +
+    (actualReport.CrewLabor || 0) +
+    (actualReport.ManagementLabor || 0) +
+    (actualReport.PayrollTax || 0) +
+    (actualReport.Advertising || 0) +
+    (actualReport.Travel || 0) +
+    (actualReport.AdvOther || 0) +
+    (actualReport.Promotion || 0) +
+    (actualReport.OutsideServices || 0) +
+    (actualReport.Linen || 0) +
+    (actualReport.OPSupply || 0) +
+    (actualReport.MaintRepair || 0) +
+    (actualReport.SmallEquipment || 0) +
+    (actualReport.Utilities || 0) +
+    (actualReport.Office || 0) +
+    (actualReport.Cash || 0) +
+    (actualReport.MiscCRTRDS || 0);
+
+  return sales - controllable;
+};
+
+const calcProjectedPAC = () => {
+  if (!projectionReport) return 0;
+  const pacLine = projectionReport.lines?.find(l => l.name === "P.A.C.");
+  return pacLine ? Number(pacLine.projectedDollar || 0) : 0;
+};
 
   const handleInputChange = (index, field, value) => {
     setProjections(prevProjections => {
@@ -118,7 +243,10 @@ const PAC = () => {
     }));
   };
 
-  const [storeNumber, setStoreNumber] = useState("Store 123"); // You might want to make this dynamic
+
+
+
+const storeNumber = selectedStore || "";
 const [actualData, setActualData] = useState({}); // Will hold actual data from invoices
 const [hoverInfo, setHoverInfo] = useState(null);
 
@@ -198,81 +326,191 @@ const isPacPositive = () => {
 };
 
   // this function saves all the user input data from the generate page into the database
-  const handleGenerate = async (e) => {
-    if (!productNetSales ||
-      !cash ||
-      !promo ||
-      !allNetSales ||
-      !advertising ||
-
-      !crewLabor ||
-      !totalLabor ||
-      !payrollTax ||
-
-      !completeWaste ||
-      !rawWaste ||
-      !condiment ||
-      !variance ||
-      !unexplained ||
-      !discounts ||
-      !baseFood ||
-
-      !startingFood ||
-      !startingCondiment ||
-      !startingPaper ||
-      !startingNonProduct ||
-      !startingOpsSupplies ||
-
-      !endingFood ||
-      !endingCondiment ||
-      !endingPaper ||
-      !endingNonProduct ||
-      !endingOpsSupplies
-    ) {
-      alert("You must fill out all fields before submitting.");
+const handleGenerate = async () => {
+  try {
+    // Require a selected store
+    if (!selectedStore) {
+      alert("Please select a store before generating the report.");
+      return;
+    }
+    if (lockInfo.locked) {
+      alert("This month is locked. Ask an admin to unlock it to make changes.");
+      return;
     }
 
-    else {
-      try {
-        await addDoc(pacGenRef, {
-          ProductNetSales: parseFloat(productNetSales),
-          Cash: parseFloat(cash),
-          Promo: parseFloat(promo),
-          AllNetSales: parseFloat(allNetSales),
-          Advertising: parseFloat(advertising),
+    // Build deterministic doc ID: <store>_<year>_<MM>
+    const mNum = monthToNumber(month); // 1..12 (you already have this helper)
+    const safeStore = String(selectedStore).replace(/\s+/g, "_");
+    const docId = `${safeStore}_${year}_${String(mNum).padStart(2, "0")}`;
 
-          CrewLabor: parseFloat(crewLabor),
-          TotalLabor: parseFloat(totalLabor),
-          PayrollTax: parseFloat(payrollTax),
+    const reportRef = doc(db, "pacGen", docId);
 
-          CompleteWaste: parseFloat(completeWaste),
-          RawWaste: parseFloat(rawWaste),
-          Condiment: parseFloat(condiment),
-          Variance: parseFloat(variance),
-          Unexplained: parseFloat(unexplained),
-          Discounts: parseFloat(discounts),
-          BaseFood: parseFloat(baseFood),
+    // Prepare payload (ensure numbers are stored as numbers)
+    const payload = {
+      storeNumber: selectedStore,
+      month,                  // e.g. "January"
+      monthNumber: mNum,      // 1..12 for sorting/filtering
+      year,                   // e.g. 2025
+      createdAt: serverTimestamp(),
 
-          StartingFood: parseFloat(startingFood),
-          StartingCondiment: parseFloat(startingCondiment),
-          StartingPaper: parseFloat(startingPaper),
-          StartingNonProduct: parseFloat(startingNonProduct),
-          StartingOpsSupplies: parseFloat(startingOpsSupplies),
+      ProductNetSales: parseFloat(productNetSales) || 0,
+      Cash: parseFloat(cash) || 0,
+      Promo: parseFloat(promo) || 0,
+      AllNetSales: parseFloat(allNetSales) || 0,
+      Advertising: parseFloat(advertising) || 0,
 
-          EndingFood: parseFloat(endingFood),
-          EndingCondiment: parseFloat(endingCondiment),
-          EndingPaper: parseFloat(endingPaper),
-          EndingNonProduct: parseFloat(endingNonProduct),
-          EndingOpsSupplies: parseFloat(endingOpsSupplies)
-        });
-        alert("Report generated successfully.");
-      } catch (error) {
-        console.error("Error saving report:", error);
-        alert("Failed to generate.");
-      }
-    }
+      CrewLabor: parseFloat(crewLabor) || 0,
+      TotalLabor: parseFloat(totalLabor) || 0,
+      PayrollTax: parseFloat(payrollTax) || 0,
 
-  };
+      CompleteWaste: parseFloat(completeWaste) || 0,
+      RawWaste: parseFloat(rawWaste) || 0,
+      Condiment: parseFloat(condiment) || 0,
+      Variance: parseFloat(variance) || 0,
+      Unexplained: parseFloat(unexplained) || 0,
+      Discounts: parseFloat(discounts) || 0,
+      BaseFood: parseFloat(baseFood) || 0,
+
+      StartingFood: parseFloat(startingFood) || 0,
+      StartingCondiment: parseFloat(startingCondiment) || 0,
+      StartingPaper: parseFloat(startingPaper) || 0,
+      StartingNonProduct: parseFloat(startingNonProduct) || 0,
+      StartingOpsSupplies: parseFloat(startingOpsSupplies) || 0,
+
+      EndingFood: parseFloat(endingFood) || 0,
+      EndingCondiment: parseFloat(endingCondiment) || 0,
+      EndingPaper: parseFloat(endingPaper) || 0,
+      EndingNonProduct: parseFloat(endingNonProduct) || 0,
+      EndingOpsSupplies: parseFloat(endingOpsSupplies) || 0,
+    };
+
+    await setDoc(reportRef, payload);
+    alert("Report generated successfully.");
+  } catch (err) {
+    console.error("Error saving report:", err);
+    alert("Failed to generate.");
+  }
+};
+const buildKey = (store, year, monthLabel) => {
+  const mNum = monthToNumber(monthLabel); // 1..12
+  const safeStore = String(store).replace(/\s+/g, "_");
+  return `${safeStore}_${year}_${String(mNum).padStart(2, "0")}`;
+};
+
+const handleApplyProjections = async () => {
+  if (!selectedStore) { alert("Select a store first."); return; }
+  if (lockInfo.locked) {
+  alert("This month is locked. Ask an admin to unlock it to make changes.");
+  return;
+}
+
+  const id = buildKey(selectedStore, year, month);
+  const ref = doc(db, "pacProjections", id);
+
+  // Save only what you need; here we save the whole projections array
+  await setDoc(ref, {
+    storeNumber: selectedStore,
+    month,
+    monthNumber: monthToNumber(month),
+    year,
+    updatedAt: serverTimestamp(),
+    lines: projections, // [{ name, projectedDollar, projectedPercent, ... }]
+  });
+
+  alert("Projections saved.");
+
+
+};
+useEffect(() => {
+    if (!actualReport) {
+      // reset if nothing in DB
+      setProductNetSales(0);
+      setCash(0);
+      setPromo(0);
+      setAllNetSales(0);
+      setAdvertising(0);
+
+      setCrewLabor(0);
+      setTotalLabor(0);
+      setPayrollTax(0);
+
+      setCompleteWaste(0);
+      setRawWaste(0);
+      setCondiment(0);
+      setVariance(0);
+      setUnexplained(0);
+      setDiscounts(0);
+      setBaseFood(0);
+
+      setStartingFood(0);
+      setStartingCondiment(0);
+      setStartingPaper(0);
+      setStartingNonProduct(0);
+      setStartingOpsSupplies(0);
+
+      setEndingFood(0);
+      setEndingCondiment(0);
+      setEndingPaper(0);
+      setEndingNonProduct(0);
+      setEndingOpsSupplies(0);
+      return;
+  }
+ setProductNetSales(actualReport.ProductNetSales ?? 0);
+  setCash(actualReport.Cash ?? 0);
+  setPromo(actualReport.Promo ?? 0);
+  setAllNetSales(actualReport.AllNetSales ?? 0);
+  setAdvertising(actualReport.Advertising ?? 0);
+
+  setCrewLabor(actualReport.CrewLabor ?? 0);
+  setTotalLabor(actualReport.TotalLabor ?? 0);
+  setPayrollTax(actualReport.PayrollTax ?? 0);
+
+  setCompleteWaste(actualReport.CompleteWaste ?? 0);
+  setRawWaste(actualReport.RawWaste ?? 0);
+  setCondiment(actualReport.Condiment ?? 0);
+  setVariance(actualReport.Variance ?? 0);
+  setUnexplained(actualReport.Unexplained ?? 0);
+  setDiscounts(actualReport.Discounts ?? 0);
+  setBaseFood(actualReport.BaseFood ?? 0);
+
+  setStartingFood(actualReport.StartingFood ?? 0);
+  setStartingCondiment(actualReport.StartingCondiment ?? 0);
+  setStartingPaper(actualReport.StartingPaper ?? 0);
+  setStartingNonProduct(actualReport.StartingNonProduct ?? 0);
+  setStartingOpsSupplies(actualReport.StartingOpsSupplies ?? 0);
+
+  setEndingFood(actualReport.EndingFood ?? 0);
+  setEndingCondiment(actualReport.EndingCondiment ?? 0);
+  setEndingPaper(actualReport.EndingPaper ?? 0);
+  setEndingNonProduct(actualReport.EndingNonProduct ?? 0);
+  setEndingOpsSupplies(actualReport.EndingOpsSupplies ?? 0);
+}, [actualReport]);
+
+useEffect(() => {
+  if (projectionReport?.lines?.length) {
+    setProjections(projectionReport.lines);
+  } else {
+    // fall back to your default builder
+    const hist = getHistoricalData();
+    setProjections(expenseList.map(name => {
+      const h = hist.find(e => e.name === name) || {};
+      return {
+        name,
+        projectedDollar: "",
+        projectedPercent: "",
+        estimatedDollar: h.historicalDollar || "-",
+        estimatedPercent: h.historicalPercent || "-",
+        historicalDollar: h.historicalDollar || "-",
+        historicalPercent: h.historicalPercent || "-"
+      };
+    }));
+  }
+}, [projectionReport]);
+const inputsDisabled = !!lockInfo.locked;
+
+
+
+
 
 
   return (
@@ -303,10 +541,27 @@ const isPacPositive = () => {
               <Tab label="Generate" />
               <Tab label="P.A.C." />
             </Tabs>
-            <Button variant="contained" onClick={() => setSavedData(prevData => ({ ...prevData, [month]: [...projections] }))}>Apply</Button>
+            <Button variant="contained" onClick={handleApplyProjections} disabled={inputsDisabled}>Apply</Button>
           </div>
         </div>
       </div>
+      {isPastMonth && (userRole || "").toLowerCase() === "admin" && (
+      <div style={{ marginLeft: 12, display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 12, opacity: 0.8 }}>
+          Status: {isLocked ? "Locked" : "Editable"}
+        </span>
+
+        {isLocked ? (
+          <Button variant="outlined" color="warning" onClick={unlockMonth}>
+            Unlock Month
+          </Button>
+        ) : (
+          <Button variant="outlined" color="error" onClick={lockMonth}>
+            Lock Month
+          </Button>
+        )}
+      </div>
+    )}
 
       {tabIndex === 0 && (
         <TableContainer component={Paper} sx={{ width: "100%" }}>
@@ -327,10 +582,10 @@ const isPacPositive = () => {
                 <TableRow key={expense.name}>
                   <TableCell>{expense.name}</TableCell>
                   <TableCell>
-                    <TextField size="small" variant="outlined" value={expense.projectedDollar} onChange={(e) => handleInputChange(index, "projectedDollar", e.target.value)} />
+                    <TextField size="small" variant="outlined" value={expense.projectedDollar} onChange={(e) => handleInputChange(index, "projectedDollar", e.target.value)} disabled={inputsDisabled} />
                   </TableCell>
                   <TableCell>
-                    <TextField size="small" variant="outlined" value={expense.projectedPercent} onChange={(e) => handleInputChange(index, "projectedPercent", e.target.value)} />
+                    <TextField size="small" variant="outlined" value={expense.projectedPercent} onChange={(e) => handleInputChange(index, "projectedPercent", e.target.value)} disabled={inputsDisabled} />
                   </TableCell>
                   <TableCell>{expense.estimatedDollar}</TableCell>
                   <TableCell>{expense.estimatedPercent}</TableCell>
@@ -353,6 +608,7 @@ const isPacPositive = () => {
                 type="number"
                 value={productNetSales}
                 onChange={(e) => setProductNetSales(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Cash +/- ($)</label>
@@ -360,6 +616,7 @@ const isPacPositive = () => {
                 type="number"
                 value={cash}
                 onChange={(e) => setCash(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Promo ($)</label>
@@ -367,6 +624,7 @@ const isPacPositive = () => {
                 type="number"
                 value={promo}
                 onChange={(e) => setPromo(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">All Net Sales ($)</label>
@@ -374,6 +632,7 @@ const isPacPositive = () => {
                 type="number"
                 value={allNetSales}
                 onChange={(e) => setAllNetSales(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Advertising ($)</label>
@@ -381,6 +640,7 @@ const isPacPositive = () => {
                 type="number"
                 value={advertising}
                 onChange={(e) => setAdvertising(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
           </div>
@@ -393,6 +653,7 @@ const isPacPositive = () => {
                 type="number"
                 value={crewLabor}
                 onChange={(e) => setCrewLabor(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Total Labor %</label>
@@ -400,6 +661,7 @@ const isPacPositive = () => {
                 type="number"
                 value={totalLabor}
                 onChange={(e) => setTotalLabor(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Payroll Tax ($)</label>
@@ -407,6 +669,7 @@ const isPacPositive = () => {
                 type="number"
                 value={payrollTax}
                 onChange={(e) => setPayrollTax(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
           </div>
@@ -419,6 +682,7 @@ const isPacPositive = () => {
                 type="number"
                 value={completeWaste}
                 onChange={(e) => setCompleteWaste(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Raw Waste %</label>
@@ -426,6 +690,7 @@ const isPacPositive = () => {
                 type="number"
                 value={rawWaste}
                 onChange={(e) => setRawWaste(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Condiment %</label>
@@ -433,6 +698,7 @@ const isPacPositive = () => {
                 type="number"
                 value={condiment}
                 onChange={(e) => setCondiment(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Variance Stat %</label>
@@ -440,6 +706,7 @@ const isPacPositive = () => {
                 type="number"
                 value={variance}
                 onChange={(e) => setVariance(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Unexplained %</label>
@@ -447,6 +714,7 @@ const isPacPositive = () => {
                 type="number"
                 value={unexplained}
                 onChange={(e) => setUnexplained(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Discounts %</label>
@@ -454,6 +722,7 @@ const isPacPositive = () => {
                 type="number"
                 value={discounts}
                 onChange={(e) => setDiscounts(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Base Food %</label>
@@ -461,6 +730,7 @@ const isPacPositive = () => {
                 type="number"
                 value={baseFood}
                 onChange={(e) => setBaseFood(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
           </div>
@@ -473,6 +743,7 @@ const isPacPositive = () => {
                 type="number"
                 value={startingFood}
                 onChange={(e) => setStartingFood(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Condiment ($)</label>
@@ -480,6 +751,7 @@ const isPacPositive = () => {
                 type="number"
                 value={startingCondiment}
                 onChange={(e) => setStartingCondiment(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Paper ($)</label>
@@ -487,6 +759,7 @@ const isPacPositive = () => {
                 type="number"
                 value={startingPaper}
                 onChange={(e) => setStartingPaper(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Non Product ($)</label>
@@ -494,6 +767,7 @@ const isPacPositive = () => {
                 type="number"
                 value={startingNonProduct}
                 onChange={(e) => setStartingNonProduct(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label"> Office Supplies ($)</label>
@@ -501,6 +775,7 @@ const isPacPositive = () => {
                 type="number"
                 value={startingOpsSupplies}
                 onChange={(e) => setStartingOpsSupplies(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
           </div>
@@ -513,6 +788,7 @@ const isPacPositive = () => {
                 type="number"
                 value={endingFood}
                 onChange={(e) => setEndingFood(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Condiment ($)</label>
@@ -520,6 +796,7 @@ const isPacPositive = () => {
                 type="number"
                 value={endingCondiment}
                 onChange={(e) => setEndingCondiment(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Paper ($)</label>
@@ -527,6 +804,7 @@ const isPacPositive = () => {
                 type="number"
                 value={endingPaper}
                 onChange={(e) => setEndingPaper(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label">Non Product ($)</label>
@@ -534,6 +812,7 @@ const isPacPositive = () => {
                 type="number"
                 value={endingNonProduct}
                 onChange={(e) => setEndingNonProduct(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
             <div className="input-row"><label className="input-label"> Office Supplies ($)</label>
@@ -541,6 +820,7 @@ const isPacPositive = () => {
                 type="number"
                 value={endingOpsSupplies}
                 onChange={(e) => setEndingOpsSupplies(e.target.value)}
+                disabled={inputsDisabled}
               />
             </div>
           </div>
@@ -561,6 +841,7 @@ const isPacPositive = () => {
               }
             }}
             onClick={handleGenerate}
+            disabled={inputsDisabled}
           >
             Generate Report
           </Button>
@@ -572,7 +853,7 @@ const isPacPositive = () => {
 {tabIndex === 2 && (
   <div style={{ marginTop: '20px' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-      <h3>{storeNumber} - {month} {new Date().getFullYear()}</h3>
+      <h3>{storeNumber || "Select a store"} - {month} {new Date().getFullYear()}</h3>
       <Button 
         variant="contained" 
         onClick={() => window.print()}
@@ -648,24 +929,41 @@ const isPacPositive = () => {
           </TableRow>
 
           {/* P.A.C. Row */}
-          <TableRow sx={{ 
-            backgroundColor: isPacPositive() ? 'rgba(0, 255, 0, 0.1)' : 'rgba(255, 0, 0, 0.1)',
-            fontWeight: 'bold'
-          }}>
-            <TableCell><strong>P.A.C.</strong></TableCell>
-            <TableCell align="right">
-              {calculatePac('historical').toFixed(2)}
-            </TableCell>
-            <TableCell align="right">
-              {calculatePercentage(calculatePac('historical'), getProductSales())}
-            </TableCell>
-            <TableCell align="right">
-              {calculatePac('projected').toFixed(2)}
-            </TableCell>
-            <TableCell align="right">
-              {calculatePercentage(calculatePac('projected'), getProductSales())}
-            </TableCell>
-          </TableRow>
+            <TableRow
+              sx={{
+                backgroundColor:
+                  calcActualPAC() >= calcProjectedPAC()
+                    ? "rgba(0, 255, 0, 0.1)"
+                    : "rgba(255, 0, 0, 0.1)",
+                fontWeight: "bold",
+              }}
+            >
+              <TableCell><strong>P.A.C.</strong></TableCell>
+
+              {/* Actual $ */}
+              <TableCell align="right">
+                {calcActualPAC().toFixed(2)}
+              </TableCell>
+
+              {/* Actual % */}
+              <TableCell align="right">
+                {actualReport
+                  ? ((calcActualPAC() / (actualReport.ProductNetSales || 1)) * 100).toFixed(2) + "%"
+                  : "-"}
+              </TableCell>
+
+              {/* Projected $ */}
+              <TableCell align="right">
+                {calcProjectedPAC().toFixed(2)}
+              </TableCell>
+
+              {/* Projected % */}
+              <TableCell align="right">
+                {projectionReport
+                  ? ((calcProjectedPAC() / (projectionReport.lines?.find(l => l.name === "Product Sales")?.projectedDollar || 1)) * 100).toFixed(2) + "%"
+                  : "-"}
+              </TableCell>
+            </TableRow>
         </TableBody>
       </Table>
     </TableContainer>
