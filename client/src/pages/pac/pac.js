@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../../config/firebase-config";
-import { collection, addDoc } from "firebase/firestore";
+//import { collection, addDoc } from "firebase/firestore";
+// Added two more firestore helpers below
+import { collection, addDoc, query, where, orderBy, limit, getDocs } from "firebase/firestore";
+import { serverTimestamp } from "firebase/firestore";
 import { Container, Tabs, Tab, Table, TableHead, TableRow, TableCell, TableBody, Paper, TableContainer, TextField, Button, Select, MenuItem } from "@mui/material";
 import './pac.css';
 
@@ -21,7 +24,7 @@ const PAC = () => {
   const years = Array.from({ length: 11 }, (_, i) => currentYear - i);
   const [year, setYear] = useState(currentYear);
 
-  // State variables for Generate tab
+  // State variables for Generate tab; may need to change these
   const pacGenRef = collection(db, "pacGen");
   const [productNetSales, setProductNetSales] = useState(0);
   const [cash, setCash] = useState(0);
@@ -75,6 +78,112 @@ const PAC = () => {
     }));
   }, [month, savedData]);
 
+  // fetch latest generate doc for selected month and year
+  useEffect(() => {
+    const loadLatestForPeriod = async () => {
+      try {
+        // Build "YYYY-MM" period string
+        const monthIndex = [
+          "January","February","March","April","May","June",
+          "July","August","September","October","November","December"
+        ].indexOf(month);
+        const period = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+
+        // 👇 No orderBy, no limit — avoids composite index
+        const q = query(
+          pacGenRef,
+          where("Period", "==", period)
+        );
+
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          setProjections(makeEmptyProjectionRows());
+          return;
+        }
+
+        // Pick the doc with the latest createdAt (or fallback)
+        let latestDoc = null;
+        let latestTs = -Infinity;
+
+        snap.forEach(d => {
+          const data = d.data();
+          // createdAt is a Firestore Timestamp; guard null when just written
+          const ts = data.createdAt?.toMillis
+            ? data.createdAt.toMillis()
+            : (typeof data.createdAt === "number" ? data.createdAt : 0);
+          if (ts > latestTs) {
+            latestTs = ts;
+            latestDoc = data;
+          }
+        });
+
+        if (!latestDoc) {
+          setProjections(makeEmptyProjectionRows());
+          return;
+        }
+
+        const data = latestDoc;
+        
+
+        const rows = makeEmptyProjectionRows();
+
+        // Helpers with safe names
+        const setProjDollar = (name, value) => {
+          const r = rows.find(x => x.name === name);
+          if (!r) return;
+          const num = Number(value);
+          r.projectedDollar = Number.isFinite(num) ? num.toFixed(2) : "";
+        };
+
+        const setProjPct = (name, value) => {
+          const r = rows.find(x => x.name === name);
+          if (!r) return;
+          const num = Number(value);
+          r.projectedPercent = Number.isFinite(num) ? String(num) : "";
+        };
+
+        // === Sales ===
+        setProjDollar("Product Sales", data.ProductNetSales);
+        setProjDollar("All Net Sales", data.AllNetSales);
+        setProjDollar("Advertising", data.Advertising);
+
+        // === Labor ===
+        setProjPct("Crew Labor", data.CrewLabor);
+        const mgmtPct = Math.max((Number(data.TotalLabor) || 0) - (Number(data.CrewLabor) || 0), 0);
+        setProjPct("Management Labor", mgmtPct);
+        setProjDollar("Payroll Tax", data.PayrollTax);
+
+        // === Food & Paper ===
+        setProjPct("Base Food", data.BaseFood);
+        setProjPct("Condiment", data.Condiment);
+        const totalWastePct = (Number(data.CompleteWaste) || 0) + (Number(data.RawWaste) || 0);
+        setProjPct("Total Waste", totalWastePct);
+
+        // Recompute Estimated columns
+        const hist = getHistoricalData();
+        rows.forEach((row, i) => {
+          const h = hist.find(e => e.name === row.name) || {};
+          const hDollar = parseFloat(h.historicalDollar) || 0;
+          const hPct = parseFloat(String(h.historicalPercent || "").replace("%","")) || 0;
+          const pDollar = parseFloat(row.projectedDollar) || 0;
+          const pPct = parseFloat(String(row.projectedPercent || "").replace("%","")) || 0;
+
+          rows[i].estimatedDollar = ((pDollar + hDollar) / 2).toFixed(2);
+          rows[i].estimatedPercent = ((pPct + hPct) / 2).toFixed(2) + "%";
+        });
+
+        setProjections(rows);
+      } catch (err) {
+        console.error("Failed to load pacGen for period:", err);
+        setProjections(makeEmptyProjectionRows());
+      }
+    };
+
+  // Only refresh when viewing the Projections tab
+  if (tabIndex === 0) loadLatestForPeriod();
+}, [month, year, tabIndex]); 
+
+
   const handleInputChange = (index, field, value) => {
     setProjections(prevProjections => {
       const newProjections = [...prevProjections];
@@ -117,6 +226,23 @@ const PAC = () => {
       historicalPercent: "5%"
     }));
   };
+
+  const makeEmptyProjectionRows = () => {
+    const historicalData = getHistoricalData();
+    return expenseList.map(expense => {
+      const h = historicalData.find(e => e.name === expense) || {};
+      return {
+        name: expense,
+        projectedDollar: "",
+        projectedPercent: "",
+        estimatedDollar: h.historicalDollar || "-",
+        estimatedPercent: h.historicalPercent || "-",
+        historicalDollar: h.historicalDollar || "-",
+        historicalPercent: h.historicalPercent || "-"
+      };
+    });
+  };
+
 
   const [storeNumber, setStoreNumber] = useState("Store 123"); // You might want to make this dynamic
 const [actualData, setActualData] = useState({}); // Will hold actual data from invoices
@@ -234,7 +360,23 @@ const isPacPositive = () => {
 
     else {
       try {
+
+        // using a "period" key for generate
+        const monthIndex = [
+          "January","February","March","April","May","June",
+          "July","August","September","October","November","December"
+        ].indexOf(month);
+        const period = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+        
+
         await addDoc(pacGenRef, {
+
+          // month year and time for when it was generated
+          Month: month,
+          Year: year,
+          Period: period, // period key
+          createdAt: serverTimestamp(),
+
           ProductNetSales: parseFloat(productNetSales),
           Cash: parseFloat(cash),
           Promo: parseFloat(promo),
