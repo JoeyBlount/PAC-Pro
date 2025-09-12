@@ -27,6 +27,7 @@ const PAC = () => {
   
   // Get selected store from context
   const { selectedStore } = useContext(StoreContext);
+  const [pacGoal, setPacGoal] = useState("");
 
   // State variables for Generate tab
   const pacGenRef = collection(db, "pacGen");
