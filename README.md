@@ -47,6 +47,21 @@ git clone <repository-url>
 cd PAC-Pro
 ```
 
+### 2. Install Dependencies (Important!)
+**Frontend Dependencies:**
+```bash
+cd client
+npm install
+cd ..
+```
+
+**Backend Dependencies:**
+```bash
+cd server/python_backend
+python -m pip install fastapi uvicorn pydantic python-multipart python-dotenv httpx pytest pytest-asyncio requests
+cd ../..
+```
+
 ## 📁 Project Structure
 
 ```
@@ -83,6 +98,8 @@ This will:
 - ✅ Start frontend on `http://localhost:3000`
 - ✅ Open both in separate windows
 - ✅ Handle all PATH and dependency issues
+
+**Note**: If you encounter "Failed to fetch" errors, the backend CORS configuration has been updated to handle all localhost variations automatically.
 
 ### Option 2: Start Servers Individually
 
@@ -365,6 +382,29 @@ pip install -r requirements.txt --force-reinstall
 - **Solution**: Use the PowerShell startup script: `scripts\start-frontend-powershell.bat`
 - **Alternative**: Restart terminal after installing Node.js
 
+#### "Failed to fetch" Error in Browser
+- **Cause**: CORS (Cross-Origin Resource Sharing) issues between frontend and backend
+- **Solution**: The backend CORS configuration has been updated to support all localhost variations
+- **Alternative**: Use the startup scripts which handle this automatically
+
+#### Frontend Dependencies Not Installed
+- **Error**: `node_modules` directory missing, causing startup failures
+- **Solution**: Always run `npm install` in the `client` directory first:
+  ```bash
+  cd client
+  npm install
+  ```
+
+#### React Development Server Issues
+- **Error**: `live-server` not found or React scripts failing
+- **Solution**: Use the built React app instead:
+  ```bash
+  cd client
+  npm run build
+  cd build
+  python -m http.server 3000
+  ```
+
 #### npm install fails
 ```bash
 # Clear npm cache
@@ -412,9 +452,10 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ### Platform-Specific Issues
 
 #### Windows ARM64
-- Some packages may require compilation
-- If Firebase installation fails, the app uses mock data
-- Disable reload mode for better compatibility
+- Some packages may require compilation (Pillow, httptools)
+- If Firebase installation fails, the app uses mock data automatically
+- Core functionality works perfectly with essential dependencies only
+- CORS configuration updated to handle IPv6 localhost variations
 
 #### Windows x86/x64
 - Full compatibility with all packages
@@ -603,6 +644,13 @@ http-server build -p 3000
 - Keep dependencies updated
 
 ## 📝 Recent Updates
+
+### 🆕 Setup Improvements (Latest)
+- **Fixed CORS Issues**: Updated backend CORS configuration to support all localhost variations (IPv4/IPv6)
+- **Improved Dependency Installation**: Added explicit dependency installation steps to prevent startup failures
+- **Enhanced Troubleshooting**: Added solutions for "Failed to fetch" errors and frontend dependency issues
+- **Windows ARM64 Compatibility**: Verified and documented core functionality works without optional packages
+- **React Build Process**: Added alternative frontend serving method using built React app
 
 ### 🆕 Comprehensive Setup Documentation
 - Merged detailed setup guides from `client/SETUP_GUIDE.md` and `server/python_backend/SETUP_GUIDE.md`
