@@ -1,34 +1,45 @@
 """
 FastAPI routers for PAC calculations
 """
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from typing import Dict, Any
+
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from models import PacCalculationResult, PacInputData
 from services.pac_calculation_service import PacCalculationService
 from services.data_ingestion_service import DataIngestionService
 from services.account_mapping_service import AccountMappingService
-import httpx
-import base64
-import json
-import os
+from services.invoice_reader import InvoiceReader
 import logging
 
-# Create router
-router = APIRouter(prefix="/api/pac", tags=["PAC"])
 
-# Dependency injection
+# ---------------------------
+# Main API router (/api/pac)
+# ---------------------------
+router = APIRouter(prefix="/api/pac", tags=["PAC"])
+logger = logging.getLogger(__name__)
+
+
+# ---- Dependencies ----
 def get_pac_calculation_service() -> PacCalculationService:
-    """Get PAC calculation service instance"""
     data_ingestion_service = DataIngestionService()
     account_mapping_service = AccountMappingService()
     return PacCalculationService(data_ingestion_service, account_mapping_service)
 
 
+def get_invoice_reader() -> InvoiceReader:
+    """
+    Lazily construct the InvoiceReader so the app can start
+    even if OPENAI_API_KEY isn't set yet. You'll only need it
+    when the invoice endpoint is called.
+    """
+    return InvoiceReader()
+
+
+# ---- Helpers ----
 def is_valid_year_month(year_month: str) -> bool:
     """Validate yearMonth format (YYYYMM)"""
     if not year_month or len(year_month) != 6:
         return False
-    
     try:
         parsed = int(year_month)
         year = parsed // 100
@@ -38,81 +49,46 @@ def is_valid_year_month(year_month: str) -> bool:
         return False
 
 
+# ---- PAC Routes ----
 @router.get("/{entity_id}/{year_month}", response_model=PacCalculationResult)
 async def get_pac_calculations(
     entity_id: str,
     year_month: str,
-    pac_service: PacCalculationService = Depends(get_pac_calculation_service)
+    pac_service: PacCalculationService = Depends(get_pac_calculation_service),
 ) -> PacCalculationResult:
     """
-    Get PAC calculations for a specific store and month
-    
-    Args:
-        entity_id: Store/entity identifier
-        year_month: Year and month in YYYYMM format (e.g., 202501)
-        
-    Returns:
-        Complete PAC calculation results
-        
-    Raises:
-        HTTPException: If year_month format is invalid or calculation fails
+    Get PAC calculations for a specific store and month (YYYYMM).
     """
-    try:
-        # Validate yearMonth format
-        if not is_valid_year_month(year_month):
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid yearMonth format. Expected YYYYMM (e.g., 202501)"
-            )
-        
-        result = await pac_service.calculate_pac_async(entity_id, year_month)
-        return result
-        
-    except HTTPException:
-        raise
-    except Exception as ex:
+    if not is_valid_year_month(year_month):
         raise HTTPException(
-            status_code=500,
-            detail=f"Error calculating PAC: {str(ex)}"
+            status_code=400,
+            detail="Invalid yearMonth format. Expected YYYYMM (e.g., 202501)",
         )
+    try:
+        return await pac_service.calculate_pac_async(entity_id, year_month)
+    except Exception as ex:
+        raise HTTPException(status_code=500, detail=f"Error calculating PAC: {str(ex)}")
 
 
 @router.get("/{entity_id}/{year_month}/input", response_model=PacInputData)
 async def get_pac_input_data(
     entity_id: str,
     year_month: str,
-    pac_service: PacCalculationService = Depends(get_pac_calculation_service)
+    pac_service: PacCalculationService = Depends(get_pac_calculation_service),
 ) -> PacInputData:
     """
-    Get PAC input data for a specific store and month
-    
-    Args:
-        entity_id: Store/entity identifier
-        year_month: Year and month in YYYYMM format (e.g., 202501)
-        
-    Returns:
-        Input data used for PAC calculations
-        
-    Raises:
-        HTTPException: If year_month format is invalid or data retrieval fails
+    Get PAC input data used for calculations for a specific store and month (YYYYMM).
     """
+    if not is_valid_year_month(year_month):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid yearMonth format. Expected YYYYMM (e.g., 202501)",
+        )
     try:
-        # Validate yearMonth format
-        if not is_valid_year_month(year_month):
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid yearMonth format. Expected YYYYMM (e.g., 202501)"
-            )
-        
-        result = await pac_service.get_input_data_async(entity_id, year_month)
-        return result
-        
-    except HTTPException:
-        raise
+        return await pac_service.get_input_data_async(entity_id, year_month)
     except Exception as ex:
         raise HTTPException(
-            status_code=500,
-            detail=f"Error retrieving PAC input data: {str(ex)}"
+            status_code=500, detail=f"Error retrieving PAC input data: {str(ex)}"
         )
 
 
@@ -122,224 +98,181 @@ async def health_check() -> Dict[str, str]:
     return {"status": "healthy", "service": "PAC Calculation API"}
 
 
+# ---- Invoice OCR Route (under /api/pac) ----
 @router.post("/invoice/read")
-async def read_invoice(image: UploadFile = File(...)) -> Dict[str, Any]:
+async def read_invoice(
+    image: UploadFile = File(...),
+    reader: InvoiceReader = Depends(get_invoice_reader),
+) -> Dict[str, Any]:
     """
-    Read invoice image using OpenAI Vision API
-    
-    Args:
-        image: Invoice image file
-        
-    Returns:
-        Extracted invoice data as JSON
-        
-    Raises:
-        HTTPException: If image processing fails
+    Read invoice image using OpenAI Vision API via the InvoiceReader service.
     """
-    logger = logging.getLogger(__name__)
     logger.info("📥 Received invoice image for reading")
-    
-    if not image or image.size == 0:
-        logger.warning("⚠️ No image uploaded")
+
+    if not image:
         raise HTTPException(status_code=400, detail="No image uploaded.")
-    
+
+    contents = await image.read()
+    await image.close()
+    if not contents or len(contents) == 0:
+        raise HTTPException(status_code=400, detail="Empty image upload.")
+
     try:
-        # Read and convert image to base64
-        image_content = await image.read()
-        base64_image = base64.b64encode(image_content).decode('utf-8')
-        data_url = f"data:image/png;base64,{base64_image}"
-        
-        logger.info("🖼️ Image converted to base64 format")
-        
-        # Prepare OpenAI request
-        prompt = ("Extract the following from this invoice image and return a raw JSON object with fields: "
-                 "invoiceNumber (string), companyName (string), invoiceDate (MM/DD/YYYY string), "
-                 "items (array of { category: string, amount: number }). Return ONLY valid JSON. Do NOT wrap in code blocks.")
-        
-        request_body = {
-            "model": "gpt-4-turbo",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": data_url}}
-                    ]
-                }
-            ],
-            "max_tokens": 1000
-        }
-        
-        # Get API key from environment
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise HTTPException(status_code=500, detail="OpenAI API key not configured")
-        
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        logger.info("📡 Sending request to OpenAI...")
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers=headers,
-                json=request_body,
-                timeout=30.0
-            )
-        
-        if not response.is_success:
-            logger.error(f"❌ OpenAI API failed: {response.status_code} - {response.text}")
-            raise HTTPException(status_code=response.status_code, detail=response.text)
-        
-        logger.info("✅ OpenAI response received")
-        
-        # Parse response
-        result_json = response.json()
-        content = result_json["choices"][0]["message"]["content"]
-        
-        logger.info(f"🧠 Raw content from OpenAI:\n{content}")
-        
-        # Clean up content: remove ```json wrappers if present
-        content = content.strip().strip('`')
-        if content.lower().startswith("json"):
-            content = content[4:].strip()
-        
-        try:
-            parsed = json.loads(content)
-            logger.info("✅ Successfully parsed content to JSON.")
-            return parsed
-        except json.JSONDecodeError as ex:
-            logger.error(f"❌ Failed to parse JSON from content: {ex}")
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Failed to parse JSON from OpenAI output:\n{content}"
-            )
-            
-    except httpx.TimeoutException:
-        logger.error("❌ OpenAI API request timed out")
-        raise HTTPException(status_code=504, detail="OpenAI API request timed out")
-    except Exception as ex:
-        logger.error(f"❌ Error processing invoice: {ex}")
-        raise HTTPException(status_code=500, detail=f"Error processing invoice: {str(ex)}")
+        result = await reader.read_bytes(contents, image.filename)
+        logger.info("✅ Invoice parsed successfully")
+        return result
+    except ValueError as e:
+        logger.error(f"❌ JSON parse error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        logger.error(f"❌ OpenAI error: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        logger.error(f"❌ Unexpected error: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error processing invoice: {str(e)}"
+        )
 
 
 @router.get("/projections/{entity_id}/{year_month}")
 async def get_pac_projections(
     entity_id: str,
     year_month: str,
-    pac_service: PacCalculationService = Depends(get_pac_calculation_service)
+    pac_service: PacCalculationService = Depends(get_pac_calculation_service),
 ):
     """
-    Get PAC projections for a specific store and month
-    
-    Args:
-        entity_id: Store/entity identifier (e.g., "store_001")
-        year_month: Year and month in YYYYMM format (e.g., "202501")
-        
-    Returns:
-        PAC projections data
+    Get PAC projections for a specific store and month (YYYYMM) from Firebase,
+    then compute the full PAC result using those projections.
     """
-    # Validate inputs
     if not entity_id or not year_month:
-        raise HTTPException(status_code=400, detail="Entity ID and year_month are required")
-    
+        raise HTTPException(
+            status_code=400, detail="Entity ID and year_month are required"
+        )
     if not is_valid_year_month(year_month):
-        raise HTTPException(status_code=400, detail="Invalid year_month format. Use YYYYMM (e.g., 202501)")
-    
+        raise HTTPException(
+            status_code=400, detail="Invalid year_month format. Use YYYYMM (e.g., 202501)"
+        )
+
+    # Guard Firebase presence/initialization
     try:
-        # Get projections data from Firebase and calculate PAC
         import firebase_admin
         from firebase_admin import firestore
-        
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+    try:
         db = firestore.client()
         doc_id = f"{entity_id}_{year_month}"
-        doc_ref = db.collection('pac_projections').document(doc_id)
+        doc_ref = db.collection("pac_projections").document(doc_id)
         doc = doc_ref.get()
-        
-        if doc.exists:
-            # Get the raw projections data
-            projections_data = doc.to_dict()
-            
-            # Calculate PAC using the projections data
-            # We need to create a temporary data ingestion service that uses projections data
-            from services.data_ingestion_service import DataIngestionService
-            from services.pac_calculation_service import PacCalculationService
-            
-            # Create a custom data ingestion service for projections
-            class ProjectionsDataIngestionService(DataIngestionService):
-                def __init__(self, projections_data):
-                    super().__init__()
-                    self.projections_data = projections_data
-                
-                async def get_input_data_async(self, entity_id: str, year_month: str):
-                    # Use the projections data instead of fetching from Firebase
-                    data = self.projections_data
-                    from models import PacInputData, InventoryData, PurchaseData
-                    from decimal import Decimal
-                    
-                    return PacInputData(
-                        product_net_sales=Decimal(str(data.get('product_net_sales', 0))),
-                        cash_adjustments=Decimal(str(data.get('cash_adjustments', 0))),
-                        promotions=Decimal(str(data.get('promotions', 0))),
-                        manager_meals=Decimal(str(data.get('manager_meals', 0))),
-                        crew_labor_percent=Decimal(str(data.get('crew_labor_percent', 0))),
-                        total_labor_percent=Decimal(str(data.get('total_labor_percent', 0))),
-                        payroll_tax_rate=Decimal(str(data.get('payroll_tax_rate', 0))),
-                        complete_waste_percent=Decimal(str(data.get('complete_waste_percent', 0))),
-                        raw_waste_percent=Decimal(str(data.get('raw_waste_percent', 0))),
-                        condiment_percent=Decimal(str(data.get('condiment_percent', 0))),
-                        advertising_percent=Decimal(str(data.get('advertising_percent', 0))),
-                        beginning_inventory=InventoryData(
-                            food=Decimal(str(data.get('beginning_inventory', {}).get('food', 0))),
-                            paper=Decimal(str(data.get('beginning_inventory', {}).get('paper', 0))),
-                            condiment=Decimal(str(data.get('beginning_inventory', {}).get('condiment', 0))),
-                            non_product=Decimal(str(data.get('beginning_inventory', {}).get('non_product', 0))),
-                            op_supplies=Decimal(str(data.get('beginning_inventory', {}).get('op_supplies', 0)))
-                        ),
-                        ending_inventory=InventoryData(
-                            food=Decimal(str(data.get('ending_inventory', {}).get('food', 0))),
-                            paper=Decimal(str(data.get('ending_inventory', {}).get('paper', 0))),
-                            condiment=Decimal(str(data.get('ending_inventory', {}).get('condiment', 0))),
-                            non_product=Decimal(str(data.get('ending_inventory', {}).get('non_product', 0))),
-                            op_supplies=Decimal(str(data.get('ending_inventory', {}).get('op_supplies', 0)))
-                        ),
-                        purchases=PurchaseData(
-                            food=Decimal(str(data.get('purchases', {}).get('food', 0))),
-                            paper=Decimal(str(data.get('purchases', {}).get('paper', 0))),
-                            condiment=Decimal(str(data.get('purchases', {}).get('condiment', 0))),
-                            non_product=Decimal(str(data.get('purchases', {}).get('non_product', 0))),
-                            op_supplies=Decimal(str(data.get('purchases', {}).get('op_supplies', 0))),
-                            travel=Decimal(str(data.get('purchases', {}).get('travel', 0))),
-                            advertising_other=Decimal(str(data.get('purchases', {}).get('advertising_other', 0))),
-                            promotion=Decimal(str(data.get('purchases', {}).get('promotion', 0))),
-                            outside_services=Decimal(str(data.get('purchases', {}).get('outside_services', 0))),
-                            linen=Decimal(str(data.get('purchases', {}).get('linen', 0))),
-                            operating_supply=Decimal(str(data.get('purchases', {}).get('operating_supply', 0))),
-                            maintenance_repair=Decimal(str(data.get('purchases', {}).get('maintenance_repair', 0))),
-                            small_equipment=Decimal(str(data.get('purchases', {}).get('small_equipment', 0))),
-                            utilities=Decimal(str(data.get('purchases', {}).get('utilities', 0))),
-                            office=Decimal(str(data.get('purchases', {}).get('office', 0))),
-                            training=Decimal(str(data.get('purchases', {}).get('training', 0))),
-                            crew_relations=Decimal(str(data.get('purchases', {}).get('crew_relations', 0)))
-                        )
-                    )
-            
-            # Create projections data ingestion service and calculate PAC
-            projections_ingestion_service = ProjectionsDataIngestionService(projections_data)
-            from services.account_mapping_service import AccountMappingService
-            account_mapping_service = AccountMappingService()
-            projections_pac_service = PacCalculationService(projections_ingestion_service, account_mapping_service)
-            
-            # Calculate PAC for projections
-            result = await projections_pac_service.calculate_pac_async(entity_id, year_month)
-            
-            # Convert to dict for JSON serialization
-            return result.dict()
-        else:
-            raise HTTPException(status_code=404, detail=f"No projections data found for {entity_id} in {year_month}")
-        
+
+        if not doc.exists:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No projections data found for {entity_id} in {year_month}",
+            )
+
+        projections_data = doc.to_dict()
+
+        # Create a custom ingestion service that returns the projections as PacInputData
+        from services.data_ingestion_service import DataIngestionService
+
+        class ProjectionsDataIngestionService(DataIngestionService):
+            def __init__(self, projections):
+                super().__init__()
+                self._projections = projections
+
+            async def get_input_data_async(self, entity_id: str, year_month: str):
+                from models import PacInputData, InventoryData, PurchaseData
+                from decimal import Decimal
+
+                d = self._projections
+
+                return PacInputData(
+                    product_net_sales=Decimal(str(d.get("product_net_sales", 0))),
+                    cash_adjustments=Decimal(str(d.get("cash_adjustments", 0))),
+                    promotions=Decimal(str(d.get("promotions", 0))),
+                    manager_meals=Decimal(str(d.get("manager_meals", 0))),
+                    crew_labor_percent=Decimal(str(d.get("crew_labor_percent", 0))),
+                    total_labor_percent=Decimal(str(d.get("total_labor_percent", 0))),
+                    payroll_tax_rate=Decimal(str(d.get("payroll_tax_rate", 0))),
+                    complete_waste_percent=Decimal(str(d.get("complete_waste_percent", 0))),
+                    raw_waste_percent=Decimal(str(d.get("raw_waste_percent", 0))),
+                    condiment_percent=Decimal(str(d.get("condiment_percent", 0))),
+                    advertising_percent=Decimal(str(d.get("advertising_percent", 0))),
+                    beginning_inventory=InventoryData(
+                        food=Decimal(str(d.get("beginning_inventory", {}).get("food", 0))),
+                        paper=Decimal(str(d.get("beginning_inventory", {}).get("paper", 0))),
+                        condiment=Decimal(str(d.get("beginning_inventory", {}).get("condiment", 0))),
+                        non_product=Decimal(str(d.get("beginning_inventory", {}).get("non_product", 0))),
+                        op_supplies=Decimal(str(d.get("beginning_inventory", {}).get("op_supplies", 0))),
+                    ),
+                    ending_inventory=InventoryData(
+                        food=Decimal(str(d.get("ending_inventory", {}).get("food", 0))),
+                        paper=Decimal(str(d.get("ending_inventory", {}).get("paper", 0))),
+                        condiment=Decimal(str(d.get("ending_inventory", {}).get("condiment", 0))),
+                        non_product=Decimal(str(d.get("ending_inventory", {}).get("non_product", 0))),
+                        op_supplies=Decimal(str(d.get("ending_inventory", {}).get("op_supplies", 0))),
+                    ),
+                    purchases=PurchaseData(
+                        food=Decimal(str(d.get("purchases", {}).get("food", 0))),
+                        paper=Decimal(str(d.get("purchases", {}).get("paper", 0))),
+                        condiment=Decimal(str(d.get("purchases", {}).get("condiment", 0))),
+                        non_product=Decimal(str(d.get("purchases", {}).get("non_product", 0))),
+                        op_supplies=Decimal(str(d.get("purchases", {}).get("op_supplies", 0))),
+                        travel=Decimal(str(d.get("purchases", {}).get("travel", 0))),
+                        advertising_other=Decimal(str(d.get("purchases", {}).get("advertising_other", 0))),
+                        promotion=Decimal(str(d.get("purchases", {}).get("promotion", 0))),
+                        outside_services=Decimal(str(d.get("purchases", {}).get("outside_services", 0))),
+                        linen=Decimal(str(d.get("purchases", {}).get("linen", 0))),
+                        operating_supply=Decimal(str(d.get("purchases", {}).get("operating_supply", 0))),
+                        maintenance_repair=Decimal(str(d.get("purchases", {}).get("maintenance_repair", 0))),
+                        small_equipment=Decimal(str(d.get("purchases", {}).get("small_equipment", 0))),
+                        utilities=Decimal(str(d.get("purchases", {}).get("utilities", 0))),
+                        office=Decimal(str(d.get("purchases", {}).get("office", 0))),
+                        training=Decimal(str(d.get("purchases", {}).get("training", 0))),
+                        crew_relations=Decimal(str(d.get("purchases", {}).get("crew_relations", 0))),
+                    ),
+                )
+
+        projections_ingestion_service = ProjectionsDataIngestionService(projections_data)
+        account_mapping_service = AccountMappingService()
+        projections_pac_service = PacCalculationService(
+            projections_ingestion_service, account_mapping_service
+        )
+
+        result = await projections_pac_service.calculate_pac_async(entity_id, year_month)
+        return result.dict()
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting projections: {str(e)}")
+
+
+# ----------------------------------
+# Compatibility router (legacy paths)
+# ----------------------------------
+compat = APIRouter(tags=["Compat"])
+
+@compat.post("/api/invoiceread/read")
+@compat.post("/api/invoice-read/read")
+async def read_invoice_compat(
+    image: UploadFile = File(...),
+    reader: InvoiceReader = Depends(get_invoice_reader),
+) -> Dict[str, Any]:
+    """
+    Legacy invoice OCR paths to match old C# routes.
+    """
+    data = await image.read()
+    await image.close()
+    if not data:
+        raise HTTPException(status_code=400, detail="No image uploaded.")
+    try:
+        return await reader.read_bytes(data, image.filename)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
