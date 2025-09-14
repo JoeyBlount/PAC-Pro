@@ -4,18 +4,43 @@ import { db } from "../../config/firebase-config";
 // Added two more firestore helpers below
 import { collection, addDoc, query, where, orderBy, limit, getDocs } from "firebase/firestore";
 import { serverTimestamp } from "firebase/firestore";
-import { Container, Tabs, Tab, Table, TableHead, TableRow, TableCell, TableBody, Paper, TableContainer, TextField, Button, Select, MenuItem } from "@mui/material";
+import { Box, Container, Grid2 as Grid, InputLabel, Tabs, Tab, Table, TableHead, TableRow, TableCell, TableBody, Paper, TableContainer, TextField, Button, Select, MenuItem, InputAdornment, FormControl, FormLabel } from "@mui/material";
 import PacTab from './PacTab';
 import { StoreContext } from "../../context/storeContext";
 import './pac.css';
 
 const expenseList = [
-  "Sales", "All Net Sales", "Payroll Tax", "Advertising",
+  "Sales", "All Net Sales", 
   "Base Food", "Employee Meal", "Condiment", "Total Waste", "Paper",
-  "Crew Labor", "Management Labor", "Travel", "Adv Other", "Promotion", "Outside Services",
+  "Crew Labor", "Management Labor", "Payroll Tax", "Advertising",
+  "Travel", "Adv Other", "Promotion", "Outside Services",
   "Linen", "OP. Supply", "Maint. & Repair", "Small Equipment", "Utilities", "Office", "Cash +/-", "Misc: CR/TR/D&S",
   "Total Controllable", "P.A.C.", "Δ P.A.C. $"
 ];
+
+// Add expense(s) to this array to disable projected $ text field. Case-senstive.
+const hasUserInputAmountField = [
+  "Sales", "All Net Sales", 
+  "Travel", "Adv Other", "Outside Services",
+  "Linen", "OP. Supply", "Maint. & Repair", "Small Equipment", "Utilities", "Office", "Cash +/-", "Misc: CR/TR/D&S",
+  "Total Controllable", "P.A.C.", "Δ P.A.C. $"
+];
+
+// Add expense(s) to this array to disable projected % text field. Case-senstive.
+const hasUserInputedPercentageField = [
+  "Base Food", "Employee Meal", "Condiment", "Total Waste", "Paper",
+  "Crew Labor", "Management Labor", "Payroll Tax", 
+  "Advertising", "Promotion"
+];
+
+const getLabel = (key) => {
+  const specialLabels = {
+    "Payroll Tax" : "% of Total Labor",
+    "Advertising" : "% of All Net Sales",
+    "Promotion" : "% of Product Sales"};
+
+  return specialLabels[key] || "";  
+};
 
 const PAC = () => {
   const [tabIndex, setTabIndex] = useState(0);
@@ -177,7 +202,7 @@ const PAC = () => {
           const pPct = parseFloat(String(row.projectedPercent || "").replace("%","")) || 0;
 
           rows[i].estimatedDollar = ((pDollar + hDollar) / 2).toFixed(2);
-          rows[i].estimatedPercent = ((pPct + hPct) / 2).toFixed(2) + "%";
+          rows[i].estimatedPercent = ((pPct + hPct) / 2).toFixed(2);
         });
 
         setProjections(rows);
@@ -220,7 +245,7 @@ const PAC = () => {
         }
 
         newProjections[idx].estimatedDollar = ((projectedDollar + historicalDollar) / 2).toFixed(2);
-        newProjections[idx].estimatedPercent = ((projectedPercent + historicalPercent) / 2).toFixed(2) + "%";
+        newProjections[idx].estimatedPercent = ((projectedPercent + historicalPercent) / 2).toFixed(2);
       });
 
       return newProjections;
@@ -231,7 +256,7 @@ const PAC = () => {
     return expenseList.map(expense => ({
       name: expense,
       historicalDollar: "1000",
-      historicalPercent: "5%"
+      historicalPercent: "5"
     }));
   };
 
@@ -287,6 +312,16 @@ const calculateCategorySums = (data, type) => {
 };
 
 // Helper functions
+const getCategory = (expense) => {
+  const input = expense.toLowerCase();
+  for (const [key, values] of Object.entries(categories)) {
+    if(values.some(v => v.toLowerCase() === input)) {
+      return key; 
+    }
+  }
+  return null;
+} 
+
 const getCategoryColor = (category) => {
   const colors = {
     'Sales': '#e3f2fd',
@@ -426,43 +461,56 @@ const isPacPositive = () => {
 
 
   return (
-    <Container sx={{ textAlign: "center", marginTop: 5, overflowX: "auto", paddingX: "20px" }}>
-      <div className="topBar">
-        <h1 className="Header">PAC</h1>
-        <div className="topBarControls">
-          <div className="filterDropdowns" style={{ display: "flex", alignItems: "center" }}>
-            {/* Month Dropdown */}
-            <Select value={month} onChange={(e) => setMonth(e.target.value)} sx={{ width: 200, marginRight: 2 }}>
-              {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(m => (
-                <MenuItem key={m} value={m}>{m}</MenuItem>
-              ))}
-            </Select>
-            {/* Year Dropdown */}
-            <Select value={year} onChange={(e) => setYear(e.target.value)} sx={{ width: 120, marginRight: 2 }}>
-              {years.map(y => (
-                <MenuItem key={y} value={y}>{y}</MenuItem>
-              ))}
-            </Select>
-            <Tabs
-              value={tabIndex}
-              onChange={(event, newIndex) => setTabIndex(newIndex)}
-              sx={{ flexGrow: 1, marginLeft: 2 }}
-              textColor="primary"
-            >
-              <Tab label="Projections" />
-              <Tab label="Generate" />
-              <Tab label="Actual" />
-            </Tabs>
-            <Button variant="contained" onClick={() => setSavedData(prevData => ({ ...prevData, [month]: [...projections] }))}>Apply</Button>
-          </div>
-        </div>
-      </div>
+    <Box sx = {{flexGrow: 1}}>
+      <Container>
+        <Paper sx={{padding: '10px'}}>
+          <Grid container wrap="wrap" justifyContent="space-between" alignItems="center">
+            <Grid item xs={12} sm={6} md={4}>
+              <Box sx={{ padding: '10px', marginLeft: '5px' }}>
+                <h1 className="Header">PAC</h1>
+              </Box>
+            </Grid>
+            <Grid container xs={12} sm={6} md={4} wrap="wrap" justifyContent="flex-end" alignItems="center"> 
+              <Grid item xs={12} sm={6} md={4}>
+                <Box display="flex" flexDirection="row" flexWrap="nowrap" justifyContent="center" gap={1} sx={{ padding: '10px', margin: '0 auto' }}>
+                  {/* Month Dropdown */}
+                  <Select value={month} onChange={(e) => setMonth(e.target.value)} sx={{ width: 200 }}>
+                    {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(m => (
+                      <MenuItem key={m} value={m}>{m}</MenuItem>
+                    ))}
+                  </Select>
+                  {/* Year Dropdown */}
+                  <Select value={year} onChange={(e) => setYear(e.target.value)} sx={{ width: 120 }}>
+                    {years.map(y => (
+                      <MenuItem key={y} value={y}>{y}</MenuItem>
+                    ))}
+                  </Select>
+                </Box>
+              </Grid>
+              
+              <Grid item xs={12} sm={6} md={4}>
+                <Tabs
+                  value={tabIndex}
+                  onChange={(event, newIndex) => setTabIndex(newIndex)}
+                  sx={{ padding: '10px', margin: '0 auto' }}
+                  textColor="primary"
+                >
+                  <Tab label="Projections" />
+                  <Tab label="Generate" />
+                  <Tab label="Actual" />
+                </Tabs>
+              </Grid>
+            </Grid>
+          </Grid>
+        </Paper>
+      </Container>
 
       {tabIndex === 0 && (
-        <TableContainer component={Paper} sx={{ width: "100%" }}>
-          <Table size="small" sx={{ tableLayout: "fixed" }}>
+        <Container sx={{marginTop: '20px'}}>
+        <TableContainer component={Paper}>
+          <Table>
             <TableHead>
-              <TableRow>
+              <TableRow sx={{ whiteSpace: 'nowrap' }}>
                 <TableCell><strong>Expense Name</strong></TableCell>
                 <TableCell><strong>Projected $</strong></TableCell>
                 <TableCell><strong>Projected %</strong></TableCell>
@@ -474,26 +522,55 @@ const isPacPositive = () => {
             </TableHead>
             <TableBody>
               {projections.map((expense, index) => (
-                <TableRow key={expense.name}>
+                <TableRow key={expense.name} sx={{backgroundColor: getCategoryColor(getCategory(expense.name))}}>
                   <TableCell>{expense.name}</TableCell>
-                  <TableCell>
-                    <TextField size="small" variant="outlined" value={expense.projectedDollar} onChange={(e) => handleInputChange(index, "projectedDollar", e.target.value)} />
+                  <TableCell> {/*Textfield for Projected $*/}
+                    {hasUserInputAmountField.includes(expense.name) 
+                      ? <TextField size="small" variant="outlined" sx={{width: '150px', backgroundColor: '#ffffff'}}
+                          slotProps={{input: { startAdornment: <InputAdornment position="start">$</InputAdornment>}}}
+                          value={expense.projectedDollar || "0.00"} 
+                          onChange={(e) => handleInputChange(index, "projectedDollar", e.target.value)} />
+                      : <item>${expense.projectedDollar || "0.00"}</item>}
                   </TableCell>
-                  <TableCell>
-                    <TextField size="small" variant="outlined" value={expense.projectedPercent} onChange={(e) => handleInputChange(index, "projectedPercent", e.target.value)} />
+                  <TableCell> {/*Textfield for Projected %*/}
+                    <FormControl>
+                      {hasUserInputedPercentageField.includes(expense.name)
+                      ?  <TextField size="small" variant="outlined" sx={{width: '125px', backgroundColor: '#ffffff'}}
+                          slotProps={{input: { endAdornment: <InputAdornment position="end">%</InputAdornment>}}}
+                          value={expense.projectedPercent || "0"} 
+                          onChange={(e) => handleInputChange(index, "projectedPercent", e.target.value)} />
+                      : <item>{expense.projectedPercent || "0"}%</item>}  
+                      <FormLabel sx={{ fontSize: '0.75rem' }}>{getLabel(expense.name)}</FormLabel>
+                    </FormControl>  
                   </TableCell>
-                  <TableCell>{expense.estimatedDollar}</TableCell>
-                  <TableCell>{expense.estimatedPercent}</TableCell>
-                  <TableCell>{expense.historicalDollar}</TableCell>
-                  <TableCell>{expense.historicalPercent}</TableCell>
+                  <TableCell> {/*Output for Estimated $*/}
+                    {"$" + expense.estimatedDollar}
+                  </TableCell>
+                  <TableCell> {/*Output for Estimated %*/}
+                    {expense.estimatedPercent + "%"}
+                  </TableCell>
+                  <TableCell> {/*Output for Historical $*/}
+                    {"$" + expense.historicalDollar}
+                  </TableCell>
+                  <TableCell> {/*Output for Historical %*/}
+                    {expense.historicalPercent + "%"}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </TableContainer>
+
+        {/*The Apply button*/}
+        <Box textAlign='center' sx={{ paddingTop: '10px', paddingBottom: '10px' }}>
+          <Button variant="contained" size="large" onClick={() => setSavedData(prevData => ({ ...prevData, [month]: [...projections] }))}>Apply</Button>
+        </Box>
+
+        </Container>
       )} {/* end of Projections page */}
 
       {tabIndex === 1 && (
+        <Container>
         <div style={{ display: "flex", flexDirection: "column", gap: "24px", marginTop: "20px" }}>
           {/* Sales */}
           <div className="pac-section sales-section">
@@ -717,19 +794,21 @@ const isPacPositive = () => {
 
 
         </div>
+        </Container>
       )}  {/* end of Generate page */}
 
       {tabIndex === 2 && (
+        <Container>
         <PacTab 
           storeId={selectedStore || "store_001"} 
           year={year} 
           month={month}
           projections={projections}
         />
+        </Container>
       )} {/* end of Actual page */}
 
-
-    </Container>
+    </Box>
   );
 };
 
