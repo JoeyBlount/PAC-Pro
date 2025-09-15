@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from "react";
 import { db, storage, auth } from "../../config/firebase-config";
 import { v4 } from "uuid";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { collection, doc, setDoc } from "firebase/firestore";
+import { collection, doc, setDoc, query, where, getDocs } from "firebase/firestore";
 import { StoreContext } from "../../context/storeContext";
 import styles from "./submitInvoice.module.css";
 import { invoiceCatList } from "../settings/InvoiceSettings";
@@ -23,11 +23,61 @@ const SubmitInvoice = () => {
   const [confirmedItems, setConfirmedItems] = useState([]);
 
   const invoiceRef = collection(db, "invoices");
+  const [userData, setUserData] = useState(null);
+  const [userRole, setUserRole] = useState("User");
+  const isAdmin =
+    String((userData?.role ?? userRole) || "").toLowerCase() === "admin";
+
   const user = auth.currentUser;
 
   useEffect(() => {
     document.title = "PAC Pro - Submit Invoice";
   }, []);
+
+  // Fetch user data from Firestore
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Get the current user from Firebase Auth
+        const user = auth.currentUser;
+        if (user) {
+          // Query the "users" collection for the current user's data
+          const userQuery = query(
+            collection(db, "users"),
+            where("uid", "==", user.uid)
+          );
+          const userSnapshot = await getDocs(userQuery);
+          if (!userSnapshot.empty) {
+            setUserData(userSnapshot.docs[0].data());
+          }
+        }
+      } catch (error) {
+        console.error("Error loading data from Firestore:", error);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // lock previous months/years for non-admins
+  const isMonthDisabled = (monthNumber) => {
+    if (isAdmin) return false;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+
+    // Any month in a past year is locked
+    if (invoiceYear < currentYear) return true;
+    // In current year, months before current month are locked
+    if (invoiceYear === currentYear && monthNumber < currentMonth) return true;
+
+    return false; // future months and current month remain selectable
+  };
+  const isYearDisabled = (yearNumber) => {
+    if (isAdmin) return false;
+    const currentYear = new Date().getFullYear();
+    return yearNumber < currentYear; // lock/grey any previous year
+  };
 
   const normalizeCategory = (rawCategory) => {
     const category = rawCategory?.toUpperCase().trim();
@@ -255,23 +305,70 @@ const SubmitInvoice = () => {
                   ))}
                 </select>
               </div>
+
               <div className={styles.formGroup}>
                 <label>Month</label>
-                <select value={invoiceMonth} onChange={(e) => setInvoiceMonth(+e.target.value)}>
+                <select
+                  value={invoiceMonth}
+                  onChange={(e) => {
+                    const nextVal = +e.target.value;
+                    if (isMonthDisabled(nextVal)) return; // guard against selecting locked options
+                    setInvoiceMonth(nextVal);
+                  }}
+                >
                   {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
-                    <option key={month} value={month}>{month}</option>
+                    <option
+                      key={month}
+                      value={month}
+                      disabled={isMonthDisabled(month)}
+                      title={!isAdmin && isMonthDisabled(month) ? "Locked for your role" : undefined}
+                      className={!isAdmin && isMonthDisabled(month) ? styles.disabledOption : undefined}
+                    >
+                      {month}
+                    </option>
                   ))}
                 </select>
               </div>
+
               <div className={styles.formGroup}>
                 <label>Year</label>
-                <select value={invoiceYear} onChange={(e) => setInvoiceYear(+e.target.value)}>
+                <select
+                  value={invoiceYear}
+                  onChange={(e) => {
+                    const nextYear = +e.target.value;
+                    if (isYearDisabled(nextYear)) return;
+                    setInvoiceYear(nextYear);
+                    // keep your existing month safety:
+                    if (isMonthDisabled(invoiceMonth)) {
+                      const now = new Date();
+                      const safeMonth =
+                        nextYear < now.getFullYear()
+                          ? now.getMonth() + 1
+                          : invoiceMonth;
+                      if (!isMonthDisabled(safeMonth)) setInvoiceMonth(safeMonth);
+                    }
+                  }}
+                >
                   {Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - i).map((year) => (
-                    <option key={year} value={year}>{year}</option>
+                    <option
+                      key={year}
+                      value={year}
+                      disabled={isYearDisabled(year)}
+                      title={!isAdmin && isYearDisabled(year) ? "Locked for your role" : undefined}
+                      className={!isAdmin && isYearDisabled(year) ? styles.disabledOption : undefined}
+                    >
+                      {year}
+                    </option>
                   ))}
                 </select>
               </div>
+
             </div>
+            {!isAdmin && (
+              <small className={styles.helpText}>
+                Previous months and years are locked for your role. Contact an admin if you need changes.
+              </small>
+            )}
           </div>
 
           {extras.map((row, idx) => (
