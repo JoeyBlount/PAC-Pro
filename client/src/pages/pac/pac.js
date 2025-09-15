@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useContext } from "react";
 import { db, auth } from "../../config/firebase-config";
-import { collection, addDoc, query, where, getDocs, serverTimestamp, limit} from "firebase/firestore";
+//import { collection, addDoc } from "firebase/firestore";
+// Added two more firestore helpers below
+import { collection, addDoc, query, where, orderBy, limit, getDocs, serverTimestamp } from "firebase/firestore";
 import { Container, Tabs, Tab, Table, TableHead, TableRow, TableCell, TableBody, Paper, TableContainer, TextField, Button, Select, MenuItem } from "@mui/material";
 import { StoreContext } from "../../context/storeContext";
+import PacTab from './PacTab';
 import styles from './pac.css';
 
 
@@ -819,124 +822,12 @@ const PAC = () => {
       )}  {/* end of Generate page */}
 
       {tabIndex === 2 && (
-        <div style={{ marginTop: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-            <h3>{storeNumber} - {month} {new Date().getFullYear()}</h3>
-            <Button
-              variant="contained"
-              onClick={() => window.print()}
-              sx={{ backgroundColor: '#1976d2', color: 'white' }}
-            >
-              Print Report
-            </Button>
-          </div>
-
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell width="25%"><strong>Account</strong></TableCell>
-                  <TableCell align="right" width="15%"><strong>Actual $</strong></TableCell>
-                  <TableCell align="right" width="15%"><strong>Actual %</strong></TableCell>
-                  <TableCell align="right" width="15%"><strong>Projected $</strong></TableCell>
-                  <TableCell align="right" width="15%"><strong>Projected %</strong></TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {Object.entries(categories).map(([category, items]) => (
-                  <React.Fragment key={category}>
-                    <TableRow
-                      hover
-                      onMouseEnter={() => {
-                        const actualSums = calculateCategorySums(projections, 'historical');
-                        const projectedSums = calculateCategorySums(projections, 'projected');
-                        setHoverInfo({
-                          category,
-                          actual: actualSums[category],
-                          projected: projectedSums[category]
-                        });
-                      }}
-                      onMouseLeave={() => setHoverInfo(null)}
-                      sx={{ backgroundColor: getCategoryColor(category) }}
-                    >
-                      <TableCell colSpan={5}><strong>{category}</strong></TableCell>
-                    </TableRow>
-
-                    {items.map(item => {
-                      const expense = projections.find(e => e.name === item);
-                      return expense ? (
-                        <TableRow key={item}>
-                          <TableCell>{item}</TableCell>
-                          <TableCell align="right">{expense.historicalDollar || '-'}</TableCell>
-                          <TableCell align="right">
-                            {item === 'Product Sales' ? '-' : (expense.historicalPercent || '-')}
-                          </TableCell>
-                          <TableCell align="right">{expense.projectedDollar || '-'}</TableCell>
-                          <TableCell align="right">{expense.projectedPercent || '-'}</TableCell>
-                        </TableRow>
-                      ) : null;
-                    })}
-                  </React.Fragment>
-                ))}
-
-                {/* Total Controllable Row */}
-                <TableRow sx={{ backgroundColor: '#f0f0f0' }}>
-                  <TableCell><strong>Total Controllable</strong></TableCell>
-                  <TableCell align="right">
-                    {calculateTotalControllable('historical').toFixed(2)}
-                  </TableCell>
-                  <TableCell align="right">
-                    {calculatePercentage(calculateTotalControllable('historical'), getProductSales())}
-                  </TableCell>
-                  <TableCell align="right">
-                    {calculateTotalControllable('projected').toFixed(2)}
-                  </TableCell>
-                  <TableCell align="right">
-                    {calculatePercentage(calculateTotalControllable('projected'), getProductSales())}
-                  </TableCell>
-                </TableRow>
-
-                {/* P.A.C. Row */}
-                <TableRow sx={{
-                  backgroundColor: isPacPositive() ? 'rgba(0, 255, 0, 0.1)' : 'rgba(255, 0, 0, 0.1)',
-                  fontWeight: 'bold'
-                }}>
-                  <TableCell><strong>P.A.C.</strong></TableCell>
-                  <TableCell align="right">
-                    {calculatePac('historical').toFixed(2)}
-                  </TableCell>
-                  <TableCell align="right">
-                    {calculatePercentage(calculatePac('historical'), getProductSales())}
-                  </TableCell>
-                  <TableCell align="right">
-                    {calculatePac('projected').toFixed(2)}
-                  </TableCell>
-                  <TableCell align="right">
-                    {calculatePercentage(calculatePac('projected'), getProductSales())}
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </TableContainer>
-
-          {/* Hover Popup */}
-          {hoverInfo && (
-            <Paper
-              elevation={3}
-              sx={{
-                position: 'absolute',
-                padding: '10px',
-                backgroundColor: 'white',
-                zIndex: 1000,
-                pointerEvents: 'none'
-              }}
-            >
-              <div><strong>{hoverInfo.category} Summary</strong></div>
-              <div>Actual: ${hoverInfo.actual.dollar.toFixed(2)} ({hoverInfo.actual.percent.toFixed(2)}%)</div>
-              <div>Projected: ${hoverInfo.projected.dollar.toFixed(2)} ({hoverInfo.projected.percent.toFixed(2)}%)</div>
-            </Paper>
-          )}
-        </div>
+         <PacTab 
+          storeId={selectedStore || "store_001"} 
+          year={year} 
+          month={month}
+          projections={projections}
+        />
       )}
 
 
