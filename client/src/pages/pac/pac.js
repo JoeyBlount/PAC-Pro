@@ -309,7 +309,7 @@ const PAC = () => {
 
   // Categories for visual grouping
   const categories = {
-    'Product Sales': ['Product Sales'],
+    'Sales': ['Sales', 'All Net Sales'],
     'Food & Paper': ['Base Food', 'Employee Meal', 'Condiment', 'Total Waste', 'Paper'],
     'Labor': ['Crew Labor', 'Management Labor', 'Payroll Tax'],
     'Purchases': ['Advertising', 'Travel', 'Adv Other', 'Promotion', 'Outside Services',
@@ -340,7 +340,7 @@ const PAC = () => {
   // Helper functions
   const getCategoryColor = (category) => {
     const colors = {
-      'Product Sales': '#e3f2fd',
+      'Sales': '#e3f2fd',
       'Food & Paper': '#e8f5e9',
       'Labor': '#fff3e0',
       'Purchases': '#f3e5f5'
