@@ -12,7 +12,7 @@ import { GetApp, Close, AccessibilityNewSharp } from "@mui/icons-material";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import "./invoiceLogs.css";
-import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, setDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, getDoc, deleteDoc, doc, updateDoc, setDoc } from "firebase/firestore";
 import { db } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext";
 import { getAuth } from "firebase/auth";
@@ -23,7 +23,7 @@ const InvoiceLogs = () => {
   // console.log("Logged in user:", currentUser?.email);
   // console.log("User role:", userRole);
   const { userRole } = useAuth();
-  console.log("USer role from invoicelogs is: ", userRole)
+  console.log("User role from invoicelogs is: ", userRole)
 
 
   useEffect(() => {
@@ -45,7 +45,8 @@ const InvoiceLogs = () => {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [showRecentlyDeleted, setShowRecentlyDeleted] = useState(false);
-  const [recentlyDeleted, setRecentlyDeleted] = useState([])
+  const [recentlyDeleted, setRecentlyDeleted] = useState([]);
+  const [budgetData, setBudgetData] = useState({});
 
   // Invoice dialog state
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -62,16 +63,19 @@ const InvoiceLogs = () => {
 
   // Helper function to get a category amount from an invoice.
   // It now reads from the top-level of the invoice document using field.
-  const getCategoryValue = (inv, categoryId) => {
+  const getCategoryValue = (inv, categoryName) => {
     // Check if invoice has categories map
-    if (!inv?.categories) return 0;
+    if (!inv?.categories) {
+      return 0;
+    }
 
-    // Get the array for this category using the categoryId
-    const categoryArray = inv.categories[categoryId];
+    // Get the array for this category using the categoryName
+    const categoryArray = inv.categories[categoryName];
 
     // If the array exists, sum all the numbers in it
     if (Array.isArray(categoryArray)) {
-      return categoryArray.reduce((sum, num) => sum + (Number(num) || 0), 0);
+      const sum = categoryArray.reduce((sum, num) => sum + (Number(num) || 0), 0);
+      return sum;
     }
 
     return 0;
@@ -226,35 +230,64 @@ const InvoiceLogs = () => {
     if (selectedStore && monetaryColumns.length > 0) {
       fetchInvoices();
     }
-  }, [selectedStore, monetaryColumns]);
+  }, [selectedStore, monetaryColumns, budgetData]);
+
+  // Fetch budget data when store or month/year changes
+  useEffect(() => {
+    if (selectedStore) {
+      const currentDate = new Date();
+      const month = selectedMonth || (currentDate.getMonth() + 1);
+      const year = selectedYear || currentDate.getFullYear();
+      const yearMonth = `${year}${String(month).padStart(2, '0')}`;
+      
+      fetchBudgetData(selectedStore, yearMonth);
+    }
+  }, [selectedStore, selectedMonth, selectedYear]);
 
   async function fetchInvoices() {
     try {
-      const q = query(
+      // First try with selectedStore as is
+      let q = query(
         collection(db, "invoices"),
         where("storeID", "==", selectedStore)
       );
-      const snapshot = await getDocs(q);
+      
+      let snapshot = await getDocs(q);
+      
+      // If no results, try with "001" format (assuming selectedStore might be "store_001")
+      if (snapshot.docs.length === 0 && selectedStore) {
+        q = query(
+          collection(db, "invoices"),
+          where("storeID", "==", "001")
+        );
+        snapshot = await getDocs(q);
+      }
+      
       const invoices = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
 
+
       // Compute totals using the category amounts stored in the categories map.
       const totals = {};
       monetaryColumns.forEach((col) => {
         const categoryId = col.id; // This matches the document ID from invoiceCategories
+        const categoryName = col.id; // Use col.id as the category name since that's what's stored in invoices
         totals[categoryId] = invoices.reduce((sum, inv) => {
-          return sum + getCategoryValue(inv, categoryId);
+          const categoryValue = getCategoryValue(inv, categoryName);
+          return sum + categoryValue;
         }, 0);
       });
 
-      // Use each invoiceCategories doc's budget field for the budget row.
+      // Use budget data from pac_projections instead of invoiceCategories
       const budgets = {};
       monetaryColumns.forEach((col) => {
-        budgets[col.id] = Number(col.budget) || 0;
+        // Use budgetData if available, otherwise fall back to invoiceCategories budget
+        budgets[col.id] = budgetData[col.id] || Number(col.budget) || 0;
       });
 
+      console.log("Setting budget data in fetchInvoices:", { budgetData, budgets });
       setData({ invoices, total: totals, budget: budgets });
     } catch (err) {
       console.error("Error loading invoices:", err);
@@ -271,6 +304,55 @@ const InvoiceLogs = () => {
       setRecentlyDeleted(deleted);
     } catch (error) {
       console.error("Error loading recently deleted invoices:", error);
+    }
+  };
+
+  // Fetch budget data from pac_projections collection
+  const fetchBudgetData = async (storeId, yearMonth) => {
+    try {
+      // Convert storeId to the format used in pac_projections (e.g., "001" -> "store_001")
+      const formattedStoreId = storeId.startsWith('store_') ? storeId : `store_${storeId.padStart(3, '0')}`;
+      const docId = `${formattedStoreId}_${yearMonth}`;
+      
+      console.log("Fetching budget data for:", { storeId, formattedStoreId, yearMonth, docId });
+      
+      // Try to get the document directly by ID first
+      const docRef = doc(db, "pac_projections", docId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const projectionsData = docSnap.data();
+        console.log("Found projections data:", projectionsData);
+        
+        // Map pac_projections purchases data to invoice categories
+        const budgetMapping = {
+          'FOOD': projectionsData.purchases?.food || 0,
+          'CONDIMENT': projectionsData.purchases?.condiment || 0,
+          'PAPER': projectionsData.purchases?.paper || 0,
+          'NONPRODUCT': projectionsData.purchases?.non_product || 0,
+          'TRAVEL': projectionsData.purchases?.travel || 0,
+          'ADV-OTHER': projectionsData.purchases?.advertising_other || 0,
+          'PROMO': projectionsData.purchases?.promotion || 0,
+          'OUTSIDE SVC': projectionsData.purchases?.outside_services || 0,
+          'LINEN': projectionsData.purchases?.linen || 0,
+          'OP. SUPPLY': projectionsData.purchases?.operating_supply || 0,
+          'M+R': projectionsData.purchases?.maintenance_repair || 0,
+          'SML EQUIP': projectionsData.purchases?.small_equipment || 0,
+          'UTILITIES': projectionsData.purchases?.utilities || 0,
+          'OFFICE': projectionsData.purchases?.office || 0,
+          'TRAINING': projectionsData.purchases?.training || 0,
+          'CR': projectionsData.purchases?.crew_relations || 0
+        };
+        
+        setBudgetData(budgetMapping);
+        console.log("Budget data loaded:", budgetMapping);
+      } else {
+        console.log("No projections data found for", docId);
+        setBudgetData({});
+      }
+    } catch (error) {
+      console.error("Error loading budget data:", error);
+      setBudgetData({});
     }
   };
 
@@ -414,7 +496,7 @@ const InvoiceLogs = () => {
       } else if (col === "Invoice Number") {
         aVal = parseInt(a.invoiceNumber, 10);
         bVal = parseInt(b.invoiceNumber, 10);
-      } else if (monetaryColumns.some((m) => m.name === col)) {
+      } else if (monetaryColumns.some((m) => m.id === col)) {
         const sumA = Array.isArray(a[col])
           ? a[col].reduce((s, v) => s + Number(v), 0)
           : a[col] || 0;
@@ -482,10 +564,10 @@ const InvoiceLogs = () => {
             <th
               key={col.id}
               className="tableHeader categoryHeader"
-              onClick={() => handleHeaderClick(col.name)}
+              onClick={() => handleHeaderClick(col.id)}
             >
-              {col.name}
-              {sortConfig.column === col.name &&
+              {col.id}
+              {sortConfig.column === col.id &&
                 (sortConfig.direction === "asc" ? " ▲" : " ▼")}
             </th>
           ))}
@@ -527,8 +609,8 @@ const InvoiceLogs = () => {
           <td className="tableCell invoiceNumberCell">{inv.invoiceNumber}</td>
     
           {monetaryColumns.map((col, j) => {
-            const categoryId = col.id;
-            const amount = getCategoryValue(inv, categoryId);
+            const categoryName = col.id; // Use col.id instead of col.name
+            const amount = getCategoryValue(inv, categoryName);
     
             return (
               <td key={j} className="tableCell categoryCell">
