@@ -103,3 +103,16 @@
   background-color: #1565c0;
 }
 
+/* PAC Goal */
+
+.pac-goal-container {
+  margin: 8px 0 16px 0;   /* space above/below */
+  text-align: center;     /* center it under the header */
+}
+
+.pac-goal-input .MuiInputBase-root {
+  height: 36px;
+  font-size: 14px;
+}
+
+

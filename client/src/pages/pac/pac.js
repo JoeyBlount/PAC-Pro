@@ -479,6 +479,7 @@ const PAC = () => {
     <Container sx={{ textAlign: "center", marginTop: 5, overflowX: "auto", paddingX: "20px" }}>
       <div className="topBar">
         <h1 className="Header">PAC</h1>
+
         <div className="topBarControls">
           <div className="filterDropdowns" style={{ display: "flex", alignItems: "center" }}>
             {/* Month Dropdown */}
@@ -543,6 +544,17 @@ const PAC = () => {
           </div>
         </div>
       </div>
+      <div className="pac-goal-container">
+          <TextField
+            label="PAC Goal ($)"
+            size="small"
+            variant="outlined"
+            className="pac-goal-input"
+            value={pacGoal}
+            onChange={(e)=>setPacGoal(e.target.value)}
+          />
+        </div>
+              
 
       {tabIndex === 0 && (
         <TableContainer component={Paper} sx={{ width: "100%" }}>
