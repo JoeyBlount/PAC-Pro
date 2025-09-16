@@ -2,13 +2,16 @@
 FastAPI routers for PAC calculations
 """
 from typing import Dict, Any
+from datetime import datetime
+import json
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from models import PacCalculationResult, PacInputData
 from services.pac_calculation_service import PacCalculationService
 from services.data_ingestion_service import DataIngestionService
 from services.account_mapping_service import AccountMappingService
 from services.invoice_reader import InvoiceReader
+from services.invoice_submit import InvoiceSubmitService
 import logging
 
 
@@ -33,6 +36,13 @@ def get_invoice_reader() -> InvoiceReader:
     when the invoice endpoint is called.
     """
     return InvoiceReader()
+
+
+def get_invoice_submit_service() -> InvoiceSubmitService:
+    """
+    Get the invoice submission service instance.
+    """
+    return InvoiceSubmitService()
 
 
 # ---- Helpers ----
@@ -131,6 +141,106 @@ async def read_invoice(
         logger.error(f"❌ Unexpected error: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error processing invoice: {str(e)}"
+        )
+
+
+@router.post("/invoices/submit")
+async def submit_invoice(
+    image: UploadFile = File(...),
+    invoice_number: str = Form(...),
+    company_name: str = Form(...),
+    invoice_day: int = Form(...),
+    invoice_month: int = Form(...),
+    invoice_year: int = Form(...),
+    store_id: str = Form(...),
+    user_email: str = Form(...),
+    categories: str = Form(...),  # JSON string of categories
+    submit_service: InvoiceSubmitService = Depends(get_invoice_submit_service),
+) -> Dict[str, Any]:
+    """
+    Submit invoice data and image to Firebase.
+    """
+    logger.info("Received invoice submission request")
+    
+    if not image:
+        raise HTTPException(status_code=400, detail="No image uploaded.")
+    
+    if not submit_service.is_available():
+        raise HTTPException(
+            status_code=503, 
+            detail="Invoice submission service not available - Firebase not initialized"
+        )
+    
+    # Read image data
+    contents = await image.read()
+    await image.close()
+    if not contents or len(contents) == 0:
+        raise HTTPException(status_code=400, detail="Empty image upload.")
+    
+    try:
+        # Validate required fields
+        validation_errors = []
+        
+        if not invoice_number:
+            validation_errors.append("Invoice number is required")
+        if not company_name:
+            validation_errors.append("Company name is required")
+        if not invoice_day or not invoice_month or not invoice_year:
+            validation_errors.append("Invoice date (day, month, year) is required")
+        if not store_id:
+            validation_errors.append("Store ID is required")
+        if not user_email:
+            validation_errors.append("User email is required")
+        if not categories:
+            validation_errors.append("Categories are required")
+        
+        if validation_errors:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Missing required fields: {', '.join(validation_errors)}"
+            )
+        
+        # Parse categories
+        try:
+            categories_dict = json.loads(categories)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid categories format")
+        
+        # Validate date
+        try:
+            invoice_date = f"{invoice_month:02d}/{invoice_day:02d}/{invoice_year}"
+            # Test if the date is valid
+            datetime.strptime(invoice_date, "%m/%d/%Y")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format")
+        
+        # Prepare invoice data
+        invoice_data = {
+            'invoiceNumber': invoice_number,
+            'companyName': company_name,
+            'invoiceDate': invoice_date,
+            'storeID': store_id,
+            'user_email': user_email,
+            'categories': categories_dict,
+            'dateSubmitted': datetime.now().strftime("%m/%d/%Y")
+        }
+        
+        # Submit invoice
+        result = await submit_service.submit_invoice(
+            invoice_data=invoice_data,
+            image_file=contents,
+            image_filename=image.filename or "invoice.jpg"
+        )
+        
+        logger.info("Invoice submitted successfully")
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error submitting invoice: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error submitting invoice: {str(e)}"
         )
 
 
