@@ -335,15 +335,15 @@ const PAC = () => {
   const [actualData, setActualData] = useState({}); // Will hold actual data from invoices
   const [hoverInfo, setHoverInfo] = useState(null);
 
-// Categories for visual grouping
-const categories = {
-  'Sales': ['Sales', 'All Net Sales'],
-  'Food & Paper': ['Base Food', 'Employee Meal', 'Condiment', 'Total Waste', 'Paper'],
-  'Labor': ['Crew Labor', 'Management Labor', 'Payroll Tax'],
-  'Purchases': ['Advertising', 'Travel', 'Adv Other', 'Promotion', 'Outside Services',
-                'Linen', 'OP. Supply', 'Maint. & Repair', 'Small Equipment', 
-                'Utilities', 'Office', 'Cash +/-', 'Misc: CR/TR/D&S']
-};
+  // Categories for visual grouping
+  const categories = {
+    'Sales': ['Sales', 'All Net Sales'],
+    'Food & Paper': ['Base Food', 'Employee Meal', 'Condiment', 'Total Waste', 'Paper'],
+    'Labor': ['Crew Labor', 'Management Labor', 'Payroll Tax'],
+    'Purchases': ['Advertising', 'Travel', 'Adv Other', 'Promotion', 'Outside Services',
+                  'Linen', 'OP. Supply', 'Maint. & Repair', 'Small Equipment', 
+                  'Utilities', 'Office', 'Cash +/-', 'Misc: CR/TR/D&S']
+  };
 
   // Calculate category sums
   const calculateCategorySums = (data, type) => {
