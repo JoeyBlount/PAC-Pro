@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
-import { db, storage, auth } from "../../config/firebase-config";
-import { v4 } from "uuid";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { collection, doc, setDoc } from "firebase/firestore";
+import { auth } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext";
 import styles from "./submitInvoice.module.css";
 import { invoiceCatList } from "../settings/InvoiceSettings";
@@ -22,7 +19,6 @@ const SubmitInvoice = () => {
   const [invoiceYear, setInvoiceYear] = useState(new Date().getFullYear());
   const [confirmedItems, setConfirmedItems] = useState([]);
 
-  const invoiceRef = collection(db, "invoices");
   const user = auth.currentUser;
 
   useEffect(() => {
@@ -141,50 +137,49 @@ const SubmitInvoice = () => {
     if (!window.confirm("Please double-check all entries before submitting invoice...")) return;
     try {
       await verifyInput();
-      handleUploadClick();
 
-      const newDocRef = doc(invoiceRef);
+      // Prepare invoice data for backend
       const invoiceFields = confirmedItems.reduce((acc, { category, amount }) => {
         if (!acc[category]) acc[category] = [];
         acc[category].push(amount);
         return acc;
       }, {});
 
-      let invoiceDate = new Date(invoiceYear, invoiceMonth - 1, invoiceDay);
-      let submitDate = new Date();
-      let submitDateStr = `${String(submitDate.getMonth() + 1).padStart(2, "0")}/${String(
-        submitDate.getDate()
-      ).padStart(2, "0")}/${submitDate.getFullYear()}`;
-      let invoiceDateStr = `${String(invoiceDate.getMonth() + 1).padStart(2, "0")}/${String(
-        invoiceDate.getDate()
-      ).padStart(2, "0")}/${invoiceDate.getFullYear()}`;
+      // Create FormData for the backend request
+      const formData = new FormData();
+      formData.append("image", imageUpload);
+      formData.append("invoice_number", invoiceNumber);
+      formData.append("company_name", companyName);
+      formData.append("invoice_day", invoiceDay.toString());
+      formData.append("invoice_month", invoiceMonth.toString());
+      formData.append("invoice_year", invoiceYear.toString());
+      formData.append("store_id", selectedStore);
+      formData.append("user_email", user.email);
+      formData.append("categories", JSON.stringify(invoiceFields));
 
-      const imageRef = ref(storage, `images/${imageUpload.name + v4()}`);
-      const snapshot = await uploadBytes(imageRef, imageUpload);
-      const url = await getDownloadURL(snapshot.ref);
+      // Submit to backend
+      const response = await fetch("http://localhost:5140/api/pac/invoices/submit", {
+        method: "POST",
+        body: formData
+      });
 
-      await setDoc(
-        newDocRef,
-        {
-          categories: invoiceFields,
-          companyName,
-          dateSubmitted: submitDateStr,
-          imageURL: url,
-          invoiceDate: invoiceDateStr,
-          invoiceNumber,
-          storeID: selectedStore,
-          user_email: user.email,
-        },
-        { merge: true }
-      );
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.detail || "Failed to submit invoice");
+      }
 
       alert("Invoice submitted successfully!");
+      
+      // Reset form
       setInvoiceNumber("");
       setInvoiceMonth(new Date().getMonth() + 1);
       setInvoiceYear(new Date().getFullYear());
       setExtras([]);
       setConfirmedItems([]);
       setCompanyName("");
+      setImageUpload(null);
+      
     } catch (error) {
       alert("Error submitting invoice: " + error.message);
     }
@@ -203,16 +198,6 @@ const SubmitInvoice = () => {
     if (!selectedStore) throw new Error("Store Selection Required");
   };
 
-  const handleUploadClick = async () => {
-    if (!imageUpload) {
-      alert("Please select a file before uploading.");
-      return;
-    }
-    const imageRef = ref(storage, `images/${imageUpload.name + v4()}`);
-    const snapshot = await uploadBytes(imageRef, imageUpload);
-    const url = await getDownloadURL(snapshot.ref);
-    setImageUrls((prev) => [...prev, url]);
-  };
 
   return (
     <div className={styles.pageContainer}>
