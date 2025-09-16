@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext } from "react";
-import { auth } from "../../config/firebase-config";
+import { auth, db } from "../../config/firebase-config";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { StoreContext } from "../../context/storeContext";
 import styles from "./submitInvoice.module.css";
 import { invoiceCatList } from "../settings/InvoiceSettings";
@@ -18,6 +19,8 @@ const SubmitInvoice = () => {
   const [invoiceMonth, setInvoiceMonth] = useState(new Date().getMonth() + 1);
   const [invoiceYear, setInvoiceYear] = useState(new Date().getFullYear());
   const [confirmedItems, setConfirmedItems] = useState([]);
+  const [userData, setUserData] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const user = auth.currentUser;
 
@@ -39,7 +42,9 @@ const SubmitInvoice = () => {
           );
           const userSnapshot = await getDocs(userQuery);
           if (!userSnapshot.empty) {
-            setUserData(userSnapshot.docs[0].data());
+            const userData = userSnapshot.docs[0].data();
+            setUserData(userData);
+            setIsAdmin(userData.role === 'admin' || userData.role === 'Admin');
           }
         }
       } catch (error) {
