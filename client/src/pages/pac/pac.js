@@ -592,6 +592,17 @@ const PAC = () => {
             </Grid>
           </Grid>
         </Paper>
+
+        <div className="pac-goal-container">
+          <TextField
+            label="PAC Goal ($)"
+            size="small"
+            variant="outlined"
+            className="pac-goal-input"
+            value={pacGoal}
+            onChange={(e)=>setPacGoal(e.target.value)}
+          />
+        </div>
       </Container>
 
       {tabIndex === 0 && (
