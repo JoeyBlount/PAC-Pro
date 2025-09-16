@@ -5,6 +5,10 @@ import { StoreContext } from "../../context/storeContext";
 import styles from "./submitInvoice.module.css";
 import { invoiceCatList } from "../settings/InvoiceSettings";
 
+const generateUUID = () => {
+  return Math.random().toString(36).slice(2);
+};
+
 const SubmitInvoice = () => {
   const { selectedStore } = useContext(StoreContext);
   const [imageUpload, setImageUpload] = useState(null);
@@ -123,14 +127,13 @@ const SubmitInvoice = () => {
 
       if (data.items && Array.isArray(data.items)) {
         const newExtras = data.items.map((item) => ({
+          id: generateUUID(),
           category: normalizeCategory(item.category),
           amount: item.amount?.toFixed(2) || "",
-          confirmed: true
+          confirmed: false
         }));
         setExtras(newExtras);
-        setConfirmedItems(
-          newExtras.map((i) => ({ category: i.category, amount: parseFloat(i.amount) }))
-        );
+        setConfirmedItems([]);
       }
 
       alert("Invoice fields auto-filled successfully!");
@@ -143,20 +146,38 @@ const SubmitInvoice = () => {
   };
 
   const handleAdd = () => {
-    if (extras.length !== confirmedItems.length) {
-      alert("Please confirm your current extra before adding another.");
-      return;
-    }
-    setExtras((prev) => [...prev, { category: "", amount: "", confirmed: false }]);
+    setExtras((prev) => [...prev, { id: generateUUID(), category: "", amount: "", confirmed: false }]);
   };
 
   const handleRemove = (idx) => {
-    setExtras((prev) => prev.filter((_, i) => i !== idx));
-    setConfirmedItems((prev) => prev.filter((_, i) => i !== idx));
+    const itemToRemove = extras[idx];
+    const isConfirmed = confirmedItems.some(item => item.id === itemToRemove.id);
+    
+    console.log("handleRemove - OLD extras:", extras);
+    console.log("handleRemove - OLD confirmedItems:", confirmedItems);
+    
+    if (isConfirmed) {
+      const proceed = window.confirm("This item is confirmed. Are you sure you want to remove it?");
+      if (!proceed) return;
+    }
+    
+    setExtras((prev) => {
+      const newExtras = prev.filter((_, i) => i !== idx);
+      console.log("handleRemove - NEW extras:", newExtras);
+      return newExtras;
+    });
+    setConfirmedItems((prev) => {
+      const newConfirmed = prev.filter(item => item.id !== itemToRemove.id);
+      console.log("handleRemove - NEW confirmedItems:", newConfirmed);
+      return newConfirmed;
+    });
   };
 
   const handleConfirm = (idx) => {
     try {
+      console.log("handleConfirm - OLD extras:", extras);
+      console.log("handleConfirm - OLD confirmedItems:", confirmedItems);
+      
       const rowCategory = extras[idx].category;
       if (rowCategory === "") throw new Error("Cannot Confirm: Must choose category");
 
@@ -173,10 +194,16 @@ const SubmitInvoice = () => {
         if (!proceed) return;
       }
 
-      setConfirmedItems((prev) => [...prev, { category: rowCategory, amount: rowAmount }]);
-      setExtras((prev) =>
-        prev.map((r, i) => (i === idx ? { ...r, confirmed: true } : r))
-      );
+      setConfirmedItems((prev) => {
+        const newConfirmed = [...prev, { id: extras[idx].id, category: rowCategory, amount: rowAmount }];
+        console.log("handleConfirm - NEW confirmedItems:", newConfirmed);
+        return newConfirmed;
+      });
+      setExtras((prev) => {
+        const newExtras = prev.map((r, i) => (i === idx ? { ...r, confirmed: true } : r));
+        console.log("handleConfirm - NEW extras:", newExtras);
+        return newExtras;
+      });
     } catch (error) {
       alert("Error: " + error.message);
     }
@@ -184,6 +211,18 @@ const SubmitInvoice = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Check if all extras are confirmed
+    const unconfirmedExtras = extras.filter(extra => !extra.confirmed);
+    if (unconfirmedExtras.length > 0) {
+      const unconfirmedList = unconfirmedExtras.map(extra => 
+        `${extra.category || 'No category'}: $${extra.amount || 'No amount'}`
+      ).join('\n');
+      
+      alert(`Please confirm or remove the following unconfirmed items before submitting:\n\n${unconfirmedList}`);
+      return;
+    }
+    
     if (!window.confirm("Please double-check all entries before submitting invoice...")) return;
     try {
       await verifyInput();
