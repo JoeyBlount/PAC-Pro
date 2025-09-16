@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useContext } from "react";
-import { db } from "../../config/firebase-config";
+import { db, auth } from "../../config/firebase-config";
 //import { collection, addDoc } from "firebase/firestore";
 // Added two more firestore helpers below
-import { collection, addDoc, query, where, orderBy, limit, getDocs } from "firebase/firestore";
-import { serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, query, where, orderBy, limit, getDocs, serverTimestamp } from "firebase/firestore";
 import { Container, Tabs, Tab, Table, TableHead, TableRow, TableCell, TableBody, Paper, TableContainer, TextField, Button, Select, MenuItem } from "@mui/material";
-import PacTab from './PacTab';
 import { StoreContext } from "../../context/storeContext";
-import './pac.css';
+import PacTab from './PacTab';
+import styles from './pac.css';
+
 
 const expenseList = [
   "Sales", "All Net Sales", "Payroll Tax", "Advertising",
@@ -24,8 +24,9 @@ const PAC = () => {
   const [month, setMonth] = useState(currentMonth);
   const [savedData, setSavedData] = useState({});
   const [projections, setProjections] = useState([]);
+  const months = [ "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
+  const years = Array.from({ length: 11 }, (_, i) => currentYear - i);
   const [year, setYear] = useState(currentYear);
   
   // Get selected store from context
@@ -64,11 +65,64 @@ const PAC = () => {
   const [endingNonProduct, setEndingNonProduct] = useState(0);
   const [endingOpsSupplies, setEndingOpsSupplies] = useState(0);
 
+  const [userData, setUserData] = useState(null);
+  const [userRole, setUserRole] = useState("User");
+  const isAdmin =
+    String((userData?.role ?? userRole) || "").toLowerCase() === "admin";
+
+  const user = auth.currentUser;
 
 
   useEffect(() => {
     document.title = "PAC Pro - PAC";
   }, []);
+
+  // Fetch user data from Firestore
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Get the current user from Firebase Auth
+        const user = auth.currentUser;
+        if (user) {
+          // Query the "users" collection for the current user's data
+          const userQuery = query(
+            collection(db, "users"),
+            where("uid", "==", user.uid)
+          );
+          const userSnapshot = await getDocs(userQuery);
+          if (!userSnapshot.empty) {
+            setUserData(userSnapshot.docs[0].data());
+          }
+        }
+      } catch (error) {
+        console.error("Error loading data from Firestore:", error);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // lock previous months/years for non-admins
+  const isMonthDisabled = (monthNumber, selectedYear) => {
+    if (isAdmin) return false;
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthIdx = now.getMonth();
+    const targetIdx = months.indexOf(monthNumber);
+
+    if (targetIdx === -1) return false;
+
+    if (selectedYear < currentYear) return true;
+    if (selectedYear > currentYear) return false;
+    return targetIdx < currentMonthIdx;
+  };
+  const isYearDisabled = (yearNumber) => {
+    if (isAdmin) return false;
+    const currentYear = new Date().getFullYear();
+    return yearNumber < currentYear; // lock/grey any previous year
+  };
+
 
   useEffect(() => {
     const historicalData = getHistoricalData();
@@ -253,83 +307,83 @@ const PAC = () => {
 
 
   const [storeNumber, setStoreNumber] = useState("Store 123"); // You might want to make this dynamic
-const [actualData, setActualData] = useState({}); // Will hold actual data from invoices
-const [hoverInfo, setHoverInfo] = useState(null);
+  const [actualData, setActualData] = useState({}); // Will hold actual data from invoices
+  const [hoverInfo, setHoverInfo] = useState(null);
 
-// Categories for visual grouping
-const categories = {
-  'Sales': ['Sales', 'All Net Sales'],
-  'Food & Paper': ['Base Food', 'Employee Meal', 'Condiment', 'Total Waste', 'Paper'],
-  'Labor': ['Crew Labor', 'Management Labor', 'Payroll Tax'],
-  'Purchases': ['Advertising', 'Travel', 'Adv Other', 'Promotion', 'Outside Services',
-                'Linen', 'OP. Supply', 'Maint. & Repair', 'Small Equipment', 
-                'Utilities', 'Office', 'Cash +/-', 'Misc: CR/TR/D&S']
-};
-
-// Calculate category sums
-const calculateCategorySums = (data, type) => {
-  const sums = {};
-  for (const [category, items] of Object.entries(categories)) {
-    sums[category] = items.reduce((acc, item) => {
-      const expense = data.find(e => e.name === item);
-      if (expense) {
-        const dollar = parseFloat(expense[`${type}Dollar`]) || 0;
-        const percent = parseFloat(expense[`${type}Percent`]) || 0;
-        return {
-          dollar: acc.dollar + dollar,
-          percent: acc.percent + percent
-        };
-      }
-      return acc;
-    }, { dollar: 0, percent: 0 });
-  }
-  return sums;
-};
-
-// Helper functions
-const getCategoryColor = (category) => {
-  const colors = {
-    'Sales': '#e3f2fd',
-    'Food & Paper': '#e8f5e9',
-    'Labor': '#fff3e0',
-    'Purchases': '#f3e5f5'
+  // Categories for visual grouping
+  const categories = {
+    'Sales': ['Sales', 'All Net Sales'],
+    'Food & Paper': ['Base Food', 'Employee Meal', 'Condiment', 'Total Waste', 'Paper'],
+    'Labor': ['Crew Labor', 'Management Labor', 'Payroll Tax'],
+    'Purchases': ['Advertising', 'Travel', 'Adv Other', 'Promotion', 'Outside Services',
+      'Linen', 'OP. Supply', 'Maint. & Repair', 'Small Equipment',
+      'Utilities', 'Office', 'Cash +/-', 'Misc: CR/TR/D&S']
   };
-  return colors[category] || '#ffffff';
-};
 
-const getProductSales = () => {
-  const productSales = projections.find(e => e.name === 'Sales');
-  return parseFloat(productSales?.historicalDollar) || 0;
-};
+  // Calculate category sums
+  const calculateCategorySums = (data, type) => {
+    const sums = {};
+    for (const [category, items] of Object.entries(categories)) {
+      sums[category] = items.reduce((acc, item) => {
+        const expense = data.find(e => e.name === item);
+        if (expense) {
+          const dollar = parseFloat(expense[`${type}Dollar`]) || 0;
+          const percent = parseFloat(expense[`${type}Percent`]) || 0;
+          return {
+            dollar: acc.dollar + dollar,
+            percent: acc.percent + percent
+          };
+        }
+        return acc;
+      }, { dollar: 0, percent: 0 });
+    }
+    return sums;
+  };
 
-const calculateTotalControllable = (type) => {
-  let total = 0;
-  ['Food & Paper', 'Labor', 'Purchases'].forEach(category => {
-    categories[category].forEach(item => {
-      const expense = projections.find(e => e.name === item);
-      if (expense) {
-        total += parseFloat(expense[`${type}Dollar`]) || 0;
-      }
+  // Helper functions
+  const getCategoryColor = (category) => {
+    const colors = {
+      'Sales': '#e3f2fd',
+      'Food & Paper': '#e8f5e9',
+      'Labor': '#fff3e0',
+      'Purchases': '#f3e5f5'
+    };
+    return colors[category] || '#ffffff';
+  };
+
+  const getProductSales = () => {
+    const productSales = projections.find(e => e.name === 'Product Sales');
+    return parseFloat(productSales?.historicalDollar) || 0;
+  };
+
+  const calculateTotalControllable = (type) => {
+    let total = 0;
+    ['Food & Paper', 'Labor', 'Purchases'].forEach(category => {
+      categories[category].forEach(item => {
+        const expense = projections.find(e => e.name === item);
+        if (expense) {
+          total += parseFloat(expense[`${type}Dollar`]) || 0;
+        }
+      });
     });
-  });
-  return total;
-};
+    return total;
+  };
 
-const calculatePac = (type) => {
-  const productSales = getProductSales();
-  const totalControllable = calculateTotalControllable(type);
-  return productSales - totalControllable;
-};
+  const calculatePac = (type) => {
+    const productSales = getProductSales();
+    const totalControllable = calculateTotalControllable(type);
+    return productSales - totalControllable;
+  };
 
-const calculatePercentage = (value, total) => {
-  return total > 0 ? ((value / total) * 100).toFixed(2) + '%' : '0.00%';
-};
+  const calculatePercentage = (value, total) => {
+    return total > 0 ? ((value / total) * 100).toFixed(2) + '%' : '0.00%';
+  };
 
-const isPacPositive = () => {
-  const actualPac = calculatePac('historical');
-  const projectedPac = calculatePac('projected');
-  return actualPac >= projectedPac;
-};
+  const isPacPositive = () => {
+    const actualPac = calculatePac('historical');
+    const projectedPac = calculatePac('projected');
+    return actualPac >= projectedPac;
+  };
 
   // this function saves all the user input data from the generate page into the database
   const handleGenerate = async (e) => {
@@ -433,15 +487,50 @@ const isPacPositive = () => {
         <div className="topBarControls">
           <div className="filterDropdowns" style={{ display: "flex", alignItems: "center" }}>
             {/* Month Dropdown */}
-            <Select value={month} onChange={(e) => setMonth(e.target.value)} sx={{ width: 200, marginRight: 2 }}>
-              {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(m => (
-                <MenuItem key={m} value={m}>{m}</MenuItem>
+            <Select
+              value={month}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (isMonthDisabled(next, year)) return; // guard
+                setMonth(next);
+              }}
+              sx={{ width: 200, marginRight: 2 }}
+            >
+              {months.map((m) => (
+                <MenuItem
+                  key={m}
+                  value={m}
+                  disabled={isMonthDisabled(m, year)}
+                  title={!isAdmin && isMonthDisabled(month) ? "Locked for your role" : undefined}
+                >
+                  {m}
+                </MenuItem>
               ))}
             </Select>
+
             {/* Year Dropdown */}
-            <Select value={year} onChange={(e) => setYear(e.target.value)} sx={{ width: 120, marginRight: 2 }}>
-              {years.map(y => (
-                <MenuItem key={y} value={y}>{y}</MenuItem>
+            <Select
+              value={year}
+              onChange={(e) => {
+                const nextYear = e.target.value;
+                if (isYearDisabled(nextYear)) return; // guard
+                setYear(nextYear);
+
+                // If the current month becomes invalid after switching years, snap to current month
+                if (isMonthDisabled(month, nextYear)) {
+                  const safeMonth = months[new Date().getMonth()];
+                  setMonth(safeMonth);
+                }
+              }}
+              sx={{ width: 120, marginRight: 2 }}
+            >
+              {years.map((y) => (
+                <MenuItem key={y} value={y} disabled={isYearDisabled(y)}
+                  title={!isAdmin && isYearDisabled(year) ? "Locked for your role" : undefined}
+                  className={!isAdmin && isYearDisabled(year) ? styles.disabledOption : undefined}
+                >
+                  {y}
+                </MenuItem>
               ))}
             </Select>
 
@@ -733,13 +822,13 @@ const isPacPositive = () => {
       )}  {/* end of Generate page */}
 
       {tabIndex === 2 && (
-        <PacTab 
+         <PacTab 
           storeId={selectedStore || "store_001"} 
           year={year} 
           month={month}
           projections={projections}
         />
-      )} {/* end of Actual page */}
+      )}
 
 
     </Container>
