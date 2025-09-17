@@ -22,8 +22,7 @@ const expenseList = [
 const hasUserInputAmountField = [
   "Sales", "All Net Sales", 
   "Travel", "Adv Other", "Outside Services",
-  "Linen", "OP. Supply", "Maint. & Repair", "Small Equipment", "Utilities", "Office", "Cash +/-", "Misc: CR/TR/D&S",
-  "Total Controllable", "P.A.C.", "Δ P.A.C. $"
+  "Linen", "OP. Supply", "Maint. & Repair", "Small Equipment", "Utilities", "Office", "Cash +/-", "Misc: CR/TR/D&S"
 ];
 
 // Add expense(s) to this array to disable projected % text field. Case-senstive.
