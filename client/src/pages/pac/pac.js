@@ -10,8 +10,9 @@ import styles from './pac.css';
 import { useAuth } from "../../context/AuthContext";
 import { Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material";
 
+
 const expenseList = [
-  "Product Sales", "All Net Sales", "Payroll Tax", "Advertising",
+  "Sales", "All Net Sales", 
   "Base Food", "Employee Meal", "Condiment", "Total Waste", "Paper",
   "Crew Labor", "Management Labor", "Payroll Tax", "Advertising",
   "Travel", "Adv Other", "Promotion", "Outside Services",
@@ -45,15 +46,22 @@ const getLabel = (key) => {
 
 const PAC = () => {
   const [tabIndex, setTabIndex] = useState(0);
-  const [month, setMonth] = useState("January");
+  const currentDate = new Date();
+  const currentMonth = currentDate.toLocaleString('default', { month: 'long' });
+  const [month, setMonth] = useState(currentMonth);
   const [savedData, setSavedData] = useState({});
+
 
   const months = [ "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 11 }, (_, i) => currentYear - i);
   const [year, setYear] = useState(currentYear);
+  
+  // Get selected store from context
+  const { selectedStore } = useContext(StoreContext);
+  const [pacGoal, setPacGoal] = useState("");
 
-  // State variables for Generate tab
+  // State variables for Generate tab; may need to change these
   const pacGenRef = collection(db, "pacGen");
   const pacProjectionsRef = collection(db, "pac_projections"); // for Projections tab
   const [productNetSales, setProductNetSales] = useState(0);
@@ -86,6 +94,12 @@ const PAC = () => {
   const [endingNonProduct, setEndingNonProduct] = useState(0);
   const [endingOpsSupplies, setEndingOpsSupplies] = useState(0);
 
+  const [userData, setUserData] = useState(null);
+  const [userRole, setUserRole] = useState("User");
+  const isAdmin =
+    String((userData?.role ?? userRole) || "").toLowerCase() === "admin";
+
+  const user = auth.currentUser;
 
   const [histMonth, setHistMonth] = useState(month);
   const [histYear, setHistYear] = useState(year);
@@ -98,100 +112,57 @@ const PAC = () => {
   const isAdmin = (userRole || "").toLowerCase() === "admin";
 
 
-//   useEffect(() => {
-//   const loadPreviousMonth = async () => {
-//     if (!selectedStore) return;
-
-//     // Figure out previous month/year
-//     const monthsArr = [
-//       "January","February","March","April","May","June",
-//       "July","August","September","October","November","December"
-//     ];
-//     const currIdx = monthsArr.indexOf(month);
-//     const prevDate = new Date(year, currIdx - 1, 1); // rolls back year if Jan
-//     const prevMonthLabel = monthsArr[prevDate.getMonth()];
-//     const prevYear = prevDate.getFullYear();
-//     const prevMonth = String(prevDate.getMonth() + 1).padStart(2, "0");
-
-//     const prevPeriod = `${prevYear}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
-
-//     // Build docId = storeId_period
-//     const docId = `${selectedStore}_${prevYear}${prevMonth}`;
-
-//     console.log("Looking for doc:", docId);
-
-//     const ref = doc(db, "pac_projections", docId);
-//     const snap = await getDoc(ref);
-//     if (!snap.exists()) {
-//       console.log("No data for", docId);
-//       return;
-//     }
-//     const latest = snap.data();
-//     console.log(latest)
-
-//     if (!latest) return;
-
-//     // Build historical data map from Firestore fields
-//     const productSales = Number(latest.ProductNetSales || 0);
-
-//     const mapping = {
-//   // Dollars
-//   "Sales": { dollar: latest.projectedDollar },
-//   "Promotion": { dollar: latest.promotions },
-//   "Cash +/-": { dollar: latest.cash_adjustments },
-//   "Paper": { dollar: latest.purchases?.paper || 0 },
-//   "Office": { dollar: latest.purchases?.office || 0 },
-
-//   // Percents
-//   "Condiment": { percent: latest.condiment_percent },
-//   "Crew Labor": { percent: latest.crew_labor_percent },
-//   "Management Labor": { percent: (latest.total_labor_percent || 0) - (latest.crew_labor_percent || 0) },
-//   "Payroll Tax": { percent: latest.payroll_tax_rate },
-//   "Advertising": { percent: latest.advertising_percent },
-//   "Total Waste": { percent: (latest.complete_waste_percent || 0) + (latest.raw_waste_percent || 0) },
-// };
-
-// const hist = expenseList.map(name => {
-//   const entry = latest.projections?.find(p => p.name === name) || {};
-//   return {
-//     name,
-//     historicalDollar: entry.projectedDollar || "-",
-//     historicalPercent: entry.projectedPercent || "-"
-//   };
-// });
-
-//     // const hist = expenseList.map(name => {
-//     //   const val = Number(mapping[name] || 0);
-//     //   return {
-//     //     name,
-//     //     historicalDollar: val.toFixed(2),
-//     //     historicalPercent: (name === "Sales" || productSales === 0)
-//     //       ? "-"
-//     //       : ((val / productSales) * 100).toFixed(2)
-//     //   };
-//     // });
-
-//    setProjections(expenseList.map(name => {
-//   const h = hist.find(e => e.name === name) || {};
-//   return {
-//     name,
-//     projectedDollar: "",
-//     projectedPercent: "",
-//     estimatedDollar: "-",
-//     estimatedPercent: "-",
-//     historicalDollar: h.historicalDollar || "-",
-//     historicalPercent: h.historicalPercent || "-"
-//   };
-// }));
-//   };
-
-//   if (tabIndex === 0) loadPreviousMonth();
-// }, [selectedStore, year, month, tabIndex]);
-
 
   useEffect(() => {
     document.title = "PAC Pro - PAC";
   }, []);
+
+  // Fetch user data from Firestore
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Get the current user from Firebase Auth
+        const user = auth.currentUser;
+        if (user) {
+          // Query the "users" collection for the current user's data
+          const userQuery = query(
+            collection(db, "users"),
+            where("uid", "==", user.uid)
+          );
+          const userSnapshot = await getDocs(userQuery);
+          if (!userSnapshot.empty) {
+            setUserData(userSnapshot.docs[0].data());
+          }
+        }
+      } catch (error) {
+        console.error("Error loading data from Firestore:", error);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // lock previous months/years for non-admins
+  const isMonthDisabled = (monthNumber, selectedYear) => {
+    if (isAdmin) return false;
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthIdx = now.getMonth();
+    const targetIdx = months.indexOf(monthNumber);
+
+    if (targetIdx === -1) return false;
+
+    if (selectedYear < currentYear) return true;
+    if (selectedYear > currentYear) return false;
+    return targetIdx < currentMonthIdx;
+  };
+  const isYearDisabled = (yearNumber) => {
+    if (isAdmin) return false;
+    const currentYear = new Date().getFullYear();
+    return yearNumber < currentYear; // lock/grey any previous year
+  };
+
 
   useEffect(() => {
   const loadHistoricalData = async () => {
@@ -372,6 +343,112 @@ useEffect(() => {
 }, [month, year, tabIndex]);
 
 
+  // fetch latest generate doc for selected month and year
+  useEffect(() => {
+    const loadLatestForPeriod = async () => {
+      try {
+        // Build "YYYY-MM" period string
+        const monthIndex = [
+          "January","February","March","April","May","June",
+          "July","August","September","October","November","December"
+        ].indexOf(month);
+        const period = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+
+        // 👇 No orderBy, no limit — avoids composite index
+        const q = query(
+          pacGenRef,
+          where("Period", "==", period)
+        );
+
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          setProjections(makeEmptyProjectionRows());
+          return;
+        }
+
+        // Pick the doc with the latest createdAt (or fallback)
+        let latestDoc = null;
+        let latestTs = -Infinity;
+
+        snap.forEach(d => {
+          const data = d.data();
+          // createdAt is a Firestore Timestamp; guard null when just written
+          const ts = data.createdAt?.toMillis
+            ? data.createdAt.toMillis()
+            : (typeof data.createdAt === "number" ? data.createdAt : 0);
+          if (ts > latestTs) {
+            latestTs = ts;
+            latestDoc = data;
+          }
+        });
+
+        if (!latestDoc) {
+          setProjections(makeEmptyProjectionRows());
+          return;
+        }
+
+        const data = latestDoc;
+        
+
+        const rows = makeEmptyProjectionRows();
+
+        // Helpers with safe names
+        const setProjDollar = (name, value) => {
+          const r = rows.find(x => x.name === name);
+          if (!r) return;
+          const num = Number(value);
+          r.projectedDollar = Number.isFinite(num) ? num.toFixed(2) : "";
+        };
+
+        const setProjPct = (name, value) => {
+          const r = rows.find(x => x.name === name);
+          if (!r) return;
+          const num = Number(value);
+          r.projectedPercent = Number.isFinite(num) ? String(num) : "";
+        };
+
+        // === Sales ===
+        setProjDollar("Product Sales", data.ProductNetSales);
+        setProjDollar("All Net Sales", data.AllNetSales);
+        setProjDollar("Advertising", data.Advertising);
+
+        // === Labor ===
+        setProjPct("Crew Labor", data.CrewLabor);
+        const mgmtPct = Math.max((Number(data.TotalLabor) || 0) - (Number(data.CrewLabor) || 0), 0);
+        setProjPct("Management Labor", mgmtPct);
+        setProjDollar("Payroll Tax", data.PayrollTax);
+
+        // === Food & Paper ===
+        setProjPct("Base Food", data.BaseFood);
+        setProjPct("Condiment", data.Condiment);
+        const totalWastePct = (Number(data.CompleteWaste) || 0) + (Number(data.RawWaste) || 0);
+        setProjPct("Total Waste", totalWastePct);
+
+        // Recompute Estimated columns
+        const hist = getHistoricalData();
+        rows.forEach((row, i) => {
+          const h = hist.find(e => e.name === row.name) || {};
+          const hDollar = parseFloat(h.historicalDollar) || 0;
+          const hPct = parseFloat(String(h.historicalPercent || "").replace("%","")) || 0;
+          const pDollar = parseFloat(row.projectedDollar) || 0;
+          const pPct = parseFloat(String(row.projectedPercent || "").replace("%","")) || 0;
+
+          rows[i].estimatedDollar = ((pDollar + hDollar) / 2).toFixed(2);
+          rows[i].estimatedPercent = ((pPct + hPct) / 2).toFixed(2);
+        });
+
+        setProjections(rows);
+      } catch (err) {
+        console.error("Failed to load pacGen for period:", err);
+        setProjections(makeEmptyProjectionRows());
+      }
+    };
+
+    // Only refresh when viewing the Projections tab
+    if (tabIndex === 0) loadLatestForPeriod();
+  }, [month, year, tabIndex]); 
+
+
   const handleInputChange = (index, field, value) => {
     setProjections(prevProjections => {
       const newProjections = [...prevProjections];
@@ -402,7 +479,7 @@ const historicalPercent = parseFloat(expense.historicalPercent) || 0;
         }
 
         newProjections[idx].estimatedDollar = ((projectedDollar + historicalDollar) / 2).toFixed(2);
-        newProjections[idx].estimatedPercent = ((projectedPercent + historicalPercent) / 2).toFixed(2) + "%";
+        newProjections[idx].estimatedPercent = ((projectedPercent + historicalPercent) / 2).toFixed(2);
       });
 
       return newProjections;
@@ -466,84 +543,111 @@ const makeEmptyProjectionRows = () => {
 
 
 
-  const [storeNumber, setStoreNumber] = useState("Store 123"); // You might want to make this dynamic
-const [actualData, setActualData] = useState({}); // Will hold actual data from invoices
-const [hoverInfo, setHoverInfo] = useState(null);
-
-// Categories for visual grouping
-const categories = {
-  'Product Sales': ['Product Sales'],
-  'Food & Paper': ['Base Food', 'Employee Meal', 'Condiment', 'Total Waste', 'Paper'],
-  'Labor': ['Crew Labor', 'Management Labor', 'Payroll Tax'],
-  'Purchases': ['Advertising', 'Travel', 'Adv Other', 'Promotion', 'Outside Services',
-                'Linen', 'OP. Supply', 'Maint. & Repair', 'Small Equipment', 
-                'Utilities', 'Office', 'Cash +/-', 'Misc: CR/TR/D&S']
-};
-
-// Calculate category sums
-const calculateCategorySums = (data, type) => {
-  const sums = {};
-  for (const [category, items] of Object.entries(categories)) {
-    sums[category] = items.reduce((acc, item) => {
-      const expense = data.find(e => e.name === item);
-      if (expense) {
-        const dollar = parseFloat(expense[`${type}Dollar`]) || 0;
-        const percent = parseFloat(expense[`${type}Percent`]) || 0;
-        return {
-          dollar: acc.dollar + dollar,
-          percent: acc.percent + percent
-        };
-      }
-      return acc;
-    }, { dollar: 0, percent: 0 });
-  }
-  return sums;
-};
-
-// Helper functions
-const getCategoryColor = (category) => {
-  const colors = {
-    'Product Sales': '#e3f2fd',
-    'Food & Paper': '#e8f5e9',
-    'Labor': '#fff3e0',
-    'Purchases': '#f3e5f5'
+  const makeEmptyProjectionRows = () => {
+    const historicalData = getHistoricalData();
+    return expenseList.map(expense => {
+      const h = historicalData.find(e => e.name === expense) || {};
+      return {
+        name: expense,
+        projectedDollar: "",
+        projectedPercent: "",
+        estimatedDollar: h.historicalDollar || "-",
+        estimatedPercent: h.historicalPercent || "-",
+        historicalDollar: h.historicalDollar || "-",
+        historicalPercent: h.historicalPercent || "-"
+      };
+    });
   };
-  return colors[category] || '#ffffff';
-};
+
+
+  const [storeNumber, setStoreNumber] = useState("Store 123"); // You might want to make this dynamic
+  const [actualData, setActualData] = useState({}); // Will hold actual data from invoices
+  const [hoverInfo, setHoverInfo] = useState(null);
+
+  // Categories for visual grouping
+  const categories = {
+    'Sales': ['Sales', 'All Net Sales'],
+    'Food & Paper': ['Base Food', 'Employee Meal', 'Condiment', 'Total Waste', 'Paper'],
+    'Labor': ['Crew Labor', 'Management Labor', 'Payroll Tax'],
+    'Purchases': ['Advertising', 'Travel', 'Adv Other', 'Promotion', 'Outside Services',
+                  'Linen', 'OP. Supply', 'Maint. & Repair', 'Small Equipment', 
+                  'Utilities', 'Office', 'Cash +/-', 'Misc: CR/TR/D&S']
+  };
+
+  // Calculate category sums
+  const calculateCategorySums = (data, type) => {
+    const sums = {};
+    for (const [category, items] of Object.entries(categories)) {
+      sums[category] = items.reduce((acc, item) => {
+        const expense = data.find(e => e.name === item);
+        if (expense) {
+          const dollar = parseFloat(expense[`${type}Dollar`]) || 0;
+          const percent = parseFloat(expense[`${type}Percent`]) || 0;
+          return {
+            dollar: acc.dollar + dollar,
+            percent: acc.percent + percent
+          };
+        }
+        return acc;
+      }, { dollar: 0, percent: 0 });
+    }
+    return sums;
+  };
+
+  // Helper functions
+  const getCategory = (expense) => {
+    const input = expense.toLowerCase();
+    for (const [key, values] of Object.entries(categories)) {
+      if(values.some(v => v.toLowerCase() === input)) {
+        return key; 
+      }
+    }
+    return null;
+  }
+
+  const getCategoryColor = (category) => {
+    const colors = {
+      'Sales': '#e3f2fd',
+      'Food & Paper': '#e8f5e9',
+      'Labor': '#fff3e0',
+      'Purchases': '#f3e5f5'
+    };
+    return colors[category] || '#ffffff';
+  };
 
   const getProductSales = () => {
     const productSales = projections.find(e => e.name === 'Sales');
     return parseFloat(productSales?.historicalDollar) || 0;
   };
 
-const calculateTotalControllable = (type) => {
-  let total = 0;
-  ['Food & Paper', 'Labor', 'Purchases'].forEach(category => {
-    categories[category].forEach(item => {
-      const expense = projections.find(e => e.name === item);
-      if (expense) {
-        total += parseFloat(expense[`${type}Dollar`]) || 0;
-      }
+  const calculateTotalControllable = (type) => {
+    let total = 0;
+    ['Food & Paper', 'Labor', 'Purchases'].forEach(category => {
+      categories[category].forEach(item => {
+        const expense = projections.find(e => e.name === item);
+        if (expense) {
+          total += parseFloat(expense[`${type}Dollar`]) || 0;
+        }
+      });
     });
-  });
-  return total;
-};
+    return total;
+  };
 
-const calculatePac = (type) => {
-  const productSales = getProductSales();
-  const totalControllable = calculateTotalControllable(type);
-  return productSales - totalControllable;
-};
+  const calculatePac = (type) => {
+    const productSales = getProductSales();
+    const totalControllable = calculateTotalControllable(type);
+    return productSales - totalControllable;
+  };
 
-const calculatePercentage = (value, total) => {
-  return total > 0 ? ((value / total) * 100).toFixed(2) + '%' : '0.00%';
-};
+  const calculatePercentage = (value, total) => {
+    return total > 0 ? ((value / total) * 100).toFixed(2) + '%' : '0.00%';
+  };
 
-const isPacPositive = () => {
-  const actualPac = calculatePac('historical');
-  const projectedPac = calculatePac('projected');
-  return actualPac >= projectedPac;
-};
+  const isPacPositive = () => {
+    const actualPac = calculatePac('historical');
+    const projectedPac = calculatePac('projected');
+    return actualPac >= projectedPac;
+  };
 
   // this function saves all the user input data from the generate page into the database
   const handleGenerate = async (e) => {
@@ -582,7 +686,23 @@ const isPacPositive = () => {
 
     else {
       try {
+
+        // using a "period" key for generate
+        const monthIndex = [
+          "January","February","March","April","May","June",
+          "July","August","September","October","November","December"
+        ].indexOf(month);
+        const period = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+        
+
         await addDoc(pacGenRef, {
+
+          // month year and time for when it was generated
+          Month: month,
+          Year: year,
+          Period: period, // period key
+          createdAt: serverTimestamp(),
+
           ProductNetSales: parseFloat(productNetSales),
           Cash: parseFloat(cash),
           Promo: parseFloat(promo),
@@ -624,37 +744,96 @@ const isPacPositive = () => {
 
 
   return (
-    <Container sx={{ textAlign: "center", marginTop: 5, overflowX: "auto", paddingX: "20px" }}>
-      <div className="topBar">
-        <h1 className="Header">PAC</h1>
-        <div className="topBarControls">
-          <div className="filterDropdowns" style={{ display: "flex", alignItems: "center" }}>
-            {/* Month Dropdown */}
-            <Select value={month} onChange={(e) => setMonth(e.target.value)} sx={{ width: 200, marginRight: 2 }}>
-              {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(m => (
-                <MenuItem key={m} value={m}>{m}</MenuItem>
-              ))}
-            </Select>
-            {/* Year Dropdown */}
-            <Select value={year} onChange={(e) => setYear(e.target.value)} sx={{ width: 120, marginRight: 2 }}>
-              {years.map(y => (
-                <MenuItem key={y} value={y}>{y}</MenuItem>
-              ))}
-            </Select>
-            <Tabs
-              value={tabIndex}
-              onChange={(event, newIndex) => setTabIndex(newIndex)}
-              sx={{ flexGrow: 1, marginLeft: 2 }}
-              textColor="primary"
-            >
-              <Tab label="Projections" />
-              <Tab label="Generate" />
-              <Tab label="P.A.C." />
-            </Tabs>
-            <Button variant="contained" onClick={() => setSavedData(prevData => ({ ...prevData, [month]: [...projections] }))}>Apply</Button>
-          </div>
+    <Box sx = {{flexGrow: 1}}>
+      <Container>
+        <Paper sx={{padding: '10px'}}>
+          <Grid container wrap="wrap" justifyContent="space-between" alignItems="center">
+            <Grid item xs={12} sm={6} md={4}>
+              <Box sx={{ padding: '10px', marginLeft: '5px' }}>
+                <h1 className="Header">PAC</h1>
+              </Box>
+            </Grid>
+            <Grid container xs={12} sm={6} md={4} wrap="wrap" justifyContent="flex-end" alignItems="center"> 
+              <Grid item xs={12} sm={6} md={4}>
+                <Box display="flex" flexDirection="row" flexWrap="nowrap" justifyContent="center" gap={1} sx={{ padding: '10px', margin: '0 auto' }}>
+                  {/* Month Dropdown */}
+                  <Select
+                    value={month}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      if (isMonthDisabled(next, year)) return; // guard
+                      setMonth(next);
+                    }}
+                    sx={{ width: 200, marginRight: 2 }}
+                  >
+                    {months.map((m) => (
+                      <MenuItem
+                        key={m}
+                        value={m}
+                        disabled={isMonthDisabled(m, year)}
+                        title={!isAdmin && isMonthDisabled(month) ? "Locked for your role" : undefined}
+                      >
+                        {m}
+                      </MenuItem>
+                    ))}
+                  </Select>
+
+                  {/* Year Dropdown */}
+                  <Select
+                    value={year}
+                    onChange={(e) => {
+                      const nextYear = e.target.value;
+                      if (isYearDisabled(nextYear)) return; // guard
+                      setYear(nextYear);
+
+                      // If the current month becomes invalid after switching years, snap to current month
+                      if (isMonthDisabled(month, nextYear)) {
+                        const safeMonth = months[new Date().getMonth()];
+                        setMonth(safeMonth);
+                      }
+                    }}
+                    sx={{ width: 120, marginRight: 2 }}
+                  >
+                    {years.map((y) => (
+                      <MenuItem key={y} value={y} disabled={isYearDisabled(y)}
+                        title={!isAdmin && isYearDisabled(year) ? "Locked for your role" : undefined}
+                        className={!isAdmin && isYearDisabled(year) ? styles.disabledOption : undefined}
+                      >
+                        {y}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </Box>
+              </Grid>
+              
+              <Grid item xs={12} sm={6} md={4}>
+                <Tabs
+                  value={tabIndex}
+                  onChange={(event, newIndex) => setTabIndex(newIndex)}
+                  sx={{ padding: '10px', margin: '0 auto' }}
+                  textColor="primary"
+                >
+                  <Tab label="Projections" />
+                  <Tab label="Generate" />
+                  <Tab label="Actual" />
+                </Tabs>
+              </Grid>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        <div className="pac-goal-container">
+          <TextField
+            label="PAC Goal ($)"
+            size="small"
+            variant="outlined"
+            className="pac-goal-input"
+            value={pacGoal}
+            onChange={(e)=>setPacGoal(e.target.value)}
+          />
         </div>
       </Container>
+
       <Box display="flex" justifyContent="center" sx={{ mt: 2 }}>
   <Button variant="outlined" onClick={() => setOpenHistModal(true)}>
     View Historical Data
@@ -715,13 +894,12 @@ const isPacPositive = () => {
                           onChange={(e) => handleInputChange(index, "projectedDollar", e.target.value)} />
                       : <item>${expense.projectedDollar || "0.00"}</item>}
                   </TableCell>
-                  <TableCell>
-                    <TextField size="small" variant="outlined" value={expense.projectedPercent} onChange={(e) => handleInputChange(index, "projectedPercent", e.target.value)} />
+                  <TableCell> {/*Output for Historical $*/}
+                    {"$" + expense.historicalDollar}
                   </TableCell>
-                  <TableCell>{expense.estimatedDollar}</TableCell>
-                  <TableCell>{expense.estimatedPercent}</TableCell>
-                  <TableCell>{expense.historicalDollar}</TableCell>
-                  <TableCell>{expense.historicalPercent}</TableCell>
+                  <TableCell> {/*Output for Historical %*/}
+                    {expense.historicalPercent + "%"}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -740,6 +918,7 @@ const isPacPositive = () => {
       )} {/* end of Projections page */}
 
       {tabIndex === 1 && (
+        <Container>
         <div style={{ display: "flex", flexDirection: "column", gap: "24px", marginTop: "20px" }}>
           {/* Sales */}
           <div className="pac-section sales-section">
@@ -964,6 +1143,7 @@ const isPacPositive = () => {
 
 
         </div>
+        </Container>
       )}  {/* end of Generate page */}
 
       {tabIndex === 2 && (
@@ -976,6 +1156,7 @@ const isPacPositive = () => {
         />
         </Container>
       )} {/* end of Actual page */}
+
 
       <Dialog open={openHistModal} onClose={() => setOpenHistModal(false)}>
   <DialogTitle>Select Historical Period</DialogTitle>
@@ -1012,7 +1193,7 @@ const isPacPositive = () => {
       onClick={() => {
         setOpenHistModal(false);
         setShouldLoadHist(true);
-        // histMonth / histYear change triggers your useEffect
+
       }}
     >
       Load Data

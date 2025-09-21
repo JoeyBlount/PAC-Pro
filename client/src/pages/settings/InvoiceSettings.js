@@ -10,7 +10,8 @@ import { ROLES } from '../../constants/roles';
 export const invoiceCatList = ["FOOD", "CONDIMENT", "NONPRODUCT", "PAPER", "TRAVEL"];
 
 const InvoiceSettings = () => {
-  const { userRole } = useAuth(); // Get current user's role
+  const userRole = ROLES.ADMIN; // This line makes all user who access the invoice settings a admin regardless of their actual role. Delete this line and uncomment the line below when user roles are fixed.
+  //const { userRole } = useAuth(); // Get current user's role
   const [categories, setCategories] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState("");
@@ -26,8 +27,22 @@ const InvoiceSettings = () => {
 
   const invoiceCatRef = collection(db, "invoiceCategories");
 
+  //prev broken code flagged here
   const getCategories = async () => {
-    // ... (logic remains the same)
+    const categoryData = [];
+    try {
+      for (const id of invoiceCatList) {
+        const docRef  = doc(invoiceCatRef, id);
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+          throw new Error("doc for " + id + " does not exist");
+        }
+        categoryData.push({ id, ...docSnap.data() });
+      }
+    } catch (error) {
+      console.error("Failure querying database for categories:", error);
+    }
+    return categoryData;
   };
 
   useEffect(() => {
@@ -37,9 +52,22 @@ const InvoiceSettings = () => {
         .catch(err => console.error(err));
     }
   }, [canActuallyView]); // Re-run if view permission changes
+  //broken code unflagged here?
 
   const editDoc = async (id, newAccount) => {
-    // ... (logic remains the same, but it will only be called if canEditSettings is true)
+    try{
+      if(isNaN(newAccount)){
+        throw new Error("account number must be numeric");
+      }
+      const ref = doc(invoiceCatRef, id);
+      await updateDoc(ref, { bankAccountNum: newAccount });
+      //document is now updated, now re-set the local array to hold the updated value:
+      const updatedData = await getCategories();
+      setCategories(updatedData);
+    } catch (error) {
+      console.error("Error: ", error);
+      alert("Failure changing bankAccountNum: " + error.message);
+    }
   };
 
   // Render Access Denied if user doesn't have view permission

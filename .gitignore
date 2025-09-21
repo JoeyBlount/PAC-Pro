@@ -1,12 +1,82 @@
-# Ignore node_modules
-node_modules/
+# --- .NET & ASP.NET Core ---
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.dbmdl
+*.pdb
+*.cache
+*.log
+*.vs/
+*.DS_Store
 
-# Ignore any build artifacts
+# app settings (override if needed)
+appsettings.Development.json
+appsettings.Local.json
+appsettings.json
+
+# secrets stored via user-secrets
+secrets.json
+
+# --- Logs & temp ---
+*.log
+logs/
+temp/
+*.tmp
+
+# --- Visual Studio Code ---
+.vscode/
+.history/
+
+# --- Node/React frontend ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+
+# React build output
+build/
 dist/
 
-# Logs
-*.log
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
 
-# Ignore OS or editor files
-.DS_Store
+# --- Firebase ---
+firebase-debug.log
+.firebaserc
+.firebase/
+storage.rules
+firebase-service-account.json
+firebase-service-account-*.json
+
+# --- OS files ---
 Thumbs.db
+ehthumbs.db
+Icon?
+.DS_Store
+Desktop.ini

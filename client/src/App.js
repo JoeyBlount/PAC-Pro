@@ -1,6 +1,7 @@
 import React from 'react';
 import { Outlet } from "react-router-dom";
 import { NavBar } from './pages/navBar/navBar';
+import { Box } from '@mui/material';
 
 // import PrivateRoute from "./routes/PrivateRoute"; // ✅ Import PrivateRoute
 // import InvoiceSheet from "./pages/invoiceLogs/InvoiceSheet";
@@ -30,9 +31,6 @@ import { NavBar } from './pages/navBar/navBar';
 //   },
 //   { path: '*', element: <h1>404 - Page Not Found</h1> } // Catch-all for invalid routes
 // ]);
-
-import { Box } from '@mui/material';
-
 
 function App() {
   return (

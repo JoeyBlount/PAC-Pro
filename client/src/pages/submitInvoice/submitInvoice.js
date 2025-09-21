@@ -1,326 +1,414 @@
 import React, { useState, useEffect, useContext } from "react";
-import { db, storage, auth } from "../../config/firebase-config"; // Import initialized Firebase storage
-import { v4 } from "uuid"; // UUID for unique image names
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { collection, doc, setDoc } from "firebase/firestore";
-import { StoreContext } from "../../context/storeContext";  // import your context
+import { auth, db } from "../../config/firebase-config";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { StoreContext } from "../../context/storeContext";
 import styles from "./submitInvoice.module.css";
 import { invoiceCatList } from "../settings/InvoiceSettings";
+
+const generateUUID = () => {
+  return Math.random().toString(36).slice(2);
+};
 
 const SubmitInvoice = () => {
   const { selectedStore } = useContext(StoreContext);
   const [imageUpload, setImageUpload] = useState(null);
   const [imageUrls, setImageUrls] = useState([]);
   const [extras, setExtras] = useState([]);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [loadingUpload, setLoadingUpload] = useState(false);
+
+  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [invoiceDay, setInvoiceDay] = useState(new Date().getDate());
+  const [invoiceMonth, setInvoiceMonth] = useState(new Date().getMonth() + 1);
+  const [invoiceYear, setInvoiceYear] = useState(new Date().getFullYear());
+  const [confirmedItems, setConfirmedItems] = useState([]);
+  const [userData, setUserData] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  const user = auth.currentUser;
 
   useEffect(() => {
     document.title = "PAC Pro - Submit Invoice";
   }, []);
 
-  // State variables for each form field
-  const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [companyName, setCompanyName]   = useState("");
-  const [invoiceDay,   setInvoiceDay]   = useState(new Date().getDate());
-  const [invoiceMonth, setInvoiceMonth] = useState(new Date().getMonth() + 1);
-  const [invoiceYear,  setInvoiceYear]  = useState(new Date().getFullYear());
-  const [confirmedItems, setConfirmedItems] = useState([]);
+  // Fetch user data from Firestore
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Get the current user from Firebase Auth
+        const user = auth.currentUser;
+        if (user) {
+          // Query the "users" collection for the current user's data
+          const userQuery = query(
+            collection(db, "users"),
+            where("uid", "==", user.uid)
+          );
+          const userSnapshot = await getDocs(userQuery);
+          if (!userSnapshot.empty) {
+            const userData = userSnapshot.docs[0].data();
+            setUserData(userData);
+            setIsAdmin(userData.role === 'admin' || userData.role === 'Admin');
+          }
+        }
+      } catch (error) {
+        console.error("Error loading data from Firestore:", error);
+      }
+    };
 
-  const invoiceRef = collection(db, "invoices"); 
-  const user = auth.currentUser;
+    fetchData();
+  }, []);
 
-  // Add a new blank category/amount row
-  const handleAdd = () => {
-    if (extras.length !== confirmedItems.length) {
-      alert("Please confirm your current extra before adding another.");
+  // lock previous months/years for non-admins
+  const isMonthDisabled = (monthNumber) => {
+    if (isAdmin) return false;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+
+    // Any month in a past year is locked
+    if (invoiceYear < currentYear) return true;
+    // In current year, months before current month are locked
+    if (invoiceYear === currentYear && monthNumber < currentMonth) return true;
+
+    return false; // future months and current month remain selectable
+  };
+  const isYearDisabled = (yearNumber) => {
+    if (isAdmin) return false;
+    const currentYear = new Date().getFullYear();
+    return yearNumber < currentYear; // lock/grey any previous year
+  };
+
+  const normalizeCategory = (rawCategory) => {
+    const category = rawCategory?.toUpperCase().trim();
+    const mapping = {
+      SUPPLIES: "NONPRODUCT",
+      MISC: "NONPRODUCT",
+      OFFICE: "PAPER",
+      SNACK: "FOOD",
+      BEVERAGE: "FOOD",
+      GAS: "TRAVEL"
+    };
+    if (invoiceCatList.includes(category)) return category;
+    if (mapping[category]) return mapping[category];
+    return "";
+  };
+
+  const handleReadFromUpload = async () => {
+    if (!imageUpload) {
+      alert("Please upload an image first.");
       return;
     }
-    setExtras(prev => [
-      ...prev,
-      { category: "", amount: "", confirmed: false }
-    ]);
+    const formData = new FormData();
+    formData.append("image", imageUpload);
+    setLoadingUpload(true);
+
+    try {
+      const res = await fetch("http://localhost:5140/api/invoiceread/read", {
+        method: "POST",
+        body: formData
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert("Failed to read invoice: " + JSON.stringify(data));
+        return;
+      }
+
+      setInvoiceNumber(data.invoiceNumber || "");
+      setCompanyName(data.companyName || "");
+
+      if (data.invoiceDate) {
+        const [mm, dd, yyyy] = data.invoiceDate.split("/");
+        setInvoiceMonth(parseInt(mm));
+        setInvoiceDay(parseInt(dd));
+        setInvoiceYear(parseInt(yyyy));
+      }
+
+      if (data.items && Array.isArray(data.items)) {
+        const newExtras = data.items.map((item) => ({
+          id: generateUUID(),
+          category: normalizeCategory(item.category),
+          amount: item.amount?.toFixed(2) || "",
+          confirmed: false
+        }));
+        setExtras(newExtras);
+        setConfirmedItems([]);
+      }
+
+      alert("Invoice fields auto-filled successfully!");
+    } catch (err) {
+      console.error(err);
+      alert("Error reading invoice.");
+    } finally {
+      setLoadingUpload(false);
+    }
   };
 
-  // Remove the row at index idx
-  const handleRemove = idx => {
-    // 1) Remove the input row
-    setExtras(prev => prev.filter((_, i) => i !== idx));
-    setConfirmedItems(prev => prev.filter((_, i) => i !== idx));
+  const handleAdd = () => {
+    setExtras((prev) => [...prev, { id: generateUUID(), category: "", amount: "", confirmed: false }]);
   };
 
-  // Placeholder confirm handler
-  const handleConfirm = idx => {
-    try{
-      //validate fields before adding:
-      //category:
+  const handleRemove = (idx) => {
+    const itemToRemove = extras[idx];
+    const isConfirmed = confirmedItems.some(item => item.id === itemToRemove.id);
+    
+    console.log("handleRemove - OLD extras:", extras);
+    console.log("handleRemove - OLD confirmedItems:", confirmedItems);
+    
+    if (isConfirmed) {
+      const proceed = window.confirm("This item is confirmed. Are you sure you want to remove it?");
+      if (!proceed) return;
+    }
+    
+    setExtras((prev) => {
+      const newExtras = prev.filter((_, i) => i !== idx);
+      console.log("handleRemove - NEW extras:", newExtras);
+      return newExtras;
+    });
+    setConfirmedItems((prev) => {
+      const newConfirmed = prev.filter(item => item.id !== itemToRemove.id);
+      console.log("handleRemove - NEW confirmedItems:", newConfirmed);
+      return newConfirmed;
+    });
+  };
+
+  const handleConfirm = (idx) => {
+    try {
+      console.log("handleConfirm - OLD extras:", extras);
+      console.log("handleConfirm - OLD confirmedItems:", confirmedItems);
+      
       const rowCategory = extras[idx].category;
-      if(rowCategory === ""){
-        throw new Error("Cannot Confirm: Must choose category");
-      }
-      //amount:
-      const raw = String(extras[idx].amount);     //to string
-      const str = raw.trim();                     //trim leading and ending whitespace
-      const amountRe = /^-?\d+(\.\d{1,2})?$/; 
-      if (!amountRe.test(str)) {
-        throw new Error(
-          "Cannot Confirm: Amount must be a number with at most two decimal places, no scientific notation"
-        );
-      }
-      const rowAmount = parseFloat(str);
-      //amount and category have been validated. Check if the category already exists
-      const existing = confirmedItems.find(item => item.category === rowCategory);
-      if(existing){
-        //handle warning
+      if (rowCategory === "") throw new Error("Cannot Confirm: Must choose category");
+
+      const raw = String(extras[idx].amount).trim();
+      const amountRe = /^-?\d+(\.\d{1,2})?$/;
+      if (!amountRe.test(raw)) throw new Error("Invalid amount format");
+
+      const rowAmount = parseFloat(raw);
+      const existing = confirmedItems.find((item) => item.category === rowCategory);
+      if (existing) {
         const proceed = window.confirm(
-          rowCategory + " has already been confirmed, would you like to add another " + rowCategory + " category?"
+          `${rowCategory} has already been confirmed. Add another?`
         );
-        if(proceed){
-          // add new confirmed item
-          setConfirmedItems(prev => [
-            ...prev,
-            { category: rowCategory, amount: rowAmount }
-          ]);
-          // update confirmed status on this row
-          setExtras(prev =>
-            prev.map((r, i) =>
-              i === idx
-                ? { ...r, confirmed: true }
-                : r
-            )
-          );
-          return;
-        }
-        else{
-          return;
-        }
+        if (!proceed) return;
       }
 
-      //warning handled, append item
-      setConfirmedItems(prev => [
-        ...prev,
-        { category: rowCategory, amount: rowAmount }
-      ]);
-      //mark row as confirmed
-      setExtras(prev =>
-        prev.map((r, i) =>
-          i === idx
-            ? { ...r, confirmed: true } 
-            : r
-        )
-      );
+      setConfirmedItems((prev) => {
+        const newConfirmed = [...prev, { id: extras[idx].id, category: rowCategory, amount: rowAmount }];
+        console.log("handleConfirm - NEW confirmedItems:", newConfirmed);
+        return newConfirmed;
+      });
+      setExtras((prev) => {
+        const newExtras = prev.map((r, i) => (i === idx ? { ...r, confirmed: true } : r));
+        console.log("handleConfirm - NEW extras:", newExtras);
+        return newExtras;
+      });
     } catch (error) {
-      console.error(error);
       alert("Error: " + error.message);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const proceed = window.confirm("Please double-check all entries before submitting invoice...");
-    if(!proceed){
-      console.log(confirmedItems);
+    
+    // Check if all extras are confirmed
+    const unconfirmedExtras = extras.filter(extra => !extra.confirmed);
+    if (unconfirmedExtras.length > 0) {
+      const unconfirmedList = unconfirmedExtras.map(extra => 
+        `${extra.category || 'No category'}: $${extra.amount || 'No amount'}`
+      ).join('\n');
+      
+      alert(`Please confirm or remove the following unconfirmed items before submitting:\n\n${unconfirmedList}`);
       return;
     }
+    
+    if (!window.confirm("Please double-check all entries before submitting invoice...")) return;
     try {
       await verifyInput();
-      handleUploadClick();
-      // convert confirmedItems = [{category, amount}, …]
-      // into an object like { FOOD: 24, … }
-      const newDocRef = doc(invoiceRef);
+
+      // Prepare invoice data for backend
       const invoiceFields = confirmedItems.reduce((acc, { category, amount }) => {
-        // if this category hasn’t been seen yet, start an empty array
         if (!acc[category]) acc[category] = [];
-        // push the amount into that category’s array
         acc[category].push(amount);
         return acc;
       }, {});
 
-      let invoiceDate = new Date(invoiceYear, invoiceMonth - 1, invoiceDay);
-      let submitDate = new Date();
-      let dd   = String(submitDate.getDate()).padStart(2, '0');
-      let mm   = String(submitDate.getMonth() + 1).padStart(2, '0');
-      let yyyy = submitDate.getFullYear();
-      submitDate = String(mm + "/" + dd + "/" + yyyy);
-      console.log(submitDate);
-      dd   = String(invoiceDate.getDate()).padStart(2, '0');
-      mm   = String(invoiceDate.getMonth() + 1).padStart(2, '0');
-      yyyy = invoiceDate.getFullYear();
-      invoiceDate = String(mm + "/" + dd + "/" + yyyy);
+      // Create FormData for the backend request
+      const formData = new FormData();
+      formData.append("image", imageUpload);
+      formData.append("invoice_number", invoiceNumber);
+      formData.append("company_name", companyName);
+      formData.append("invoice_day", invoiceDay.toString());
+      formData.append("invoice_month", invoiceMonth.toString());
+      formData.append("invoice_year", invoiceYear.toString());
+      formData.append("store_id", selectedStore);
+      formData.append("user_email", user.email);
+      formData.append("categories", JSON.stringify(invoiceFields));
 
-      const imageRef = ref(storage, `images/${imageUpload.name + v4()}`);
-      const snapshot = await uploadBytes(imageRef, imageUpload);
-      const url = await getDownloadURL(snapshot.ref);
+      // Submit to backend
+      const response = await fetch("http://localhost:5140/api/pac/invoices/submit", {
+        method: "POST",
+        body: formData
+      });
 
-      await setDoc(
-        newDocRef,
-        {
-          categories:    invoiceFields,
-          companyName:   companyName,
-          dateSubmitted: submitDate,
-          imageURL:      url,
-          invoiceDate:   invoiceDate,
-          invoiceNumber: invoiceNumber,
-          storeID:       selectedStore,
-          user_email:    user.email
-        },
-        { merge: true }
-      );
-  
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.detail || "Failed to submit invoice");
+      }
+
       alert("Invoice submitted successfully!");
-      // Reset everything
+      
+      // Reset form
       setInvoiceNumber("");
-      setInvoiceMonth(new Date().toLocaleString("default", { month: "long" }));
-      setInvoiceYear(new Date().getFullYear().toString());
+      setInvoiceMonth(new Date().getMonth() + 1);
+      setInvoiceYear(new Date().getFullYear());
       setExtras([]);
       setConfirmedItems([]);
       setCompanyName("");
+      setImageUpload(null);
+      
     } catch (error) {
-      console.error("Error adding invoice: ", error);
       alert("Error submitting invoice: " + error.message);
     }
   };
 
   const verifyInput = async () => {
-    if (invoiceNumber === "") {
-      return Promise.reject(new Error("Invoice Number Required"));
-    }
+    if (invoiceNumber === "") throw new Error("Invoice Number Required");
     const d = new Date(invoiceYear, invoiceMonth - 1, invoiceDay);
     if (
-      d.getFullYear()  !== invoiceYear  ||
+      d.getFullYear() !== invoiceYear ||
       d.getMonth() + 1 !== invoiceMonth ||
-      d.getDate()      !== invoiceDay
-    ) {
-      return Promise.reject(new Error("Invalid Date Selected"));
-    }
-    if(!imageUpload){
-      return Promise.reject(new Error("Image Upload Required"));
-    }
-    if(selectedStore === ""){
-      return Promise.reject(new Error("Store Selection Required"));
-    }
-    /*
-    try {
-      const docSnapShot = await getDoc(doc(db, "invoices", invoiceNumber));
-      if (docSnapShot.exists()) {
-        return Promise.reject(new Error("Invoice Number Already Exists"));
-      }
-    } catch (error) {
-      console.error("Failed querying the database", error);
-      return Promise.reject(new Error("Failed querying the database"));
-    }
-    */
+      d.getDate() !== invoiceDay
+    )
+      throw new Error("Invalid Date Selected");
+    if (!imageUpload) throw new Error("Image Upload Required");
+    if (!selectedStore) throw new Error("Store Selection Required");
   };
 
-  const handleUploadClick = async () => {
-    if (!imageUpload) {
-      alert("Please select a file before uploading.");
-      return;
-    }
-    try {
-      const imageRef = ref(storage, `images/${imageUpload.name + v4()}`);
-      const snapshot = await uploadBytes(imageRef, imageUpload);
-      const url = await getDownloadURL(snapshot.ref);
-      setImageUrls(prev => [...prev, url]);
-      // alert("Image uploaded successfully!");
-    } catch (error) {
-      console.error("Upload failed:", error);
-      alert("Upload failed, please try again.");
-    }
-  };
 
   return (
     <div className={styles.pageContainer}>
       <div className={styles.topBar}>Submit Invoice</div>
-
       <div className={styles.formContainer}>
         <form onSubmit={handleSubmit}>
-          {/* Invoice # */}
           <div className={styles.formGroup}>
             <label>Invoice #</label>
             <input
               type="text"
               placeholder="Enter Invoice Number"
               value={invoiceNumber}
-              onChange={e => setInvoiceNumber(e.target.value)}
+              onChange={(e) => setInvoiceNumber(e.target.value)}
             />
           </div>
 
-          {/* Store Number (read-only) */}
           <div className={styles.formGroup}>
             <label>Store Number</label>
             <input type="text" value={selectedStore || ""} readOnly />
           </div>
 
-          {/* Company Name */}
           <div className={styles.formGroup}>
             <label>Company Name</label>
             <input
               type="text"
               placeholder="Enter Company Name"
               value={companyName}
-              onChange={e => setCompanyName(e.target.value)}
+              onChange={(e) => setCompanyName(e.target.value)}
             />
           </div>
 
-          {/* Invoice Date */}
           <div className={styles.formGroup}>
             <label>Invoice Date</label>
             <div className={styles.inputRow}>
-              {/* Day */}
               <div className={styles.formGroup}>
                 <label>Day</label>
-                <select
-                  value={invoiceDay}
-                  onChange={e => setInvoiceDay(+e.target.value)}
-                >
-                  {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                <select value={invoiceDay} onChange={(e) => setInvoiceDay(+e.target.value)}>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
                     <option key={day} value={day}>{day}</option>
                   ))}
                 </select>
               </div>
 
-              {/* Month */}
               <div className={styles.formGroup}>
                 <label>Month</label>
                 <select
                   value={invoiceMonth}
-                  onChange={e => setInvoiceMonth(+e.target.value)}
+                  onChange={(e) => {
+                    const nextVal = +e.target.value;
+                    if (isMonthDisabled(nextVal)) return; // guard against selecting locked options
+                    setInvoiceMonth(nextVal);
+                  }}
                 >
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
-                    <option key={month} value={month}>{month}</option>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
+                    <option
+                      key={month}
+                      value={month}
+                      disabled={isMonthDisabled(month)}
+                      title={!isAdmin && isMonthDisabled(month) ? "Locked for your role" : undefined}
+                      className={!isAdmin && isMonthDisabled(month) ? styles.disabledOption : undefined}
+                    >
+                      {month}
+                    </option>
                   ))}
                 </select>
               </div>
 
-              {/* Year */}
               <div className={styles.formGroup}>
                 <label>Year</label>
                 <select
                   value={invoiceYear}
-                  onChange={e => setInvoiceYear(+e.target.value)}
+                  onChange={(e) => {
+                    const nextYear = +e.target.value;
+                    if (isYearDisabled(nextYear)) return;
+                    setInvoiceYear(nextYear);
+                    // keep your existing month safety:
+                    if (isMonthDisabled(invoiceMonth)) {
+                      const now = new Date();
+                      const safeMonth =
+                        nextYear < now.getFullYear()
+                          ? now.getMonth() + 1
+                          : invoiceMonth;
+                      if (!isMonthDisabled(safeMonth)) setInvoiceMonth(safeMonth);
+                    }
+                  }}
                 >
-                  {Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - i).map(year => (
-                    <option key={year} value={year}>{year}</option>
+                  {Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - i).map((year) => (
+                    <option
+                      key={year}
+                      value={year}
+                      disabled={isYearDisabled(year)}
+                      title={!isAdmin && isYearDisabled(year) ? "Locked for your role" : undefined}
+                      className={!isAdmin && isYearDisabled(year) ? styles.disabledOption : undefined}
+                    >
+                      {year}
+                    </option>
                   ))}
                 </select>
               </div>
+
             </div>
+            {!isAdmin && (
+              <small className={styles.helpText}>
+                Previous months and years are locked for your role. Contact an admin if you need changes.
+              </small>
+            )}
           </div>
 
-          {/* Dynamic Category & Amount Rows */}
           {extras.map((row, idx) => (
             <div key={idx} className={styles.extraRow}>
               <select
                 value={row.category}
                 disabled={row.confirmed}
-                onChange={e => {
+                onChange={(e) => {
                   const val = e.target.value;
-                  setExtras(prev =>
+                  setExtras((prev) =>
                     prev.map((r, i) => (i === idx ? { ...r, category: val, confirmed: false } : r))
                   );
                 }}
               >
                 <option value="" disabled>Choose Category</option>
-                {invoiceCatList.map(cat => (
+                {invoiceCatList.map((cat) => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
@@ -332,53 +420,42 @@ const SubmitInvoice = () => {
                   placeholder="Amount"
                   value={row.amount}
                   disabled={row.confirmed}
-                  onChange={e => {
+                  onChange={(e) => {
                     const val = e.target.value;
-                    setExtras(prev =>
-                      prev.map((r, i) => (i === idx ? { ...r, amount: val, confirmed: false } : r)) //right here
+                    setExtras((prev) =>
+                      prev.map((r, i) => (i === idx ? { ...r, amount: val, confirmed: false } : r))
                     );
                   }}
                 />
-                {row.confirmed && <span className={styles.checkmark}>✓</span>} 
+                {row.confirmed && <span className={styles.checkmark}>✓</span>}
               </div>
               {!row.confirmed && (
-              <button
-                type="button"
-                className={styles.confirmBtn}
-                onClick={() => handleConfirm(idx)}
-              >
-                Confirm
-              </button>
+                <button type="button" className={styles.confirmBtn} onClick={() => handleConfirm(idx)}>
+                  Confirm
+                </button>
               )}
-              <button
-                type="button"
-                className={styles.removeBtn}
-                onClick={() => handleRemove(idx)}
-              >
+              <button type="button" className={styles.removeBtn} onClick={() => handleRemove(idx)}>
                 Remove
               </button>
             </div>
           ))}
 
-          {/* + Add New Amount */}
           <div className={styles.formGroup}>
-            <button
-              type="button"
-              className={styles.addBtn}
-              onClick={handleAdd}
-            >
+            <button type="button" className={styles.addBtn} onClick={handleAdd}>
               + Add New Amount
             </button>
           </div>
 
-          {/* File & Submit */}
           <div className={styles.buttonRow}>
-            <input
-              type="file"
-              onChange={e => setImageUpload(e.target.files[0])}
-            />
-            <button type="submit" className={styles.submitBtn}>
-              Submit Invoice
+            <input type="file" onChange={(e) => setImageUpload(e.target.files[0])} />
+            <button type="submit" className={styles.submitBtn}>Submit Invoice</button>
+            <button
+              type="button"
+              className={styles.readUploadBtn}
+              onClick={handleReadFromUpload}
+              disabled={loadingUpload}
+            >
+              {loadingUpload ? "Reading..." : "Read from Upload"}
             </button>
           </div>
         </form>
