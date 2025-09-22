@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
 import { db, auth } from "../../config/firebase-config";
-//import { collection, addDoc } from "firebase/firestore";
-// Added two more firestore helpers below
 import { collection, addDoc, query, where, orderBy, limit, getDocs, serverTimestamp, doc, getDoc, setDoc } from "firebase/firestore";
 import { Box, Container, Grid2 as Grid, InputLabel, Tabs, Tab, Table, TableHead, TableRow, TableCell, TableBody, Paper, TableContainer, TextField, Button, Select, MenuItem, InputAdornment, FormControl, FormLabel } from "@mui/material";
 import { StoreContext } from "../../context/storeContext";
@@ -95,9 +93,7 @@ const PAC = () => {
   const [endingOpsSupplies, setEndingOpsSupplies] = useState(0);
 
   const [userData, setUserData] = useState(null);
-  const [userRole, setUserRole] = useState("User");
-  const isAdmin =
-    String((userData?.role ?? userRole) || "").toLowerCase() === "admin";
+
 
   const user = auth.currentUser;
 
@@ -116,6 +112,21 @@ const PAC = () => {
   useEffect(() => {
     document.title = "PAC Pro - PAC";
   }, []);
+
+  useEffect(() => {
+  setProjections(prev =>
+    prev.map(expense => ({
+      ...expense,
+      historicalDollar: "-",
+      historicalPercent: "-"
+    }))
+  );
+
+  // also reset histMonth/year selection if you want
+  setHistMonth(null);
+  setHistYear(null);
+  setShouldLoadHist(false);
+}, [month, year]);
 
   // Fetch user data from Firestore
   useEffect(() => {
@@ -211,242 +222,54 @@ const PAC = () => {
   } 
 }, [selectedStore, histMonth, histYear, tabIndex, shouldLoadHist]);
 
-  // Fetch user data from Firestore
-  // useEffect(() => {
-  //   const fetchData = async () => {
-  //     try {
-  //       // Get the current user from Firebase Auth
-  //       const user = auth.currentUser;
-  //       if (user) {
-  //         // Query the "users" collection for the current user's data
-  //         const userQuery = query(
-  //           collection(db, "users"),
-  //           where("uid", "==", user.uid)
-  //         );
-  //         const userSnapshot = await getDocs(userQuery);
-  //         if (!userSnapshot.empty) {
-  //           setUserData(userSnapshot.docs[0].data());
-  //         }
-  //       }
-  //     } catch (error) {
-  //       console.error("Error loading data from Firestore:", error);
-  //     }
-  //   };
 
-  //   fetchData();
-  // }, []);
-
-  // lock previous months/years for non-admins
-  const isMonthDisabled = (monthNumber, selectedYear) => {
-    if (isAdmin) return false;
-
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonthIdx = now.getMonth();
-    const targetIdx = months.indexOf(monthNumber);
-
-    if (targetIdx === -1) return false;
-
-    if (selectedYear < currentYear) return true;
-    if (selectedYear > currentYear) return false;
-    return targetIdx < currentMonthIdx;
-  };
-  const isYearDisabled = (yearNumber) => {
-    if (isAdmin) return false;
-    const currentYear = new Date().getFullYear();
-    return yearNumber < currentYear; // lock/grey any previous year
-  };
-
-
-  // useEffect(() => {
-  //   const historicalData = getHistoricalData();
-  //   setProjections(savedData[month] || expenseList.map(expense => {
-  //     const historicalEntry = historicalData.find(e => e.name === expense) || {};
-  //     return {
-  //       name: expense,
-  //       projectedDollar: "",
-  //       projectedPercent: "",
-  //       estimatedDollar: historicalEntry.historicalDollar || "-",
-  //       estimatedPercent: historicalEntry.historicalPercent || "-",
-  //       historicalDollar: historicalEntry.historicalDollar || "-",
-  //       historicalPercent: historicalEntry.historicalPercent || "-"
-  //     };
-  //   }));
-  // }, [month, savedData]);
-
-  // fetch latest generate doc for selected month and year
 useEffect(() => {
   const loadLatestForPeriod = async () => {
+    if (!selectedStore) return;
+
     try {
-      const monthIndex = months.indexOf(month);
-      const period = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+      const monthIndex = months.indexOf(month); // 0 = January
+      const docId = `${selectedStore}_${year}${String(monthIndex + 1).padStart(2, "0")}`;
 
-      const q = query(pacGenRef, where("Period", "==", period));
-      const snap = await getDocs(q);
+      console.log("Fetching projections doc:", docId);
 
-      if (snap.empty) return; // ⬅ don’t reset to empty rows
+      const ref = doc(db, "pac_projections", docId);
+      const snap = await getDoc(ref);
 
-      let latestDoc = null;
-      let latestTs = -Infinity;
-      snap.forEach(d => {
-        const data = d.data();
-        const ts = data.createdAt?.toMillis?.() ?? 0;
-        if (ts > latestTs) {
-          latestTs = ts;
-          latestDoc = data;
-        }
-      });
-      if (!latestDoc) return;
+      if (!snap.exists()) {
+        console.log("No projections found for", docId);
+        return;
+      }
 
-      // Instead of resetting, start with current projections
-      setProjections(prev => {
-        const updated = [...prev]; // clone
+      const latest = snap.data();
+      console.log("Projections for", docId, latest);
 
-        const setProjDollar = (name, value) => {
-          const r = updated.find(x => x.name === name);
-          if (r) {
-            const num = Number(value);
-            r.projectedDollar = Number.isFinite(num) ? num.toFixed(2) : "";
-          }
-        };
-        const setProjPct = (name, value) => {
-          const r = updated.find(x => x.name === name);
-          if (r) {
-            const num = Number(value);
-            r.projectedPercent = Number.isFinite(num) ? String(num) : "";
-          }
-        };
-
-        // === fill in Generate values, but leave historical untouched ===
-        setProjDollar("Sales", latestDoc.ProductNetSales);
-        setProjDollar("All Net Sales", latestDoc.AllNetSales);
-        setProjDollar("Advertising", latestDoc.Advertising);
-
-        setProjPct("Crew Labor", latestDoc.CrewLabor);
-        const mgmtPct = Math.max((Number(latestDoc.TotalLabor) || 0) - (Number(latestDoc.CrewLabor) || 0), 0);
-        setProjPct("Management Labor", mgmtPct);
-        setProjDollar("Payroll Tax", latestDoc.PayrollTax);
-
-        setProjPct("Base Food", latestDoc.BaseFood);
-        setProjPct("Condiment", latestDoc.Condiment);
-        const totalWastePct = (Number(latestDoc.CompleteWaste) || 0) + (Number(latestDoc.RawWaste) || 0);
-        setProjPct("Total Waste", totalWastePct);
-
-        return updated;
-      });
+      // Map Firestore fields → your table rows
+      setProjections(prev =>
+        prev.map(expense => {
+          const entry = latest.projections?.find(p => p.name === expense.name) || {};
+          return {
+            ...expense,
+            projectedDollar: entry.projectedDollar || "",
+            projectedPercent: entry.projectedPercent || "",
+            estimatedDollar: entry.estimatedDollar || "-",
+            estimatedPercent: entry.estimatedPercent || "-",
+            historicalDollar: entry.historicalDollar || "-",
+            historicalPercent: entry.historicalPercent || "-"
+          };
+        })
+      );
     } catch (err) {
-      console.error("Failed to load pacGen for period:", err);
+      console.error("Failed to load pac_projections for period:", err);
     }
   };
 
-  if (tabIndex === 0) loadLatestForPeriod();
-}, [month, year, tabIndex]);
+  if (tabIndex === 0) {
+    loadLatestForPeriod();
+  }
+}, [month, year, tabIndex, selectedStore]);
 
 
-  // fetch latest generate doc for selected month and year
-  useEffect(() => {
-    const loadLatestForPeriod = async () => {
-      try {
-        // Build "YYYY-MM" period string
-        const monthIndex = [
-          "January","February","March","April","May","June",
-          "July","August","September","October","November","December"
-        ].indexOf(month);
-        const period = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-
-        // 👇 No orderBy, no limit — avoids composite index
-        const q = query(
-          pacGenRef,
-          where("Period", "==", period)
-        );
-
-        const snap = await getDocs(q);
-        if (snap.empty) {
-          setProjections(makeEmptyProjectionRows());
-          return;
-        }
-
-        // Pick the doc with the latest createdAt (or fallback)
-        let latestDoc = null;
-        let latestTs = -Infinity;
-
-        snap.forEach(d => {
-          const data = d.data();
-          // createdAt is a Firestore Timestamp; guard null when just written
-          const ts = data.createdAt?.toMillis
-            ? data.createdAt.toMillis()
-            : (typeof data.createdAt === "number" ? data.createdAt : 0);
-          if (ts > latestTs) {
-            latestTs = ts;
-            latestDoc = data;
-          }
-        });
-
-        if (!latestDoc) {
-          setProjections(makeEmptyProjectionRows());
-          return;
-        }
-
-        const data = latestDoc;
-        
-
-        const rows = makeEmptyProjectionRows();
-
-        // Helpers with safe names
-        const setProjDollar = (name, value) => {
-          const r = rows.find(x => x.name === name);
-          if (!r) return;
-          const num = Number(value);
-          r.projectedDollar = Number.isFinite(num) ? num.toFixed(2) : "";
-        };
-
-        const setProjPct = (name, value) => {
-          const r = rows.find(x => x.name === name);
-          if (!r) return;
-          const num = Number(value);
-          r.projectedPercent = Number.isFinite(num) ? String(num) : "";
-        };
-
-        // === Sales ===
-        setProjDollar("Product Sales", data.ProductNetSales);
-        setProjDollar("All Net Sales", data.AllNetSales);
-        setProjDollar("Advertising", data.Advertising);
-
-        // === Labor ===
-        setProjPct("Crew Labor", data.CrewLabor);
-        const mgmtPct = Math.max((Number(data.TotalLabor) || 0) - (Number(data.CrewLabor) || 0), 0);
-        setProjPct("Management Labor", mgmtPct);
-        setProjDollar("Payroll Tax", data.PayrollTax);
-
-        // === Food & Paper ===
-        setProjPct("Base Food", data.BaseFood);
-        setProjPct("Condiment", data.Condiment);
-        const totalWastePct = (Number(data.CompleteWaste) || 0) + (Number(data.RawWaste) || 0);
-        setProjPct("Total Waste", totalWastePct);
-
-        // Recompute Estimated columns
-        const hist = getHistoricalData();
-        rows.forEach((row, i) => {
-          const h = hist.find(e => e.name === row.name) || {};
-          const hDollar = parseFloat(h.historicalDollar) || 0;
-          const hPct = parseFloat(String(h.historicalPercent || "").replace("%","")) || 0;
-          const pDollar = parseFloat(row.projectedDollar) || 0;
-          const pPct = parseFloat(String(row.projectedPercent || "").replace("%","")) || 0;
-
-          rows[i].estimatedDollar = ((pDollar + hDollar) / 2).toFixed(2);
-          rows[i].estimatedPercent = ((pPct + hPct) / 2).toFixed(2);
-        });
-
-        setProjections(rows);
-      } catch (err) {
-        console.error("Failed to load pacGen for period:", err);
-        setProjections(makeEmptyProjectionRows());
-      }
-    };
-
-    // Only refresh when viewing the Projections tab
-    if (tabIndex === 0) loadLatestForPeriod();
-  }, [month, year, tabIndex]); 
 
 
   const handleInputChange = (index, field, value) => {
@@ -462,11 +285,8 @@ useEffect(() => {
       let advertisingPercent = parseFloat(newProjections.find(e => e.name === "Advertising")?.projectedPercent) || 0;
 
       newProjections.forEach((expense, idx) => {
-        // const historicalEntry = historicalData.find(e => e.name === expense.name) || {};
-        // const historicalDollar = parseFloat(historicalEntry.historicalDollar) || 0;
-        // const historicalPercent = parseFloat(historicalEntry.historicalPercent) || 0;
         const historicalDollar = parseFloat(expense.historicalDollar) || 0;
-const historicalPercent = parseFloat(expense.historicalPercent) || 0;
+        const historicalPercent = parseFloat(expense.historicalPercent) || 0;
         const projectedDollar = parseFloat(expense.projectedDollar) || 0;
         const projectedPercent = parseFloat(expense.projectedPercent) || 0;
 
@@ -487,29 +307,34 @@ const historicalPercent = parseFloat(expense.historicalPercent) || 0;
   };
 
   const handleApply = async () => {
-  if (!selectedStore) {
-    alert("No store selected");
-    return;
-  }
+    if (!selectedStore) {
+      alert("No store selected");
+      return;
+    }
 
-  // Build a document ID: store_001_202509 (for Sept 2025, example)
-  const monthIndex = months.indexOf(month); // 0–11
-  const docId = `${selectedStore}_${year}${String(monthIndex + 1).padStart(2, "0")}`;
+    // Build a document ID: store_001_202509 
+    const monthIndex = months.indexOf(month); // 0–11
+    const docId = `${selectedStore}_${year}${String(monthIndex + 1).padStart(2, "0")}`;
 
-  try {
-    await setDoc(doc(db, "pac_projections", docId), {
-      store_id: selectedStore,
-      year_month: `${year}${String(monthIndex + 1).padStart(2, "0")}`,
-      projections: projections,   // <-- save the array you built
-      updatedAt: serverTimestamp(),
-    });
+    try {
+      await setDoc(doc(db, "pac_projections", docId), {
+        store_id: selectedStore,
+        year_month: `${year}${String(monthIndex + 1).padStart(2, "0")}`,
+        projections: projections.map(p => ({
+            name: p.name,
+            projectedDollar: p.projectedDollar,
+            projectedPercent: p.projectedPercent,
+        })),
+        updatedAt: serverTimestamp(),
+      });
 
-    alert("Projections saved to Firestore!");
-  } catch (err) {
-    console.error("Error saving projections:", err);
-    alert("Failed to save projections");
-  }
+      alert("Projections saved to Firestore!");
+    } catch (err) {
+      console.error("Error saving projections:", err);
+      alert("Failed to save projections");
+    }
 };
+
 
   const getEmptyHistoricalData = () => {
     return expenseList.map(expense => ({
@@ -518,9 +343,6 @@ const historicalPercent = parseFloat(expense.historicalPercent) || 0;
       historicalPercent: "-"
     }));
   };
-  useEffect(() => {
-  console.log("shouldLoadHist changed:", shouldLoadHist);
-}, [shouldLoadHist]);
 
 const makeEmptyProjectionRows = () => {
   const historicalData = getEmptyHistoricalData();
@@ -542,22 +364,6 @@ const makeEmptyProjectionRows = () => {
   const [projections, setProjections] = useState(makeEmptyProjectionRows());
 
 
-
-  const makeEmptyProjectionRows = () => {
-    const historicalData = getHistoricalData();
-    return expenseList.map(expense => {
-      const h = historicalData.find(e => e.name === expense) || {};
-      return {
-        name: expense,
-        projectedDollar: "",
-        projectedPercent: "",
-        estimatedDollar: h.historicalDollar || "-",
-        estimatedPercent: h.historicalPercent || "-",
-        historicalDollar: h.historicalDollar || "-",
-        historicalPercent: h.historicalPercent || "-"
-      };
-    });
-  };
 
 
   const [storeNumber, setStoreNumber] = useState("Store 123"); // You might want to make this dynamic
@@ -833,16 +639,61 @@ const makeEmptyProjectionRows = () => {
           />
         </div>
       </Container>
+            <Box display="flex" justifyContent="center" sx={{ mt: 2 }}>
+            <Button variant="outlined" onClick={() => setOpenHistModal(true)}>
+              View Historical Data
+            </Button>
+          </Box>
+          
+<Dialog open={openHistModal} onClose={() => setOpenHistModal(false)}>
+  <DialogTitle>Select Historical Period</DialogTitle>
+  <DialogContent>
+    <Box display="flex" gap={2} mt={1}>
+      {/* Month Dropdown */}
+      <Select
+        value={histMonth}
+        onChange={(e) => setHistMonth(e.target.value)}
+        sx={{ width: 200 }}
+      >
+        {months.map((m) => (
+          <MenuItem key={m} value={m}>
+            {m}
+          </MenuItem>
+        ))}
+      </Select>
 
-      <Box display="flex" justifyContent="center" sx={{ mt: 2 }}>
-  <Button variant="outlined" onClick={() => setOpenHistModal(true)}>
-    View Historical Data
-  </Button>
-</Box>
+      {/* Year Dropdown */}
+      <Select
+        value={histYear}
+        onChange={(e) => setHistYear(e.target.value)}
+        sx={{ width: 120 }}
+      >
+        {years.map((y) => (
+          <MenuItem key={y} value={y}>
+            {y}
+          </MenuItem>
+        ))}
+      </Select>
+    </Box>
+  </DialogContent>
+
+  <DialogActions>
+    <Button onClick={() => setOpenHistModal(false)}>Cancel</Button>
+    <Button
+      variant="contained"
+      onClick={() => {
+        setOpenHistModal(false);
+        setShouldLoadHist(true);
+      }}
+    >
+      Load Data
+    </Button>
+  </DialogActions>
+</Dialog>
 
       {tabIndex === 0 && (
-  <Container sx={{ marginTop: '20px' }}>
-      {shouldLoadHist ? (
+        <Container sx={{marginTop: '20px'}}>
+          {shouldLoadHist ? (
         <Box sx={{ mb: 2 }}>
           <strong>
             Displaying Historical Data for {histMonth} {histYear}
@@ -855,37 +706,23 @@ const makeEmptyProjectionRows = () => {
           </strong>
         </Box>
       )}
-    
-
-    <TableContainer component={Paper}>
-      <Table>
-        <TableHead>
-          <TableRow sx={{ whiteSpace: 'nowrap' }}>
-            <TableCell><strong>Expense Name</strong></TableCell>
-            <TableCell><strong>Projected $</strong></TableCell>
-            <TableCell><strong>Projected %</strong></TableCell>
-            <TableCell><strong>Estimated $</strong></TableCell>
-            <TableCell><strong>Estimated %</strong></TableCell>
-            <TableCell><strong>Historical $</strong></TableCell>
-            <TableCell><strong>Historical %</strong></TableCell>
-          </TableRow>
-        </TableHead>
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow sx={{ whiteSpace: 'nowrap' }}>
+                <TableCell><strong>Expense Name</strong></TableCell>
+                <TableCell><strong>Projected $</strong></TableCell>
+                <TableCell><strong>Projected %</strong></TableCell>
+                <TableCell><strong>Estimated $</strong></TableCell>
+                <TableCell><strong>Estimated %</strong></TableCell>
+                <TableCell><strong>Historical $</strong></TableCell>
+                <TableCell><strong>Historical %</strong></TableCell>
+              </TableRow>
+            </TableHead>
             <TableBody>
               {projections.map((expense, index) => (
-                <TableRow key={expense.name} sx={{backgroundColor:
-      expense.name === "P.A.C."
-        ? (isPacPositive() ? "#e8f5e9" : "#ffebee") // green or red
-        : getCategoryColor(getCategory(expense.name))}}>
-                  <TableCell
-                    sx={{
-                      fontWeight: expense.name === "P.A.C." ? "bold" : "normal",
-                      color: expense.name === "P.A.C."
-                        ? (isPacPositive() ? "green" : "red")
-                        : "inherit"
-                    }}
-                  >
-                    {expense.name}
-                  </TableCell>
+                <TableRow key={expense.name} sx={{backgroundColor: getCategoryColor(getCategory(expense.name))}}>
+                  <TableCell>{expense.name}</TableCell>
                   <TableCell> {/*Textfield for Projected $*/}
                     {hasUserInputAmountField.includes(expense.name) 
                       ? <TextField size="small" variant="outlined" sx={{width: '150px', backgroundColor: '#ffffff'}}
@@ -893,6 +730,23 @@ const makeEmptyProjectionRows = () => {
                           value={expense.projectedDollar || "0.00"} 
                           onChange={(e) => handleInputChange(index, "projectedDollar", e.target.value)} />
                       : <item>${expense.projectedDollar || "0.00"}</item>}
+                  </TableCell>
+                  <TableCell> {/*Textfield for Projected %*/}
+                    <FormControl>
+                      {hasUserInputedPercentageField.includes(expense.name)
+                      ?  <TextField size="small" variant="outlined" sx={{width: '125px', backgroundColor: '#ffffff'}}
+                          slotProps={{input: { endAdornment: <InputAdornment position="end">%</InputAdornment>}}}
+                          value={expense.projectedPercent || "0"} 
+                          onChange={(e) => handleInputChange(index, "projectedPercent", e.target.value)} />
+                      : <item>{expense.projectedPercent || "0"}%</item>}  
+                      <FormLabel sx={{ fontSize: '0.75rem' }}>{getLabel(expense.name)}</FormLabel>
+                    </FormControl>  
+                  </TableCell>
+                  <TableCell> {/*Output for Estimated $*/}
+                    {"$" + expense.estimatedDollar}
+                  </TableCell>
+                  <TableCell> {/*Output for Estimated %*/}
+                    {expense.estimatedPercent + "%"}
                   </TableCell>
                   <TableCell> {/*Output for Historical $*/}
                     {"$" + expense.historicalDollar}
@@ -908,10 +762,7 @@ const makeEmptyProjectionRows = () => {
 
         {/*The Apply button*/}
         <Box textAlign='center' sx={{ paddingTop: '10px', paddingBottom: '10px' }}>
-          {/* <Button variant="contained" size="large" onClick={() => setSavedData(prevData => ({ ...prevData, [month]: [...projections] }))}>Apply</Button> */}
-          <Button variant="contained" size="large" onClick={handleApply}>
-            Apply
-          </Button>
+          <Button variant="contained" size="large" onClick={handleApply}>Apply</Button>
         </Box>
 
         </Container>
@@ -1079,7 +930,6 @@ const makeEmptyProjectionRows = () => {
               />
             </div>
           </div>
-    
 
           {/* Ending Inventory */}
           <div className="pac-section ending-inventory-section">
@@ -1156,51 +1006,6 @@ const makeEmptyProjectionRows = () => {
         />
         </Container>
       )} {/* end of Actual page */}
-
-
-      <Dialog open={openHistModal} onClose={() => setOpenHistModal(false)}>
-  <DialogTitle>Select Historical Period</DialogTitle>
-  <DialogContent>
-    <Box display="flex" gap={2} mt={1}>
-      {/* Month Dropdown */}
-      <Select
-        value={histMonth}
-        onChange={(e) => setHistMonth(e.target.value)}
-        sx={{ width: 200 }}
-      >
-        {months.map((m) => (
-          <MenuItem key={m} value={m}>{m}</MenuItem>
-        ))}
-      </Select>
-
-      {/* Year Dropdown */}
-      <Select
-        value={histYear}
-        onChange={(e) => setHistYear(e.target.value)}
-        sx={{ width: 120 }}
-      >
-        {years.map((y) => (
-          <MenuItem key={y} value={y}>{y}</MenuItem>
-        ))}
-      </Select>
-    </Box>
-  </DialogContent>
-
-  <DialogActions>
-    <Button onClick={() => setOpenHistModal(false)}>Cancel</Button>
-    <Button
-      variant="contained"
-      onClick={() => {
-        setOpenHistModal(false);
-        setShouldLoadHist(true);
-
-      }}
-    >
-      Load Data
-    </Button>
-  </DialogActions>
-</Dialog>
-
     </Box>
   );
 };
