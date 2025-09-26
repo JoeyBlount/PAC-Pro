@@ -156,3 +156,96 @@
   justify-content: flex-start;
   width: auto;
 }
+
+/* --- Reports Dropdown Styles --- */
+.reports-container {
+  position: relative;
+  width: 100%;
+}
+
+.reports-button {
+  position: relative;
+}
+
+.reports-dropdown {
+  position: fixed;
+  top: 80px;
+  left: 100px;
+  background: white;
+  border: 2px solid #0d47a1;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 280px;
+  z-index: 9999;
+  padding: 8px 0;
+  /* Make it more visible for debugging */
+  opacity: 1;
+  visibility: visible;
+}
+
+.report-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.report-item:last-child {
+  border-bottom: none;
+}
+
+.report-item:hover {
+  background-color: #f5f5f5;
+}
+
+.report-icon {
+  margin-right: 12px;
+  color: #0d47a1;
+  display: flex;
+  align-items: center;
+}
+
+.report-icon svg {
+  font-size: 20px;
+}
+
+.report-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.report-name {
+  font-weight: 500;
+  color: #333;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.report-description {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.3;
+}
+
+.report-print-icon {
+  margin-left: 8px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.report-item:hover .report-print-icon {
+  opacity: 1;
+  color: #0d47a1;
+}
+
+.report-print-icon svg {
+  font-size: 16px;
+}
+
+/* Reports dropdown positioning - simplified for debugging */

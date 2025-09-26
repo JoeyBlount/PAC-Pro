@@ -183,7 +183,8 @@ const InvoiceLogs = () => {
         locked: false,
       })
       alert("Invoice unlocked.")
-
+      
+      fetchInvoices(); // refresh from Firestore
     }catch(error) {
       console.error("Error unlocking invoice:", error);
       alert("Failed to unlock invoice.");
@@ -594,10 +595,14 @@ const InvoiceLogs = () => {
 
     return sorted.map((inv, i) => {
       const canEdit = isCurrentMonth(inv.invoiceDate) && !inv.locked;
-      
+      const isLocked = inv.locked === true; // Explicitly check for true
     
       return (
-        <tr key={i} className="invoice-row" onClick={() => handleRowClick(inv)}>
+        <tr 
+          key={i} 
+          className={`invoice-row ${isLocked ? 'locked-row' : 'unlocked-row'}`} 
+          onClick={() => handleRowClick(inv)}
+        >
           <td className="tableCell">{inv.storeID}</td>
           <td className="tableCell dateCell">
             {new Date(inv.dateSubmitted).toLocaleDateString("en-US")}
@@ -630,40 +635,38 @@ const InvoiceLogs = () => {
           {(canEdit || userRole === "Supervisor" || userRole === "Admin") && (
             <>
               <button
+                className="edit-button"
                 onClick={(e) => {
                   e.stopPropagation(); 
                   handleEdit(inv);
-                  // console.log(inv)
                 }}
               >
-                Edit
+                ✏️ Edit
               </button>
               <button
+                className="delete-button"
                 onClick={(e) => {
                   e.stopPropagation(); 
                   handleDelete(inv);
-                  
                 }}
               >
-                Delete
+                🗑️ Delete
               </button>
               <button
+                className={`lock-toggle-button ${isLocked ? 'locked' : 'unlocked'}`}
                 onClick={(e) => {
-                  console.log(e)
                   e.stopPropagation(); 
-                  lockInvoice(inv.id);  
+                  console.log('Invoice lock status:', inv.locked, 'isLocked:', isLocked);
+                  if (isLocked) {
+                    console.log('Unlocking invoice:', inv.id);
+                    unlockInvoice(inv.id);
+                  } else {
+                    console.log('Locking invoice:', inv.id);
+                    lockInvoice(inv.id);
+                  }
                 }}
               >
-                Lock
-              </button>
-              <button
-                onClick={(e) => {
-                  console.log(e)
-                  e.stopPropagation(); 
-                  unlockInvoice(inv.id);  
-                }}
-              >
-                Unlock
+                {isLocked ? '🔓 Unlock' : '🔒 Lock'}
               </button>
             </>
           )}
