@@ -111,6 +111,10 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (fetching || !selectedStore) return;
+
+    setLoadingTotals(true);
+    setLoadingBudget(true);
+    setLoadingPAC(true);
     
     fetchFromDatabase();
     setFetching(true);
@@ -132,7 +136,7 @@ const Dashboard = () => {
   monthlySalesData = [];
   monthlySalesLabels = [];
   for (let i = 0; i < 12; i ++) {
-    if (!loadingTotals) {
+    if (!loadingTotals && totalSalesData != null) {
       let point = (startYear * 100) + (startMonth); // YYYY * 100 = YYYY00 + month = YYYYMM <- Key
       fData = totalSalesData.find(item => item.key === (point.toString()));
       monthlySalesData[i] = (fData == null) ? (null) : fData.netsales;
@@ -208,7 +212,7 @@ const Dashboard = () => {
 
   var budgetDataS, budgetDataB, budgetTitle;
   budgetTitle = months[startMonth - 1] + ' ' + startYear + ' Budget and Spending';
-  if (!loadingBudget) {
+  if (!loadingBudget && budgetData != null) {
     let point = (startYear * 100) + (startMonth);
     fData = budgetData.find(item => item.key === point.toString());
     if (fData != null)
@@ -292,7 +296,7 @@ const Dashboard = () => {
   projDataValues = [];
   pacVSProjlabels = [];
   for (let i = 0; i < 3; i++) {
-    if (!loadingPAC) {
+    if (!loadingPAC && pacData != null) {
       let point = (startYear * 100) + (startMonth);
       fData = pacData.find(item => item.key === point.toString());
       pacDataValues[i] = (fData == null) ? (null) : fData.pac;
@@ -374,30 +378,27 @@ const Dashboard = () => {
         <Grid size = {6}>
           <Paper sx={{ padding: 2, minHeight: '35vh' }}>
             { /* Placeholder */ }
-            {loadingTotals
-              ? (<Skeleton variant="rectangular" animation="wave" height={'inherit'} />) 
-              : (<p />)}
           </Paper>
         </Grid>
         <Grid size = {6}>
           <Paper sx={{ padding: 2, minHeight: '35vh' }}>
             {loadingTotals 
-              ? (<Skeleton variant="rectangular" animation="wave" height={'inherit'} />) 
-              : (<MonthlySalesChart />)}
+              ? (<Skeleton variant="rectangular" animation="wave" height={'35vh'} />) 
+              : ((totalSalesData != null) ? <MonthlySalesChart /> : <p>ERROR: Unable to load data for chart.</p> )}
           </Paper>
         </Grid>
         <Grid size = {6}>
           <Paper sx={{ padding: 2, minHeight: '35vh' }}>
-            {loading 
-              ? (<Skeleton variant="rectangular" animation="wave" height={'inherit'} />) 
-              : (<BudgetChart />)}
+            {loadingBudget 
+              ? (<Skeleton variant="rectangular" animation="wave" height={'35vh'} />) 
+              : ((budgetData != null) ? <BudgetChart /> : <p>ERROR: Unable to load data for chart.</p>)}
           </Paper>
         </Grid>
         <Grid size = {6}>
           <Paper sx={{ padding: 2, minHeight: '35vh' }}>
-            {loading 
-              ? (<Skeleton variant="rectangular" animation="wave" height={'inherit'} />) 
-              : (<PacVSProjectedChart />)}
+            {loadingPAC 
+              ? (<Skeleton variant="rectangular" animation="wave" height={'35vh'} />) 
+              : ((pacData != null) ? <PacVSProjectedChart /> : <p>ERROR: Unable to load data for chart.</p>)}
           </Paper>
         </Grid>
       </Grid>
