@@ -1,22 +1,21 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { Box, Container, Grid2 as Grid, Paper, Skeleton } from "@mui/material";
 import { Bar, Line } from "react-chartjs-2";
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, BarElement, LineElement, Title, Tooltip, Legend } from "chart.js";
 import './dashboard.css';
 import { auth } from "../../config/firebase-config";
-import Notepad from "./notepad";
-//import { StoreContext } from "../../context/storeContext"; // Save for future
+import { StoreContext } from "../../context/storeContext"; // Save for future
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, BarElement, LineElement, Title, Tooltip, Legend); 
 
-const months = [ 'Jan.', 'Feb.', 'Mar.', 'Apr.', 'May.', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.' ];
+const months = [ 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ];
 
 const Dashboard = () => {
   React.useEffect(() => {
     document.title = "PAC Pro - Home";
   }, []); // Used to change the title.
 
-  //const { selectedStore } = useContext(StoreContext);  // Save for future
+  const { selectedStore } = useContext(StoreContext);  // Save for future
   const user = auth.currentUser;
 
   if (user) {
@@ -25,10 +24,19 @@ const Dashboard = () => {
     console.log("Error no user logged in")
   }
 
+  const [fetching, setFetching] = useState(false);
+
   const [jdata, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingTotals, setLoadingTotals] = useState(true);
+  const [loadingBudget, setLoadingBudget] = useState(true);
+  const [loadingPAC, setLoadingPAC] = useState(true);
 
-  // Fetch .json file data. In the future, this would be replaced with fetching from database
+  const [totalSalesData, setTotalSalesData] = useState(null);
+  const [budgetData, setBudgetData] = useState(null);
+  const [pacData, setPACData] = useState(null);
+
+  // Fetch .json file data.
   useEffect(() => {
     const fetchData = async () => { 
       try {
@@ -46,6 +54,74 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
+  // Fetch from database
+  const fetchFromDatabase = async () => {
+    const yearMonth = `${todayDate.getFullYear()}${String(todayDate.getMonth()).padStart(2, "0")}`;
+
+    // Convert store ID to proper format (e.g., "001" -> "store_001")
+    const sID = selectedStore || "store_001";
+    const formattedStoreId = sID.startsWith("store_")
+      ? sID
+      : `store_${sID.padStart(3, "0")}`;
+
+    try {
+      const response = await fetch(
+        `http://localhost:5140/api/pac/info/sales/${formattedStoreId}/${yearMonth}`
+      );
+      if (response.ok) {
+        const jsonData = await response.json();
+        setTotalSalesData(jsonData.totalsales);
+      }
+    } catch (error) {
+      console.warn(`Error fetching totalSales: ${error.message}`);
+    } finally {
+      setLoadingTotals(false);
+    }
+
+    try {
+      const response = await fetch(
+        `http://localhost:5140/api/pac/info/budget/${formattedStoreId}/${yearMonth}`
+      );
+      if (response.ok) {
+        const jsonData = await response.json();
+        setBudgetData(jsonData.budgetspending);
+      }
+    } catch (error) {
+      console.warn(`Error fetching totalSales: ${error.message}`);
+    } finally {
+      setLoadingBudget(false);
+    }
+
+    try {
+      const response = await fetch(
+        `http://localhost:5140/api/pac/info/pac/${formattedStoreId}/${yearMonth}`
+      );
+      if (response.ok) {
+        const jsonData = await response.json();
+        setPACData(jsonData.pacprojections);
+      }
+    } catch (error) {
+      console.warn(`Error fetching totalSales: ${error.message}`);
+    } finally {
+      setLoadingPAC(false);
+    }
+
+    setFetching(false);
+  };
+
+  useEffect(() => {
+    if (fetching || !selectedStore) return;
+    
+    fetchFromDatabase();
+    setFetching(true);
+
+    const timer = setTimeout(() => {
+      setFetching(false);
+    }, 1000);
+
+    return () => clearTimeout(timer);    
+  }, [selectedStore]);
+
   var startMonth, startYear, fData;
 
   const todayDate = new Date();
@@ -56,15 +132,16 @@ const Dashboard = () => {
   monthlySalesData = [];
   monthlySalesLabels = [];
   for (let i = 0; i < 12; i ++) {
-    if (!loading) {
-      let point = (startYear * 100) + (startMonth);
-      fData = jdata.find(item => item.date === (point));
-      monthlySalesData[i] = (fData == null) ? (null) : fData.totalSales;
+    if (!loadingTotals) {
+      let point = (startYear * 100) + (startMonth); // YYYY * 100 = YYYY00 + month = YYYYMM <- Key
+      fData = totalSalesData.find(item => item.key === (point.toString()));
+      monthlySalesData[i] = (fData == null) ? (null) : fData.netsales;
     } else {
       monthlySalesData[i] = 1;
     }
 
-    monthlySalesLabels[i] = months[startMonth - 1] + " " + (startYear).toString().substring(2);
+    const includeYear = (startMonth == 12 || startMonth == 1) ? "yes" : "no";
+    monthlySalesLabels[i] =  months[startMonth - 1] + ((includeYear == "yes") ? " '" + (startYear).toString().substring(2) : "");
     startMonth += 1;
     if (startMonth > 12)
     {
@@ -131,13 +208,13 @@ const Dashboard = () => {
 
   var budgetDataS, budgetDataB, budgetTitle;
   budgetTitle = months[startMonth - 1] + ' ' + startYear + ' Budget and Spending';
-  if (!loading) {
+  if (!loadingBudget) {
     let point = (startYear * 100) + (startMonth);
-    fData = jdata.find(item => item.date === point);
+    fData = budgetData.find(item => item.key === point.toString());
     if (fData != null)
     {
-      budgetDataS = [fData.foodAndPaperCosts, fData.laborCosts, fData.purchaseCosts];
-      budgetDataB = [fData.foodAndPaperBudget, fData.laborBudget, fData.purchaseBudget];
+      budgetDataS = [fData.foodpaperspending, fData.laborspending, fData.purchasespending];
+      budgetDataB = [fData.foodpaperbudget, fData.laborbudget, fData.purchasebudget];
     } else {
       budgetDataS = [null, null, null];
       budgetDataB = [null, null, null];
@@ -152,16 +229,16 @@ const Dashboard = () => {
       labels: ['Food & Paper', 'Labor', 'Purchases'],
       datasets: [
         {
-          label: 'Spent',
-          data: budgetDataS,
-          borderColor: 'rgba(233, 40, 40, 0.9)',
-          backgroundColor: 'rgba(233, 40, 40, 0.8)',
-        },
-        {
           label: 'Budget',
           data: budgetDataB,
           borderColor: 'rgba(40, 59, 233, 0.9)',
           backgroundColor: 'rgba(40, 59, 233, 0.8)',
+        },
+        {
+          label: 'Spent',
+          data: budgetDataS,
+          borderColor: 'rgba(233, 40, 40, 0.9)',
+          backgroundColor: 'rgba(233, 40, 40, 0.8)',
         }
       ],
     };
@@ -210,22 +287,22 @@ const Dashboard = () => {
     startYear -= 1;
   }
   
-  var pacData, projData, pacVSProjlabels;
-  pacData = [];
-  projData = [];
+  var pacDataValues, projDataValues, pacVSProjlabels;
+  pacDataValues = [];
+  projDataValues = [];
   pacVSProjlabels = [];
   for (let i = 0; i < 3; i++) {
-    if (!loading) {
+    if (!loadingPAC) {
       let point = (startYear * 100) + (startMonth);
-      fData = jdata.find(item => item.date === (point));
-      pacData[i] = (fData == null) ? (null) : fData.pac;
-      projData[i] = (fData == null) ? (null) : fData.projections;
+      fData = pacData.find(item => item.key === point.toString());
+      pacDataValues[i] = (fData == null) ? (null) : fData.pac;
+      projDataValues[i] = (fData == null) ? (null) : fData.projections;
     } else {
-      pacData[i] = 1;
-      projData[i] = 1;
+      pacDataValues[i] = 1;
+      projDataValues[i] = 1;
     }
 
-    pacVSProjlabels[i] = months[startMonth - 1] + " " + (startYear).toString().substring(2);
+    pacVSProjlabels[i] = months[startMonth - 1] + " " + (startYear).toString();
     
     startMonth += 1;
     if (startMonth > 12)
@@ -240,16 +317,16 @@ const Dashboard = () => {
       labels: pacVSProjlabels,
       datasets: [
         {
-          label: 'P.A.C.',
-          data: pacData,
-          borderColor: 'rgba(233, 40, 40, 0.9)',
-          backgroundColor: 'rgba(233, 40, 40, 0.8)',
-        },
-        {
           label: 'Projected',
-          data: projData,
+          data: projDataValues,
           borderColor: 'rgba(40, 59, 233, 0.9)',
           backgroundColor: 'rgba(40, 59, 233, 0.8)',
+        },
+        {
+          label: 'P.A.C.',
+          data: pacDataValues,
+          borderColor: 'rgba(233, 40, 40, 0.9)',
+          backgroundColor: 'rgba(233, 40, 40, 0.8)',
         }
       ],
     };
@@ -287,6 +364,13 @@ const Dashboard = () => {
   
     return <Bar data = {data} options = {option} />;
   };
+
+  const MapPrintout = () => {
+    if (!totalSalesData) return "null";
+    {totalSalesData.map((total) => {
+          //console.log(total); // 👈 print each item to console
+          return <p/>})}
+  };
   
   return (
     <Box sx={{flexGrow: 1}}>
@@ -296,7 +380,15 @@ const Dashboard = () => {
       <Grid container spacing={3} columns={{ xs: 6, sm: 12, md: 12}} sx={{ padding: 2, height: '75vh'}}>
         <Grid size = {6}>
           <Paper sx={{ padding: 2, minHeight: '35vh' }}>
-            {loading 
+            { /* Placeholder */ }
+            {loadingTotals
+              ? (<Skeleton variant="rectangular" animation="wave" height={'inherit'} />) 
+              : (<MapPrintout />)}
+          </Paper>
+        </Grid>
+        <Grid size = {6}>
+          <Paper sx={{ padding: 2, minHeight: '35vh' }}>
+            {loadingTotals 
               ? (<Skeleton variant="rectangular" animation="wave" height={'inherit'} />) 
               : (<MonthlySalesChart />)}
           </Paper>
@@ -313,11 +405,6 @@ const Dashboard = () => {
             {loading 
               ? (<Skeleton variant="rectangular" animation="wave" height={'inherit'} />) 
               : (<PacVSProjectedChart />)}
-          </Paper>
-        </Grid>
-        <Grid size = {6}>
-          <Paper sx={{ padding: 2, minHeight: '35vh' }}>
-            <Notepad />
           </Paper>
         </Grid>
       </Grid>
