@@ -38,7 +38,7 @@ import styles from "./pac.css";
 import { useAuth } from "../../context/AuthContext";
 import { Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material";
 
-// ---------- Backend API helper (no .env needed) ----------
+// Backend
 const BASE_URL = "http://127.0.0.1:5140";
 async function api(path, { method = "GET", body } = {}) {
   const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
@@ -219,7 +219,7 @@ const PAC = () => {
     setShouldLoadHist(false);
   }, [month, year]);
 
-  // Fetch user data (from Firestore) – unchanged
+  // Fetch user data (from Firestore)
   useEffect(() => {
     const fetchData = async () => {
       try {
