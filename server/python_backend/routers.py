@@ -362,6 +362,206 @@ async def get_pac_projections(
         raise HTTPException(status_code=500, detail=f"Error getting projections: {str(e)}")
 
 
+# ---- Dashboard Routes -----
+@router.get("/info/sales/{entity_id}/{year_month}")
+async def get_chart_years_sales(entity_id: str, year_month: str):
+    if not entity_id or not year_month:
+        raise HTTPException(
+            status_code=400, detail="Entity ID and year_month are required"
+        )
+    if not is_valid_year_month(year_month):
+        raise HTTPException(
+            status_code=400, detail="Invalid year_month format. Use YYYYMM (e.g., 202501)"
+        )
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    endDate = year_month
+
+    # Calculate Start Date
+    startYear = int(year_month[:4]) - 1
+    startMonth = int(year_month[4:]) + 1
+    
+    if startMonth < 0:
+        r = -(startMonth)
+        startMonth = 12 - r
+        startYear -= 1
+
+    startDate = f"{startYear}{startMonth:02d}"
+
+    try:
+        db = firestore.client()
+        doc_ref = db.collection("pac_projections")
+        docs = doc_ref.stream()
+
+        totalSales = []
+
+        for doc in docs:
+            doc_id = doc.id
+            storeID = doc_id[:9]
+            yyyymm = doc_id[-6:]
+            if storeID == entity_id and startDate <= yyyymm <= endDate:
+                result = doc.to_dict()
+                totalSales.append({"key": yyyymm, "netsales": result.get("product_net_sales")})
+        return {"totalsales": totalSales}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting sales info: {str(e)}")
+    
+
+@router.get("/info/budget/{entity_id}/{year_month}")
+async def get_chart_budget_and_spending(entity_id: str, year_month: str):
+    if not entity_id or not year_month:
+        raise HTTPException(
+            status_code=400, detail="Entity ID and year_month are required"
+        )
+    if not is_valid_year_month(year_month):
+        raise HTTPException(
+            status_code=400, detail="Invalid year_month format. Use YYYYMM (e.g., 202501)"
+        )
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    try:
+        db = firestore.client()
+        doc_id = f"{entity_id}_{year_month}"
+        doc_ref = db.collection("pac_projections").document(doc_id)
+        doc = doc_ref.get()
+
+        budgetSpending = []
+
+        if not doc.exists:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No projections data found for {entity_id} in {year_month}",
+            )
+
+        foodpaper = ["condiment", "food", "paper"]
+        labor = ["crew_labor_percent"]
+        purchase = ["advertising_other", "crew_relations", "linen", "maintenance_repair", "non_product", "office", "op_supplies", "outside_services", "promotion", "small_equipment", "training", "travel", "utilities"]
+
+        foodpaperbudget = 0
+        foodpaperspending = 0
+        laborbudget = 0
+        laborspending = 0
+        purchasebudget = 0
+        purchasespending = 0
+
+        result = doc.to_dict()
+
+        ## Spending cacluation.
+        ## Will need to be redone to reflect actual calculation
+        for i in foodpaper:
+            data = (result.get("purchases", {})).get(i)
+            if data is not None:
+                foodpaperspending = foodpaperspending + data
+            #else:
+                # print("ERROR: Unknown database field", doc_id + ".purchases." + i) # Uncomment for debug
+
+        for i in purchase:
+            data = (result.get("purchases", {})).get(i)
+            if data is not None:
+                purchasespending = purchasespending + (result.get("purchases", {})).get(i)
+            #else:
+                # print("ERROR: Unknown database field", doc_id + ".purchases." + i) # Uncomment for debug
+
+        laborspending = 10000 
+
+        ## Budget cacluation 
+        ## To be added. Temp using spending values.
+
+        foodpaperbudget = foodpaperspending
+        purchasebudget = purchasespending
+        laborbudget = laborspending
+        
+
+        budgetSpending.append(
+            {"key": year_month, 
+             "foodpaperbudget": foodpaperbudget, "foodpaperspending": foodpaperspending, 
+             "laborbudget": laborbudget, "laborspending": laborspending,
+             "purchasebudget": purchasebudget, "purchasespending": purchasespending})
+
+        return {"budgetspending": budgetSpending}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting sales info: {str(e)}")
+    
+
+@router.get("/info/pac/{entity_id}/{year_month}")
+async def get_chart_PAC_and_projection(entity_id: str, year_month: str):
+    if not entity_id or not year_month:
+        raise HTTPException(
+            status_code=400, detail="Entity ID and year_month are required"
+        )
+    if not is_valid_year_month(year_month):
+        raise HTTPException(
+            status_code=400, detail="Invalid year_month format. Use YYYYMM (e.g., 202501)"
+        )
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    endDate = year_month
+
+    # Calculate Start Date
+    startYear = int(year_month[:4])
+    startMonth = int(year_month[4:]) - 2
+
+    if startMonth < 0:
+        r = -(startMonth)
+        startMonth = 12 - r
+        startYear -= 1
+
+    startDate = f"{startYear}{startMonth:02d}"
+
+    try:
+        db = firestore.client()
+        doc_ref = db.collection("pac_projections")
+        docs = doc_ref.stream()
+
+        pacAndProjections = []
+
+        ## PAC Calulations.
+        ## To be added. Temp using set values.
+
+        for doc in docs:
+            pac = 0
+            projections = 0
+
+            doc_id = doc.id
+            storeID = doc_id[:9]
+            yyyymm = doc_id[-6:]
+            if storeID == entity_id and startDate <= yyyymm <= endDate:
+                result = doc.to_dict()
+                
+                if "product_net_sales" in result:
+                    pac = result.get("product_net_sales")
+
+                if "product_net_sales" in result:
+                    projections = result.get("product_net_sales")
+                    projections = projections * 1.1
+
+                pacAndProjections.append({"key": yyyymm, "pac": pac, "projections": projections })
+        return {"pacprojections": pacAndProjections}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting sales info: {str(e)}")
+
+
 # ----------------------------------
 # Compatibility router (legacy paths)
 # ----------------------------------
