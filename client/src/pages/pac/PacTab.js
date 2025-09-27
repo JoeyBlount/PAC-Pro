@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 import {
   Container,
   Table,
@@ -1018,6 +1020,7 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
       );
       if (response.ok) {
         const data = await response.json();
+        console.log("Here is projected data: ", data)
         return data;
       } else {
         console.warn(
@@ -1059,6 +1062,7 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
         );
       }
       const data = await actualResponse.json();
+      console.log("RAW PAC JSON from API:", data);
 
       // Convert snake_case from backend to camelCase for frontend
       const convertedData = {
@@ -1462,28 +1466,408 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
       </Container>
     );
   }
+  const handleExportExcel = () => {
+  if (!pacData) {
+    alert("No data available to export.");
+    return;
+  }
+const getProjectedPercent = (accountName) => {
+  if (!projectionsData) return "-";
+
+  const expenseMap = {
+    "Base Food": projectionsData.controllable_expenses?.base_food?.percent,
+    "Employee Meal": projectionsData.controllable_expenses?.employee_meal?.percent,
+    "Condiment": projectionsData.controllable_expenses?.condiment?.percent,
+    "Total Waste": projectionsData.controllable_expenses?.total_waste?.percent,
+    "Paper": projectionsData.controllable_expenses?.paper?.percent,
+    "Crew Labor": projectionsData.controllable_expenses?.crew_labor?.percent,
+    "Management Labor": projectionsData.controllable_expenses?.management_labor?.percent,
+    "Payroll Tax": projectionsData.controllable_expenses?.payroll_tax?.percent,
+    "Travel": projectionsData.controllable_expenses?.travel?.percent,
+    "Advertising": projectionsData.controllable_expenses?.advertising?.percent,
+    "Advertising Other": projectionsData.controllable_expenses?.advertising_other?.percent,
+    "Promotion": projectionsData.controllable_expenses?.promotion?.percent,
+    "Outside Services": projectionsData.controllable_expenses?.outside_services?.percent,
+    "Linen": projectionsData.controllable_expenses?.linen?.percent,
+    "Operating Supply": projectionsData.controllable_expenses?.op_supply?.percent,
+    "Maintenance & Repair": projectionsData.controllable_expenses?.maintenance_repair?.percent,
+    "Small Equipment": projectionsData.controllable_expenses?.small_equipment?.percent,
+    "Utilities": projectionsData.controllable_expenses?.utilities?.percent,
+    "Office": projectionsData.controllable_expenses?.office?.percent,
+    "Cash +/-": projectionsData.controllable_expenses?.cash_adjustments?.percent,
+    "Misc: CR/TR/D&S": projectionsData.controllable_expenses?.misc_cr_tr_ds?.percent,
+    "Total Controllable": projectionsData.total_controllable_percent,
+    "P.A.C.": projectionsData.pac_percent,
+  };
+
+  const raw = expenseMap[accountName];
+  return raw !== undefined && raw !== null ? formatPercentage(raw) : "-";
+};
+
+  // Flatten into rows for Excel
+const rows = [
+  // --- Sales ---
+  {
+    Account: "Product Net Sales",
+    "Actual $": pacData?.productNetSales ?? 0,
+    "Actual %": "-",
+    "Projected $": getProjectedValueAsNumber("Product Net Sales"),
+    "Projected %": getProjectedPercent("Product Net Sales"),
+    "Difference $":
+      (pacData?.productNetSales ?? 0) -
+      getProjectedValueAsNumber("Product Net Sales"),
+  },
+  {
+    Account: "All Net Sales",
+    "Actual $": pacData?.allNetSales ?? 0,
+    "Actual %": "-",
+    "Projected $": getProjectedValueAsNumber("All Net Sales"),
+    "Projected %": getProjectedPercent("All Net Sales"),
+    "Difference $":
+      (pacData?.allNetSales ?? 0) -
+      getProjectedValueAsNumber("All Net Sales"),
+  },
+
+  // --- Food & Paper ---
+  {
+    Account: "Base Food",
+    "Actual $": pacData?.controllableExpenses?.baseFood?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.baseFood?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.baseFood.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Base Food"),
+    "Projected %": getProjectedPercent("Base Food"),
+    "Difference $":
+      (pacData?.controllableExpenses?.baseFood?.dollars ?? 0) -
+      getProjectedValueAsNumber("Base Food"),
+  },
+  {
+    Account: "Employee Meal",
+    "Actual $": pacData?.controllableExpenses?.employeeMeal?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.employeeMeal?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.employeeMeal.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Employee Meal"),
+    "Projected %": getProjectedPercent("Employee Meal"),
+    "Difference $":
+      (pacData?.controllableExpenses?.employeeMeal?.dollars ?? 0) -
+      getProjectedValueAsNumber("Employee Meal"),
+  },
+  {
+    Account: "Condiment",
+    "Actual $": pacData?.controllableExpenses?.condiment?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.condiment?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.condiment.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Condiment"),
+    "Projected %": getProjectedPercent("Condiment"),
+    "Difference $":
+      (pacData?.controllableExpenses?.condiment?.dollars ?? 0) -
+      getProjectedValueAsNumber("Condiment"),
+  },
+  {
+    Account: "Total Waste",
+    "Actual $": pacData?.controllableExpenses?.totalWaste?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.totalWaste?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.totalWaste.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Total Waste"),
+    "Projected %": getProjectedPercent("Total Waste"),
+    "Difference $":
+      (pacData?.controllableExpenses?.totalWaste?.dollars ?? 0) -
+      getProjectedValueAsNumber("Total Waste"),
+  },
+  {
+    Account: "Paper",
+    "Actual $": pacData?.controllableExpenses?.paper?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.paper?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.paper.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Paper"),
+    "Projected %": getProjectedPercent("Paper"),
+    "Difference $":
+      (pacData?.controllableExpenses?.paper?.dollars ?? 0) -
+      getProjectedValueAsNumber("Paper"),
+  },
+
+  // --- Labor ---
+  {
+    Account: "Crew Labor",
+    "Actual $": pacData?.controllableExpenses?.crewLabor?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.crewLabor?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.crewLabor.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Crew Labor"),
+    "Projected %": getProjectedPercent("Crew Labor"),
+    "Difference $":
+      (pacData?.controllableExpenses?.crewLabor?.dollars ?? 0) -
+      getProjectedValueAsNumber("Crew Labor"),
+  },
+  {
+    Account: "Management Labor",
+    "Actual $": pacData?.controllableExpenses?.managementLabor?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.managementLabor?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.managementLabor.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Management Labor"),
+    "Projected %": getProjectedPercent("Management Labor"),
+    "Difference $":
+      (pacData?.controllableExpenses?.managementLabor?.dollars ?? 0) -
+      getProjectedValueAsNumber("Management Labor"),
+  },
+  {
+    Account: "Payroll Tax",
+    "Actual $": pacData?.controllableExpenses?.payrollTax?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.payrollTax?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.payrollTax.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Payroll Tax"),
+    "Projected %": getProjectedPercent("Payroll Tax"),
+    "Difference $":
+      (pacData?.controllableExpenses?.payrollTax?.dollars ?? 0) -
+      getProjectedValueAsNumber("Payroll Tax"),
+  },
+
+  // --- Other Expenses ---
+  {
+    Account: "Travel",
+    "Actual $": pacData?.controllableExpenses?.travel?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.travel?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.travel.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Travel"),
+    "Projected %": getProjectedPercent("Travel"),
+    "Difference $":
+      (pacData?.controllableExpenses?.travel?.dollars ?? 0) -
+      getProjectedValueAsNumber("Travel"),
+  },
+  {
+    Account: "Advertising",
+    "Actual $": pacData?.controllableExpenses?.advertising?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.advertising?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.advertising.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Advertising"),
+    "Projected %": getProjectedPercent("Advertising"),
+    "Difference $":
+      (pacData?.controllableExpenses?.advertising?.dollars ?? 0) -
+      getProjectedValueAsNumber("Advertising"),
+  },
+  {
+    Account: "Advertising Other",
+    "Actual $": pacData?.controllableExpenses?.advertisingOther?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.advertisingOther?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.advertisingOther.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Advertising Other"),
+    "Projected %": getProjectedPercent("Advertising Other"),
+    "Difference $":
+      (pacData?.controllableExpenses?.advertisingOther?.dollars ?? 0) -
+      getProjectedValueAsNumber("Advertising Other"),
+  },
+  {
+    Account: "Promotion",
+    "Actual $": pacData?.controllableExpenses?.promotion?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.promotion?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.promotion.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Promotion"),
+    "Projected %": getProjectedPercent("Promotion"),
+    "Difference $":
+      (pacData?.controllableExpenses?.promotion?.dollars ?? 0) -
+      getProjectedValueAsNumber("Promotion"),
+  },
+  {
+    Account: "Outside Services",
+    "Actual $": pacData?.controllableExpenses?.outsideServices?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.outsideServices?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.outsideServices.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Outside Services"),
+    "Projected %": getProjectedPercent("Outside Services"),
+    "Difference $":
+      (pacData?.controllableExpenses?.outsideServices?.dollars ?? 0) -
+      getProjectedValueAsNumber("Outside Services"),
+  },
+  {
+    Account: "Linen",
+    "Actual $": pacData?.controllableExpenses?.linen?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.linen?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.linen.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Linen"),
+    "Projected %": getProjectedPercent("Linen"),
+    "Difference $":
+      (pacData?.controllableExpenses?.linen?.dollars ?? 0) -
+      getProjectedValueAsNumber("Linen"),
+  },
+{
+  Account: "Operating Supply",
+  "Actual $": pacData?.controllableExpenses?.opSupply?.dollars ?? 0,
+  "Actual %": pacData?.controllableExpenses?.opSupply?.percent !== undefined
+    ? formatPercentage(pacData.controllableExpenses.opSupply.percent)
+    : "-",
+  "Projected $": getProjectedValueAsNumber("Operating Supply"),
+  "Projected %": getProjectedPercent("Operating Supply"),
+  "Difference $":
+    (pacData?.controllableExpenses?.opSupply?.dollars ?? 0) -
+    getProjectedValueAsNumber("Operating Supply"),
+},
+  {
+    Account: "Maintenance & Repair",
+    "Actual $": pacData?.controllableExpenses?.maintenanceRepair?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.maintenanceRepair?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.maintenanceRepair.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Maintenance & Repair"),
+    "Projected %": getProjectedPercent("Maintenance & Repair"),
+    "Difference $":
+      (pacData?.controllableExpenses?.maintenanceRepair?.dollars ?? 0) -
+      getProjectedValueAsNumber("Maintenance & Repair"),
+  },
+  {
+    Account: "Small Equipment",
+    "Actual $": pacData?.controllableExpenses?.smallEquipment?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.smallEquipment?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.smallEquipment.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Small Equipment"),
+    "Projected %": getProjectedPercent("Small Equipment"),
+    "Difference $":
+      (pacData?.controllableExpenses?.smallEquipment?.dollars ?? 0) -
+      getProjectedValueAsNumber("Small Equipment"),
+  },
+  {
+    Account: "Utilities",
+    "Actual $": pacData?.controllableExpenses?.utilities?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.utilities?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.utilities.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Utilities"),
+    "Projected %": getProjectedPercent("Utilities"),
+    "Difference $":
+      (pacData?.controllableExpenses?.utilities?.dollars ?? 0) -
+      getProjectedValueAsNumber("Utilities"),
+  },
+  {
+    Account: "Office",
+    "Actual $": pacData?.controllableExpenses?.office?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.office?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.office.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Office"),
+    "Projected %": getProjectedPercent("Office"),
+    "Difference $":
+      (pacData?.controllableExpenses?.office?.dollars ?? 0) -
+      getProjectedValueAsNumber("Office"),
+  },
+  {
+    Account: "Cash +/-",
+    "Actual $": pacData?.controllableExpenses?.cashAdjustments?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.cashAdjustments?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.cashAdjustments.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Cash +/-"),
+    "Projected %": getProjectedPercent("Cash +/-"),
+    "Difference $":
+      (pacData?.controllableExpenses?.cashAdjustments?.dollars ?? 0) -
+      getProjectedValueAsNumber("Cash +/-"),
+  },
+  {
+    Account: "Misc: CR/TR/D&S",
+    "Actual $": pacData?.controllableExpenses?.miscCrTrDs?.dollars ?? 0,
+    "Actual %": pacData?.controllableExpenses?.miscCrTrDs?.percent !== undefined
+      ? formatPercentage(pacData.controllableExpenses.miscCrTrDs.percent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Misc: CR/TR/D&S"),
+    "Projected %": getProjectedPercent("Misc: CR/TR/D&S"),
+    "Difference $":
+      (pacData?.controllableExpenses?.miscCrTrDs?.dollars ?? 0) -
+      getProjectedValueAsNumber("Misc: CR/TR/D&S"),
+  },
+
+  // --- Totals ---
+  {
+    Account: "Total Controllable",
+    "Actual $": pacData?.totalControllableDollars ?? 0,
+    "Actual %": pacData?.totalControllablePercent !== undefined
+      ? formatPercentage(pacData.totalControllablePercent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("Total Controllable"),
+    "Projected %": getProjectedPercent("Total Controllable"),
+    "Difference $":
+      (pacData?.totalControllableDollars ?? 0) -
+      getProjectedValueAsNumber("Total Controllable"),
+  },
+  {
+    Account: "P.A.C.",
+    "Actual $": pacData?.pacDollars ?? 0,
+    "Actual %": pacData?.pacPercent !== undefined
+      ? formatPercentage(pacData.pacPercent)
+      : "-",
+    "Projected $": getProjectedValueAsNumber("P.A.C."),
+    "Projected %": getProjectedPercent("P.A.C."),
+    "Difference $":
+      (pacData?.pacDollars ?? 0) -
+      getProjectedValueAsNumber("P.A.C."),
+  },
+];
+
+
+
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+   const currencyCols = ["B", "D", "F"]; // adjust column letters based on where these land
+  currencyCols.forEach((col) => {
+    for (let row = 2; row <= rows.length + 1; row++) { // start at row 2 (skip headers)
+      const cellRef = `${col}${row}`;
+      if (worksheet[cellRef]) {
+        worksheet[cellRef].z = "$#,##0.00"; // Excel currency format
+      }
+    }
+  });
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "PAC Report");
+
+  XLSX.writeFile(
+    workbook,
+    `pac_report_${storeId}_${year}${getMonthNumber(month)}.xlsx`
+  );
+
+  // saveAs(data, `pac_report_${storeId}_${year}${getMonthNumber(month)}.xlsx`);
+};
+
 
   return (
     <Container sx={{ mt: 2, mb: 4 }}>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 3,
-        }}
-      >
-        <Typography variant="h4" component="h1">
-          PAC Report - {storeId} - {month} {year}
-        </Typography>
-        <Button
-          variant="contained"
-          onClick={handlePrint}
-          sx={{ backgroundColor: "#1976d2", color: "white" }}
-        >
-          Print Report
-        </Button>
-      </Box>
+     <Box
+  sx={{
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    mb: 3,
+  }}
+>
+  <Typography variant="h4" component="h1">
+    PAC Report - {storeId} - {month} {year}
+  </Typography>
+  <Box>
+    <Button
+      variant="contained"
+      onClick={handlePrint}
+      sx={{ backgroundColor: "#1976d2", color: "white", mr: 2 }}
+    >
+      Print Report
+    </Button>
+    <Button
+      variant="contained"
+      onClick={handleExportExcel}
+      sx={{ backgroundColor: "#2e7d32", color: "white" }}
+    >
+      Export to Excel
+    </Button>
+  </Box>
+</Box>
 
       <TableContainer component={Paper} sx={{ mb: 3 }}>
         <Table size="small">
