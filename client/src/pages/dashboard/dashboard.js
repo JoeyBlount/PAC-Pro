@@ -364,13 +364,6 @@ const Dashboard = () => {
   
     return <Bar data = {data} options = {option} />;
   };
-
-  const MapPrintout = () => {
-    if (!totalSalesData) return "null";
-    {totalSalesData.map((total) => {
-          //console.log(total); // 👈 print each item to console
-          return <p/>})}
-  };
   
   return (
     <Box sx={{flexGrow: 1}}>
@@ -383,7 +376,7 @@ const Dashboard = () => {
             { /* Placeholder */ }
             {loadingTotals
               ? (<Skeleton variant="rectangular" animation="wave" height={'inherit'} />) 
-              : (<MapPrintout />)}
+              : (<p />)}
           </Paper>
         </Grid>
         <Grid size = {6}>
