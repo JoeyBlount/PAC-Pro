@@ -6,8 +6,6 @@ import {
 } from "@mui/material";
 import { auth } from "../../config/firebase-config";
 import { signOut, onAuthStateChanged } from "firebase/auth";
-
-// 👇 No .env — just hardcoded backend URL
 const BASE_URL = "http://127.0.0.1:5140";
 
 // Auth-aware fetch helper
