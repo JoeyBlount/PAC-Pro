@@ -10,37 +10,79 @@ import { Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material
 
 
 const expenseList = [
-  "Sales", "All Net Sales", 
+  "Product Sales", "All Net Sales",
   "Base Food", "Employee Meal", "Condiment", "Total Waste", "Paper",
   "Crew Labor", "Management Labor", "Payroll Tax", "Advertising",
   "Travel", "Adv Other", "Promotion", "Outside Services",
-  "Linen", "OP. Supply", "Maint. & Repair", "Small Equipment", "Utilities", "Office", "Cash +/-", "Misc: CR/TR/D&S",
-  "Total Controllable", "P.A.C.", "Δ P.A.C. $"
+  "Linen", "OP. Supply", "Maint. & Repair", "Small Equipment", "Utilities", "Office", "Cash +/-", "Crew Relations", "Training",
+  "Total Controllable", "P.A.C."
 ];
 
 // Add expense(s) to this array to disable projected $ text field. Case-senstive.
 const hasUserInputAmountField = [
-  "Sales", "All Net Sales", 
+  "Product Sales", "All Net Sales",
   "Travel", "Adv Other", "Outside Services",
-  "Linen", "OP. Supply", "Maint. & Repair", "Small Equipment", "Utilities", "Office", "Cash +/-", "Misc: CR/TR/D&S",
-  "Total Controllable", "P.A.C.", "Δ P.A.C. $"
+  "Linen", "OP. Supply", "Maint. & Repair", "Small Equipment", "Utilities", "Office", "Cash +/-", "Crew Relations", "Training",
+  "P.A.C.", "Promotion"
 ];
 
 // Add expense(s) to this array to disable projected % text field. Case-senstive.
 const hasUserInputedPercentageField = [
   "Base Food", "Employee Meal", "Condiment", "Total Waste", "Paper",
-  "Crew Labor", "Management Labor", "Payroll Tax", 
-  "Advertising", "Promotion"
+  "Crew Labor", "Management Labor", "Payroll Tax",
+  "Advertising"
 ];
 
 const getLabel = (key) => {
   const specialLabels = {
-    "Payroll Tax" : "% of Total Labor",
-    "Advertising" : "% of All Net Sales",
-    "Promotion" : "% of Product Sales"};
+    "Payroll Tax": "% of Total Labor",
+    "Advertising": "% of All Net Sales"
+  };
 
-  return specialLabels[key] || "";  
+  return specialLabels[key] || "";
 };
+
+
+// define the controllable window
+const CONTROLLABLE_START = "Base Food";
+const CONTROLLABLE_END = "Training";
+
+// sum helper over a field prefix: "projected" or "historical"
+const computeControllables = (rows, fieldPrefix) => {
+  const start = rows.findIndex(r => r.name === CONTROLLABLE_START);
+  const end = rows.findIndex(r => r.name === CONTROLLABLE_END);
+  if (start === -1 || end === -1 || end < start) return 0;
+
+  let sum = 0;
+  for (let i = start; i <= end; i++) {
+    sum += parseFloat(rows[i][`${fieldPrefix}Dollar`]) || 0;
+  }
+  return sum;
+};
+
+// write the totals into the "Total Controllable" row
+const applyControllables = (rows) => {
+  const idx = rows.findIndex(r => r.name === "Total Controllable");
+  if (idx === -1) return rows;
+
+  const projected = computeControllables(rows, "projected");
+  const historical = computeControllables(rows, "historical");
+
+  const next = [...rows];
+  next[idx] = {
+    ...next[idx],
+    projectedDollar: projected.toFixed(2),
+    // leave % blank per spec (or compute relative to Sales if you later want)
+    projectedPercent: "",
+    historicalDollar: historical.toFixed(2),
+    historicalPercent: "",
+    // estimates are removed in your UI, keep safe placeholder if present
+    estimatedDollar: next[idx].estimatedDollar ?? "-",
+    estimatedPercent: next[idx].estimatedPercent ?? "-"
+  };
+  return next;
+};
+
 
 const PAC = () => {
   const [tabIndex, setTabIndex] = useState(0);
@@ -50,11 +92,11 @@ const PAC = () => {
   const [savedData, setSavedData] = useState({});
 
 
-  const months = [ "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 11 }, (_, i) => currentYear - i);
   const [year, setYear] = useState(currentYear);
-  
+
   // Get selected store from context
   const { selectedStore } = useContext(StoreContext);
   const [pacGoal, setPacGoal] = useState("");
@@ -107,6 +149,33 @@ const PAC = () => {
 
   const isAdmin = (userRole || "").toLowerCase() === "admin";
 
+  const CONTROLLABLE_START = "Base Food";
+  const CONTROLLABLE_END = "Misc: CR/TR/D&S";
+
+  const computeControllables = (rows, fieldPrefix) => {
+    const s = rows.findIndex(r => r.name === CONTROLLABLE_START);
+    const e = rows.findIndex(r => r.name === CONTROLLABLE_END);
+    if (s === -1 || e === -1 || e < s) return 0;
+    let sum = 0;
+    for (let i = s; i <= e; i++) {
+      sum += parseFloat(rows[i][`${fieldPrefix}Dollar`]) || 0;
+    }
+    return sum;
+  };
+
+  const applyControllables = (rows) => {
+    const idx = rows.findIndex(r => r.name === "Total Controllable");
+    if (idx === -1) return rows;
+    const next = [...rows];
+    next[idx] = {
+      ...next[idx],
+      projectedDollar: computeControllables(rows, "projected").toFixed(2),
+      projectedPercent: "", // keep blank
+      historicalDollar: computeControllables(rows, "historical").toFixed(2),
+      historicalPercent: "",
+    };
+    return next;
+  };
 
 
   useEffect(() => {
@@ -114,19 +183,19 @@ const PAC = () => {
   }, []);
 
   useEffect(() => {
-  setProjections(prev =>
-    prev.map(expense => ({
-      ...expense,
-      historicalDollar: "-",
-      historicalPercent: "-"
-    }))
-  );
+    setProjections(prev =>
+      prev.map(expense => ({
+        ...expense,
+        historicalDollar: "-",
+        historicalPercent: "-"
+      }))
+    );
 
-  // also reset histMonth/year selection if you want
-  setHistMonth(null);
-  setHistYear(null);
-  setShouldLoadHist(false);
-}, [month, year]);
+    // also reset histMonth/year selection if you want
+    setHistMonth(null);
+    setHistYear(null);
+    setShouldLoadHist(false);
+  }, [month, year]);
 
   // Fetch user data from Firestore
   useEffect(() => {
@@ -176,101 +245,137 @@ const PAC = () => {
 
 
   useEffect(() => {
-  const loadHistoricalData = async () => {
-    if (!selectedStore) return;
+    const loadHistoricalData = async () => {
+      if (!selectedStore || !histYear || !histMonth) return;
 
-    const histMonthIdx = months.indexOf(histMonth);
-    const docId = `${selectedStore}_${histYear}${String(histMonthIdx + 1).padStart(2, "0")}`;
+      const histMonthIdx = months.indexOf(histMonth);
+      const docId = `${selectedStore}_${histYear}${String(histMonthIdx + 1).padStart(2, "0")}`;
 
-    console.log("Fetching historical doc:", docId);
-
-    const ref = doc(db, "pac_projections", docId);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) {
-      console.log("No data for", docId);
-      return;
-    }
-    const latest = snap.data();
-    console.log("latest data: ", latest);
-    
-
-    const hist = expenseList.map(name => {
-      const entry = latest.projections?.find(p => p.name === name) || {};
-      return {
-        name,
-        historicalDollar: entry.projectedDollar || "-",
-        historicalPercent: entry.projectedPercent || "-"
-      };
-    });
-
-    setProjections(prev =>
-      prev.map(expense => {
-        const h = hist.find(e => e.name === expense.name) || {};
-        return {
-          ...expense,
-          historicalDollar: h.historicalDollar || "-",
-          historicalPercent: h.historicalPercent || "-"
-        };
-      })
-    );
-  };
-
-  if (tabIndex === 0 && shouldLoadHist){
-    loadHistoricalData();
-    // setShouldLoadHist(false)
-
-  } 
-}, [selectedStore, histMonth, histYear, tabIndex, shouldLoadHist]);
-
-
-useEffect(() => {
-  const loadLatestForPeriod = async () => {
-    if (!selectedStore) return;
-
-    try {
-      const monthIndex = months.indexOf(month); // 0 = January
-      const docId = `${selectedStore}_${year}${String(monthIndex + 1).padStart(2, "0")}`;
-
-      console.log("Fetching projections doc:", docId);
+      console.log("Fetching historical doc:", docId);
 
       const ref = doc(db, "pac_projections", docId);
       const snap = await getDoc(ref);
-
       if (!snap.exists()) {
-        console.log("No projections found for", docId);
+        console.log("No data for", docId);
         return;
       }
-
       const latest = snap.data();
-      console.log("Projections for", docId, latest);
+      console.log("latest data: ", latest);
 
-      // Map Firestore fields → your table rows
+
+      const hist = expenseList.map(name => {
+        const entry = latest.projections?.find(p => p.name === name) || {};
+        return {
+          name,
+          historicalDollar: entry.projectedDollar || "-",
+          historicalPercent: entry.projectedPercent || "-"
+        };
+      });
+
       setProjections(prev =>
         prev.map(expense => {
-          const entry = latest.projections?.find(p => p.name === expense.name) || {};
+          const h = hist.find(e => e.name === expense.name) || {};
           return {
             ...expense,
-            projectedDollar: entry.projectedDollar || "",
-            projectedPercent: entry.projectedPercent || "",
-            estimatedDollar: entry.estimatedDollar || "-",
-            estimatedPercent: entry.estimatedPercent || "-",
-            historicalDollar: entry.historicalDollar || "-",
-            historicalPercent: entry.historicalPercent || "-"
+            historicalDollar: h.historicalDollar || "-",
+            historicalPercent: h.historicalPercent || "-"
           };
         })
       );
-    } catch (err) {
-      console.error("Failed to load pac_projections for period:", err);
+    };
+
+    if (tabIndex === 0 && shouldLoadHist && histMonth && histYear) {
+      loadHistoricalData();
+      // setShouldLoadHist(false)
+
     }
-  };
+  }, [selectedStore, histMonth, histYear, tabIndex, shouldLoadHist]);
 
-  if (tabIndex === 0) {
-    loadLatestForPeriod();
-  }
-}, [month, year, tabIndex, selectedStore]);
+  useEffect(() => {
+    const loadLatestForPeriod = async () => {
+      if (!selectedStore) return;
 
+      // helpers
+      const pad2 = (n) => String(n).padStart(2, "0");
+      const idFormats = (store, y, m) => ([
+        { col: "pac_projections", id: `${store}_${y}${pad2(m)}` },   // e.g. 82012_202501
+      ]);
+      const get = async (col, id) => getDoc(doc(db, col, id));
 
+      const mIdx = months.indexOf(month); // 0..11
+      const currY = year;
+      const currM = mIdx + 1;
 
+      // prev month calc
+      const prevDate = new Date(currY, mIdx - 1, 1);
+      const prevY = prevDate.getFullYear();
+      const prevM = prevDate.getMonth() + 1;
+
+      const normalizeName = (name) => {
+        if (!name) return name;
+        const map = {
+          "Sales": "Product Sales",           
+          "Misc: CR/TR/D&S": "Misc: CR/TR/D&S",
+        };
+        return map[name] || name;
+      };
+
+      const SKIP = new Set(["Total Controllable", "P.A.C."]);
+
+      const applyFromDoc = (data, tag) => {
+        const rows = Array.isArray(data?.projections) ? data.projections : [];
+        console.log(`[PAC] applying ${rows.length} projections from ${tag}`);
+        setProjections(prev =>
+          prev.map(row => {
+            if (SKIP.has(row.name)) return row;
+            const match = rows.find(p => normalizeName(p.name) === row.name);
+            if (!match) return row;
+            return {
+              ...row,
+              projectedDollar: match.projectedDollar ?? row.projectedDollar ?? "",
+              projectedPercent: match.projectedPercent ?? row.projectedPercent ?? "",
+            };
+          })
+        );
+      };
+
+      // 1) Try current month in both places
+      for (const f of idFormats(selectedStore, currY, currM)) {
+        const snap = await get(f.col, f.id);
+        if (snap.exists()) {
+          const data = snap.data();
+          const has = Array.isArray(data?.projections) && data.projections.length > 0;
+          console.log("[PAC] found current:", f.col, f.id, "has projections:", has);
+          if (has) {
+            applyFromDoc(data, `current ${f.col}/${f.id}`);
+            return;
+          }
+        } else {
+          console.log("[PAC] no current:", f.col, f.id);
+        }
+      }
+
+      // 2) Seed from previous month in both places
+      for (const f of idFormats(selectedStore, prevY, prevM)) {
+        const snap = await get(f.col, f.id);
+        if (snap.exists()) {
+          const data = snap.data();
+          const has = Array.isArray(data?.projections) && data.projections.length > 0;
+          console.log("[PAC] found previous:", f.col, f.id, "has projections:", has);
+          if (has) {
+            applyFromDoc(data, `previous ${f.col}/${f.id}`);
+            return;
+          }
+        } else {
+          console.log("[PAC] no previous:", f.col, f.id);
+        }
+      }
+
+      console.log("[PAC] nothing to load/seed");
+    };
+
+    if (tabIndex === 0) loadLatestForPeriod();
+  }, [month, year, tabIndex, selectedStore, months]);
 
   const handleInputChange = (index, field, value) => {
     setProjections(prevProjections => {
@@ -317,13 +422,13 @@ useEffect(() => {
     const docId = `${selectedStore}_${year}${String(monthIndex + 1).padStart(2, "0")}`;
 
     try {
-      await setDoc(doc(db, "pac_projections", docId), {
+      await setDoc(doc(db, "pac-projections", docId), {
         store_id: selectedStore,
         year_month: `${year}${String(monthIndex + 1).padStart(2, "0")}`,
         projections: projections.map(p => ({
-            name: p.name,
-            projectedDollar: p.projectedDollar,
-            projectedPercent: p.projectedPercent,
+          name: p.name,
+          projectedDollar: p.projectedDollar,
+          projectedPercent: p.projectedPercent,
         })),
         updatedAt: serverTimestamp(),
       });
@@ -333,7 +438,7 @@ useEffect(() => {
       console.error("Error saving projections:", err);
       alert("Failed to save projections");
     }
-};
+  };
 
 
   const getEmptyHistoricalData = () => {
@@ -344,21 +449,21 @@ useEffect(() => {
     }));
   };
 
-const makeEmptyProjectionRows = () => {
-  const historicalData = getEmptyHistoricalData();
-  return expenseList.map(expense => {
-    const h = historicalData.find(e => e.name === expense) || {};
-    return {
-      name: expense,
-      projectedDollar: "",
-      projectedPercent: "",
-      estimatedDollar: h.historicalDollar || "-",
-      estimatedPercent: h.historicalPercent || "-",
-      historicalDollar: h.historicalDollar || "-",
-      historicalPercent: h.historicalPercent || "-"
-    };
-  });
-};
+  const makeEmptyProjectionRows = () => {
+    const historicalData = getEmptyHistoricalData();
+    return expenseList.map(expense => {
+      const h = historicalData.find(e => e.name === expense) || {};
+      return {
+        name: expense,
+        projectedDollar: 0,
+        projectedPercent: 0,
+        estimatedDollar: h.historicalDollar || 0,
+        estimatedPercent: h.historicalPercent || 0,
+        historicalDollar: h.historicalDollar || 0,
+        historicalPercent: h.historicalPercent || 0
+      };
+    });
+  };
 
 
   const [projections, setProjections] = useState(makeEmptyProjectionRows());
@@ -372,12 +477,12 @@ const makeEmptyProjectionRows = () => {
 
   // Categories for visual grouping
   const categories = {
-    'Sales': ['Sales', 'All Net Sales'],
+    'Sales': ['Product Sales', 'All Net Sales'],
     'Food & Paper': ['Base Food', 'Employee Meal', 'Condiment', 'Total Waste', 'Paper'],
     'Labor': ['Crew Labor', 'Management Labor', 'Payroll Tax'],
     'Purchases': ['Advertising', 'Travel', 'Adv Other', 'Promotion', 'Outside Services',
-                  'Linen', 'OP. Supply', 'Maint. & Repair', 'Small Equipment', 
-                  'Utilities', 'Office', 'Cash +/-', 'Misc: CR/TR/D&S']
+      'Linen', 'OP. Supply', 'Maint. & Repair', 'Small Equipment',
+      'Utilities', 'Office', 'Cash +/-', 'Crew Relations', 'Training']
   };
 
   // Calculate category sums
@@ -404,8 +509,8 @@ const makeEmptyProjectionRows = () => {
   const getCategory = (expense) => {
     const input = expense.toLowerCase();
     for (const [key, values] of Object.entries(categories)) {
-      if(values.some(v => v.toLowerCase() === input)) {
-        return key; 
+      if (values.some(v => v.toLowerCase() === input)) {
+        return key;
       }
     }
     return null;
@@ -422,7 +527,7 @@ const makeEmptyProjectionRows = () => {
   };
 
   const getProductSales = () => {
-    const productSales = projections.find(e => e.name === 'Sales');
+    const productSales = projections.find(e => e.name === 'Product Sales');
     return parseFloat(productSales?.historicalDollar) || 0;
   };
 
@@ -495,11 +600,11 @@ const makeEmptyProjectionRows = () => {
 
         // using a "period" key for generate
         const monthIndex = [
-          "January","February","March","April","May","June",
-          "July","August","September","October","November","December"
+          "January", "February", "March", "April", "May", "June",
+          "July", "August", "September", "October", "November", "December"
         ].indexOf(month);
         const period = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-        
+
 
         await addDoc(pacGenRef, {
 
@@ -550,16 +655,16 @@ const makeEmptyProjectionRows = () => {
 
 
   return (
-    <Box sx = {{flexGrow: 1}}>
+    <Box sx={{ flexGrow: 1 }}>
       <Container>
-        <Paper sx={{padding: '10px'}}>
+        <Paper sx={{ padding: '10px' }}>
           <Grid container wrap="wrap" justifyContent="space-between" alignItems="center">
             <Grid item xs={12} sm={6} md={4}>
               <Box sx={{ padding: '10px', marginLeft: '5px' }}>
                 <h1 className="Header">PAC</h1>
               </Box>
             </Grid>
-            <Grid container xs={12} sm={6} md={4} wrap="wrap" justifyContent="flex-end" alignItems="center"> 
+            <Grid container xs={12} sm={6} md={4} wrap="wrap" justifyContent="flex-end" alignItems="center">
               <Grid item xs={12} sm={6} md={4}>
                 <Box display="flex" flexDirection="row" flexWrap="nowrap" justifyContent="center" gap={1} sx={{ padding: '10px', margin: '0 auto' }}>
                   {/* Month Dropdown */}
@@ -611,7 +716,7 @@ const makeEmptyProjectionRows = () => {
                   </Select>
                 </Box>
               </Grid>
-              
+
               <Grid item xs={12} sm={6} md={4}>
                 <Tabs
                   value={tabIndex}
@@ -635,375 +740,375 @@ const makeEmptyProjectionRows = () => {
             variant="outlined"
             className="pac-goal-input"
             value={pacGoal}
-            onChange={(e)=>setPacGoal(e.target.value)}
+            onChange={(e) => setPacGoal(e.target.value)}
           />
         </div>
       </Container>
-            <Box display="flex" justifyContent="center" sx={{ mt: 2 }}>
-            <Button variant="outlined" onClick={() => setOpenHistModal(true)}>
-              View Historical Data
-            </Button>
+
+      <Box sx={{ mb: 2, display: "flex", justifyContent: "flex-end", pr: "22%" }}>
+        <Button variant="outlined" onClick={() => {
+          setHistMonth("");
+          setHistYear("");
+          setOpenHistModal(true)
+        }
+        }>
+          View Historical Data
+        </Button>
+      </Box>
+
+      <Dialog open={openHistModal} onClose={() => setOpenHistModal(false)}>
+        <DialogTitle>Select Historical Period</DialogTitle>
+        <DialogContent>
+          <Box display="flex" gap={2} mt={1}>
+            {/* Month Dropdown */}
+            <Select
+              value={histMonth}
+              onChange={(e) => setHistMonth(e.target.value)}
+              sx={{ width: 200 }}
+            >
+              {months.map((m) => (
+                <MenuItem key={m} value={m}>
+                  {m}
+                </MenuItem>
+              ))}
+            </Select>
+
+            {/* Year Dropdown */}
+            <Select
+              value={histYear}
+              onChange={(e) => setHistYear(e.target.value)}
+              sx={{ width: 120 }}
+            >
+              {years.map((y) => (
+                <MenuItem key={y} value={y}>
+                  {y}
+                </MenuItem>
+              ))}
+            </Select>
           </Box>
-          
-<Dialog open={openHistModal} onClose={() => setOpenHistModal(false)}>
-  <DialogTitle>Select Historical Period</DialogTitle>
-  <DialogContent>
-    <Box display="flex" gap={2} mt={1}>
-      {/* Month Dropdown */}
-      <Select
-        value={histMonth}
-        onChange={(e) => setHistMonth(e.target.value)}
-        sx={{ width: 200 }}
-      >
-        {months.map((m) => (
-          <MenuItem key={m} value={m}>
-            {m}
-          </MenuItem>
-        ))}
-      </Select>
+        </DialogContent>
 
-      {/* Year Dropdown */}
-      <Select
-        value={histYear}
-        onChange={(e) => setHistYear(e.target.value)}
-        sx={{ width: 120 }}
-      >
-        {years.map((y) => (
-          <MenuItem key={y} value={y}>
-            {y}
-          </MenuItem>
-        ))}
-      </Select>
-    </Box>
-  </DialogContent>
-
-  <DialogActions>
-    <Button onClick={() => setOpenHistModal(false)}>Cancel</Button>
-    <Button
-      variant="contained"
-      onClick={() => {
-        setOpenHistModal(false);
-        setShouldLoadHist(true);
-      }}
-    >
-      Load Data
-    </Button>
-  </DialogActions>
-</Dialog>
+        <DialogActions>
+          <Button onClick={() => setOpenHistModal(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              if (histMonth && histYear) {
+                setOpenHistModal(false);
+                setShouldLoadHist(true);
+              } else {
+                alert("Please select both month and year before loading data.");
+              }
+            }}
+          >
+            Load Data
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {tabIndex === 0 && (
-        <Container sx={{marginTop: '20px'}}>
-          {shouldLoadHist ? (
-        <Box sx={{ mb: 2 }}>
-          <strong>
-            Displaying Historical Data for {histMonth} {histYear}
-          </strong>
-        </Box>
-      ) : (
-        <Box sx={{ mb: 2 }}>
-          <strong>
-            Select a month to view historical data
-          </strong>
-        </Box>
-      )}
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ whiteSpace: 'nowrap' }}>
-                <TableCell><strong>Expense Name</strong></TableCell>
-                <TableCell><strong>Projected $</strong></TableCell>
-                <TableCell><strong>Projected %</strong></TableCell>
-                <TableCell><strong>Estimated $</strong></TableCell>
-                <TableCell><strong>Estimated %</strong></TableCell>
-                <TableCell><strong>Historical $</strong></TableCell>
-                <TableCell><strong>Historical %</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {projections.map((expense, index) => (
-                <TableRow key={expense.name} sx={{backgroundColor: getCategoryColor(getCategory(expense.name))}}>
-                  <TableCell>{expense.name}</TableCell>
-                  <TableCell> {/*Textfield for Projected $*/}
-                    {hasUserInputAmountField.includes(expense.name) 
-                      ? <TextField size="small" variant="outlined" sx={{width: '150px', backgroundColor: '#ffffff'}}
-                          slotProps={{input: { startAdornment: <InputAdornment position="start">$</InputAdornment>}}}
-                          value={expense.projectedDollar || "0.00"} 
-                          onChange={(e) => handleInputChange(index, "projectedDollar", e.target.value)} />
-                      : <item>${expense.projectedDollar || "0.00"}</item>}
-                  </TableCell>
-                  <TableCell> {/*Textfield for Projected %*/}
-                    <FormControl>
-                      {hasUserInputedPercentageField.includes(expense.name)
-                      ?  <TextField size="small" variant="outlined" sx={{width: '125px', backgroundColor: '#ffffff'}}
-                          slotProps={{input: { endAdornment: <InputAdornment position="end">%</InputAdornment>}}}
-                          value={expense.projectedPercent || "0"} 
-                          onChange={(e) => handleInputChange(index, "projectedPercent", e.target.value)} />
-                      : <item>{expense.projectedPercent || "0"}%</item>}  
-                      <FormLabel sx={{ fontSize: '0.75rem' }}>{getLabel(expense.name)}</FormLabel>
-                    </FormControl>  
-                  </TableCell>
-                  <TableCell> {/*Output for Estimated $*/}
-                    {"$" + expense.estimatedDollar}
-                  </TableCell>
-                  <TableCell> {/*Output for Estimated %*/}
-                    {expense.estimatedPercent + "%"}
-                  </TableCell>
-                  <TableCell> {/*Output for Historical $*/}
-                    {"$" + expense.historicalDollar}
-                  </TableCell>
-                  <TableCell> {/*Output for Historical %*/}
-                    {expense.historicalPercent + "%"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <Container sx={{ marginTop: '20px' }}>
+          <Box sx={{ mb: 2, textAlign: "right", mr: "2.5%" }}>
+            <strong>
+              {shouldLoadHist
+                ? `Displaying Historical Data for ${histMonth} ${histYear}`
+                : "Select a month to view historical data"}
+            </strong>
+          </Box>
 
-        {/*The Apply button*/}
-        <Box textAlign='center' sx={{ paddingTop: '10px', paddingBottom: '10px' }}>
-          <Button variant="contained" size="large" onClick={handleApply}>Apply</Button>
-        </Box>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ whiteSpace: 'nowrap' }}>
+                  <TableCell><strong>Expense Name</strong></TableCell>
+                  <TableCell><strong>Projected $</strong></TableCell>
+                  <TableCell><strong>Projected %</strong></TableCell>
+                  <TableCell sx={{ borderRight: "20px solid #f5f5f5ff", width: "12px" }} />
+                  <TableCell><strong>Historical $</strong></TableCell>
+                  <TableCell><strong>Historical %</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {projections.map((expense, index) => (
+                  <TableRow key={expense.name} sx={{ backgroundColor: getCategoryColor(getCategory(expense.name)) }}>
+                    <TableCell>{expense.name}</TableCell>
+                    <TableCell> {/*Textfield for Projected $*/}
+                      {hasUserInputAmountField.includes(expense.name)
+                        ? <TextField size="small" variant="outlined" sx={{ width: '150px', backgroundColor: '#ffffff' }}
+                          slotProps={{ input: { startAdornment: <InputAdornment position="start">$</InputAdornment> } }}
+                          value={expense.projectedDollar || 0}
+                          onChange={(e) => handleInputChange(index, "projectedDollar", e.target.value)} />
+                        : <item>${expense.projectedDollar || 0}</item>}
+                    </TableCell>
+                    <TableCell> {/*Textfield for Projected %*/}
+                      <FormControl>
+                        {hasUserInputedPercentageField.includes(expense.name)
+                          ? <TextField size="small" variant="outlined" sx={{ width: '125px', backgroundColor: '#ffffff' }}
+                            slotProps={{ input: { endAdornment: <InputAdornment position="end">%</InputAdornment> } }}
+                            value={expense.projectedPercent || 0}
+                            onChange={(e) => handleInputChange(index, "projectedPercent", e.target.value)} />
+                          : <item>{expense.projectedPercent || 0}%</item>}
+                        <FormLabel sx={{ fontSize: '0.75rem' }}>{getLabel(expense.name)}</FormLabel>
+                      </FormControl>
+                    </TableCell>
+                    <TableCell sx={{ borderRight: "20px solid #f5f5f5ff", width: "12px" }} />
+
+                    <TableCell> {/*Output for Historical $*/}
+                      {"$" + expense.historicalDollar}
+                    </TableCell>
+                    <TableCell> {/*Output for Historical %*/}
+                      {expense.historicalPercent + "%"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          {/*The Apply button*/}
+          <Box textAlign='center' sx={{ paddingTop: '10px', paddingBottom: '10px' }}>
+            <Button variant="contained" size="large" onClick={handleApply}>Apply</Button>
+          </Box>
 
         </Container>
       )} {/* end of Projections page */}
 
       {tabIndex === 1 && (
         <Container>
-        <div style={{ display: "flex", flexDirection: "column", gap: "24px", marginTop: "20px" }}>
-          {/* Sales */}
-          <div className="pac-section sales-section">
-            <h4>Sales</h4>
-            <div className="input-row"><label className="input-label">Product Net Sales ($)</label>
-              <input
-                type="number"
-                value={productNetSales}
-                onChange={(e) => setProductNetSales(e.target.value)}
-              />
+          <div style={{ display: "flex", flexDirection: "column", gap: "24px", marginTop: "20px" }}>
+            {/* Sales */}
+            <div className="pac-section sales-section">
+              <h4>Sales</h4>
+              <div className="input-row"><label className="input-label">Product Net Sales ($)</label>
+                <input
+                  type="number"
+                  value={productNetSales}
+                  onChange={(e) => setProductNetSales(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Cash +/- ($)</label>
+                <input
+                  type="number"
+                  value={cash}
+                  onChange={(e) => setCash(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Promo ($)</label>
+                <input
+                  type="number"
+                  value={promo}
+                  onChange={(e) => setPromo(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">All Net Sales ($)</label>
+                <input
+                  type="number"
+                  value={allNetSales}
+                  onChange={(e) => setAllNetSales(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Advertising ($)</label>
+                <input
+                  type="number"
+                  value={advertising}
+                  onChange={(e) => setAdvertising(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="input-row"><label className="input-label">Cash +/- ($)</label>
-              <input
-                type="number"
-                value={cash}
-                onChange={(e) => setCash(e.target.value)}
-              />
+
+            {/* Labor */}
+            <div className="pac-section labor-section">
+              <h4>Labor</h4>
+              <div className="input-row"><label className="input-label">Crew Labor %</label>
+                <input
+                  type="number"
+                  value={crewLabor}
+                  onChange={(e) => setCrewLabor(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Total Labor %</label>
+                <input
+                  type="number"
+                  value={totalLabor}
+                  onChange={(e) => setTotalLabor(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Payroll Tax ($)</label>
+                <input
+                  type="number"
+                  value={payrollTax}
+                  onChange={(e) => setPayrollTax(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="input-row"><label className="input-label">Promo ($)</label>
-              <input
-                type="number"
-                value={promo}
-                onChange={(e) => setPromo(e.target.value)}
-              />
+
+            {/* Food */}
+            <div className="pac-section food-section">
+              <h4>Food</h4>
+              <div className="input-row"><label className="input-label">Complete Waste %</label>
+                <input
+                  type="number"
+                  value={completeWaste}
+                  onChange={(e) => setCompleteWaste(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Raw Waste %</label>
+                <input
+                  type="number"
+                  value={rawWaste}
+                  onChange={(e) => setRawWaste(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Condiment %</label>
+                <input
+                  type="number"
+                  value={condiment}
+                  onChange={(e) => setCondiment(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Variance Stat %</label>
+                <input
+                  type="number"
+                  value={variance}
+                  onChange={(e) => setVariance(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Unexplained %</label>
+                <input
+                  type="number"
+                  value={unexplained}
+                  onChange={(e) => setUnexplained(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Discounts %</label>
+                <input
+                  type="number"
+                  value={discounts}
+                  onChange={(e) => setDiscounts(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Base Food %</label>
+                <input
+                  type="number"
+                  value={baseFood}
+                  onChange={(e) => setBaseFood(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="input-row"><label className="input-label">All Net Sales ($)</label>
-              <input
-                type="number"
-                value={allNetSales}
-                onChange={(e) => setAllNetSales(e.target.value)}
-              />
+
+            {/* Starting Inventory */}
+            <div className="pac-section starting-inventory-section">
+              <h4>Starting Inventory</h4>
+              <div className="input-row"><label className="input-label">Food ($)</label>
+                <input
+                  type="number"
+                  value={startingFood}
+                  onChange={(e) => setStartingFood(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Condiment ($)</label>
+                <input
+                  type="number"
+                  value={startingCondiment}
+                  onChange={(e) => setStartingCondiment(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Paper ($)</label>
+                <input
+                  type="number"
+                  value={startingPaper}
+                  onChange={(e) => setStartingPaper(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Non Product ($)</label>
+                <input
+                  type="number"
+                  value={startingNonProduct}
+                  onChange={(e) => setStartingNonProduct(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label"> Office Supplies ($)</label>
+                <input
+                  type="number"
+                  value={startingOpsSupplies}
+                  onChange={(e) => setStartingOpsSupplies(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="input-row"><label className="input-label">Advertising ($)</label>
-              <input
-                type="number"
-                value={advertising}
-                onChange={(e) => setAdvertising(e.target.value)}
-              />
+
+            {/* Ending Inventory */}
+            <div className="pac-section ending-inventory-section">
+              <h4>Ending Inventory</h4>
+              <div className="input-row"><label className="input-label">Food ($)</label>
+                <input
+                  type="number"
+                  value={endingFood}
+                  onChange={(e) => setEndingFood(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Condiment ($)</label>
+                <input
+                  type="number"
+                  value={endingCondiment}
+                  onChange={(e) => setEndingCondiment(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Paper ($)</label>
+                <input
+                  type="number"
+                  value={endingPaper}
+                  onChange={(e) => setEndingPaper(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label">Non Product ($)</label>
+                <input
+                  type="number"
+                  value={endingNonProduct}
+                  onChange={(e) => setEndingNonProduct(e.target.value)}
+                />
+              </div>
+              <div className="input-row"><label className="input-label"> Office Supplies ($)</label>
+                <input
+                  type="number"
+                  value={endingOpsSupplies}
+                  onChange={(e) => setEndingOpsSupplies(e.target.value)}
+                />
+              </div>
             </div>
+
+            {/* This button calls the handleGenerate function */}
+            <Button
+              variant="contained"
+              color="primary"
+              size="large"
+              sx={{
+                marginTop: 2,
+                marginBottom: 8,
+                width: "250px",
+                alignSelf: "center",
+                backgroundColor: "#1976d2",
+                "&:hover": {
+                  backgroundColor: "#42a5f5",
+                }
+              }}
+              onClick={handleGenerate}
+            >
+              Generate Report
+            </Button>
+
+
           </div>
-
-          {/* Labor */}
-          <div className="pac-section labor-section">
-            <h4>Labor</h4>
-            <div className="input-row"><label className="input-label">Crew Labor %</label>
-              <input
-                type="number"
-                value={crewLabor}
-                onChange={(e) => setCrewLabor(e.target.value)}
-              />
-            </div>
-            <div className="input-row"><label className="input-label">Total Labor %</label>
-              <input
-                type="number"
-                value={totalLabor}
-                onChange={(e) => setTotalLabor(e.target.value)}
-              />
-            </div>
-            <div className="input-row"><label className="input-label">Payroll Tax ($)</label>
-              <input
-                type="number"
-                value={payrollTax}
-                onChange={(e) => setPayrollTax(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Food */}
-          <div className="pac-section food-section">
-            <h4>Food</h4>
-            <div className="input-row"><label className="input-label">Complete Waste %</label>
-              <input
-                type="number"
-                value={completeWaste}
-                onChange={(e) => setCompleteWaste(e.target.value)}
-              />
-            </div>
-            <div className="input-row"><label className="input-label">Raw Waste %</label>
-              <input
-                type="number"
-                value={rawWaste}
-                onChange={(e) => setRawWaste(e.target.value)}
-              />
-            </div>
-            <div className="input-row"><label className="input-label">Condiment %</label>
-              <input
-                type="number"
-                value={condiment}
-                onChange={(e) => setCondiment(e.target.value)}
-              />
-            </div>
-            <div className="input-row"><label className="input-label">Variance Stat %</label>
-              <input
-                type="number"
-                value={variance}
-                onChange={(e) => setVariance(e.target.value)}
-              />
-            </div>
-            <div className="input-row"><label className="input-label">Unexplained %</label>
-              <input
-                type="number"
-                value={unexplained}
-                onChange={(e) => setUnexplained(e.target.value)}
-              />
-            </div>
-            <div className="input-row"><label className="input-label">Discounts %</label>
-              <input
-                type="number"
-                value={discounts}
-                onChange={(e) => setDiscounts(e.target.value)}
-              />
-            </div>
-            <div className="input-row"><label className="input-label">Base Food %</label>
-              <input
-                type="number"
-                value={baseFood}
-                onChange={(e) => setBaseFood(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Starting Inventory */}
-          <div className="pac-section starting-inventory-section">
-            <h4>Starting Inventory</h4>
-            <div className="input-row"><label className="input-label">Food ($)</label>
-              <input
-                type="number"
-                value={startingFood}
-                onChange={(e) => setStartingFood(e.target.value)}
-              />
-            </div>
-            <div className="input-row"><label className="input-label">Condiment ($)</label>
-              <input
-                type="number"
-                value={startingCondiment}
-                onChange={(e) => setStartingCondiment(e.target.value)}
-              />
-            </div>
-            <div className="input-row"><label className="input-label">Paper ($)</label>
-              <input
-                type="number"
-                value={startingPaper}
-                onChange={(e) => setStartingPaper(e.target.value)}
-              />
-            </div>
-            <div className="input-row"><label className="input-label">Non Product ($)</label>
-              <input
-                type="number"
-                value={startingNonProduct}
-                onChange={(e) => setStartingNonProduct(e.target.value)}
-              />
-            </div>
-            <div className="input-row"><label className="input-label"> Office Supplies ($)</label>
-              <input
-                type="number"
-                value={startingOpsSupplies}
-                onChange={(e) => setStartingOpsSupplies(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Ending Inventory */}
-          <div className="pac-section ending-inventory-section">
-            <h4>Ending Inventory</h4>
-            <div className="input-row"><label className="input-label">Food ($)</label>
-              <input
-                type="number"
-                value={endingFood}
-                onChange={(e) => setEndingFood(e.target.value)}
-              />
-            </div>
-            <div className="input-row"><label className="input-label">Condiment ($)</label>
-              <input
-                type="number"
-                value={endingCondiment}
-                onChange={(e) => setEndingCondiment(e.target.value)}
-              />
-            </div>
-            <div className="input-row"><label className="input-label">Paper ($)</label>
-              <input
-                type="number"
-                value={endingPaper}
-                onChange={(e) => setEndingPaper(e.target.value)}
-              />
-            </div>
-            <div className="input-row"><label className="input-label">Non Product ($)</label>
-              <input
-                type="number"
-                value={endingNonProduct}
-                onChange={(e) => setEndingNonProduct(e.target.value)}
-              />
-            </div>
-            <div className="input-row"><label className="input-label"> Office Supplies ($)</label>
-              <input
-                type="number"
-                value={endingOpsSupplies}
-                onChange={(e) => setEndingOpsSupplies(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* This button calls the handleGenerate function */}
-          <Button
-            variant="contained"
-            color="primary"
-            size="large"
-            sx={{
-              marginTop: 2,
-              marginBottom: 8,
-              width: "250px",
-              alignSelf: "center",
-              backgroundColor: "#1976d2",
-              "&:hover": {
-                backgroundColor: "#42a5f5",
-              }
-            }}
-            onClick={handleGenerate}
-          >
-            Generate Report
-          </Button>
-
-
-        </div>
         </Container>
       )}  {/* end of Generate page */}
 
       {tabIndex === 2 && (
         <Container>
-        <PacTab 
-          storeId={selectedStore || "store_001"} 
-          year={year} 
-          month={month}
-          projections={projections}
-        />
+          <PacTab
+            storeId={selectedStore || "store_001"}
+            year={year}
+            month={month}
+            projections={projections}
+          />
         </Container>
       )} {/* end of Actual page */}
     </Box>
