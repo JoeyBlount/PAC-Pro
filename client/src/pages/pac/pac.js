@@ -177,6 +177,17 @@ const PAC = () => {
     return next;
   };
 
+  // helper to sanitize numeric input strings
+  const sanitizeNumberInput = (s) => {
+    if (s === "") return "";
+    // keep only digits and single dot
+    s = String(s).replace(/[^\d.]/g, "");
+    const parts = s.split(".");
+    const whole = parts[0].replace(/^0+(?=\d)/, ""); // drop leading zeros but keep single 0 if only zero
+    const frac = parts[1] != null ? parts[1].replace(/\./g, "") : undefined;
+    return frac != null ? `${whole || "0"}.${frac}` : (whole || "");
+  };
+
 
   useEffect(() => {
     document.title = "PAC Pro - PAC";
@@ -314,7 +325,7 @@ const PAC = () => {
       const normalizeName = (name) => {
         if (!name) return name;
         const map = {
-          "Sales": "Product Sales",           
+          "Sales": "Product Sales",
           "Misc: CR/TR/D&S": "Misc: CR/TR/D&S",
         };
         return map[name] || name;
@@ -332,8 +343,8 @@ const PAC = () => {
             if (!match) return row;
             return {
               ...row,
-              projectedDollar: match.projectedDollar ?? row.projectedDollar ?? "",
-              projectedPercent: match.projectedPercent ?? row.projectedPercent ?? "",
+              historicalDollar: Number(match.projectedDollar) || 0,
+              historicalPercent: Number(match.projectedPercent) || 0,
             };
           })
         );
@@ -455,12 +466,12 @@ const PAC = () => {
       const h = historicalData.find(e => e.name === expense) || {};
       return {
         name: expense,
-        projectedDollar: 0,
-        projectedPercent: 0,
-        estimatedDollar: h.historicalDollar || 0,
-        estimatedPercent: h.historicalPercent || 0,
-        historicalDollar: h.historicalDollar || 0,
-        historicalPercent: h.historicalPercent || 0
+        projectedDollar: "",
+        projectedPercent: "",
+        estimatedDollar: h.historicalDollar || "",
+        estimatedPercent: h.historicalPercent || "",
+        historicalDollar: h.historicalDollar || "",
+        historicalPercent: h.historicalPercent || ""
       };
     });
   };
@@ -834,19 +845,35 @@ const PAC = () => {
                     <TableCell>{expense.name}</TableCell>
                     <TableCell> {/*Textfield for Projected $*/}
                       {hasUserInputAmountField.includes(expense.name)
-                        ? <TextField size="small" variant="outlined" sx={{ width: '150px', backgroundColor: '#ffffff' }}
+                        ? <TextField
+                          type="number" 
+                          size="small"
+                          variant="outlined"
+                          sx={{ width: '150px', backgroundColor: '#ffffff' }}
                           slotProps={{ input: { startAdornment: <InputAdornment position="start">$</InputAdornment> } }}
-                          value={expense.projectedDollar || 0}
-                          onChange={(e) => handleInputChange(index, "projectedDollar", e.target.value)} />
+                          value={expense.projectedDollar ?? ""}               
+                          placeholder="0.00"
+                          onChange={(e) =>
+                            handleInputChange(index, "projectedDollar", e.target.valueAsNumber)
+                          }
+                        />
                         : <item>${expense.projectedDollar || 0}</item>}
                     </TableCell>
                     <TableCell> {/*Textfield for Projected %*/}
                       <FormControl>
                         {hasUserInputedPercentageField.includes(expense.name)
-                          ? <TextField size="small" variant="outlined" sx={{ width: '125px', backgroundColor: '#ffffff' }}
+                          ? <TextField
+                            type="number"
+                            size="small"
+                            variant="outlined"
+                            sx={{ width: '125px', backgroundColor: '#ffffff' }}
                             slotProps={{ input: { endAdornment: <InputAdornment position="end">%</InputAdornment> } }}
-                            value={expense.projectedPercent || 0}
-                            onChange={(e) => handleInputChange(index, "projectedPercent", e.target.value)} />
+                            value={expense.projectedPercent ?? ""}             
+                            placeholder="0.00"
+                            onChange={(e) =>
+                              handleInputChange(index, "projectedPercent", e.target.valueAsNumber)
+                            }
+                          />
                           : <item>{expense.projectedPercent || 0}%</item>}
                         <FormLabel sx={{ fontSize: '0.75rem' }}>{getLabel(expense.name)}</FormLabel>
                       </FormControl>
