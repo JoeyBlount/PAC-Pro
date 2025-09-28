@@ -47,6 +47,7 @@ const InvoiceLogs = () => {
   const [showRecentlyDeleted, setShowRecentlyDeleted] = useState(false);
   const [recentlyDeleted, setRecentlyDeleted] = useState([]);
   const [budgetData, setBudgetData] = useState({});
+  const [pacTotals, setPacTotals] = useState({});
 
   // Invoice dialog state
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -230,7 +231,7 @@ const InvoiceLogs = () => {
     if (selectedStore && monetaryColumns.length > 0) {
       fetchInvoices();
     }
-  }, [selectedStore, monetaryColumns, budgetData]);
+  }, [selectedStore, monetaryColumns, budgetData, pacTotals]);
 
   // Fetch budget data when store or month/year changes
   useEffect(() => {
@@ -241,6 +242,7 @@ const InvoiceLogs = () => {
       const yearMonth = `${year}${String(month).padStart(2, '0')}`;
       
       fetchBudgetData(selectedStore, yearMonth);
+      fetchPacTotals(selectedStore, yearMonth);
     }
   }, [selectedStore, selectedMonth, selectedYear]);
 
@@ -287,8 +289,9 @@ const InvoiceLogs = () => {
         budgets[col.id] = budgetData[col.id] || Number(col.budget) || 0;
       });
 
-      console.log("Setting budget data in fetchInvoices:", { budgetData, budgets });
-      setData({ invoices, total: totals, budget: budgets });
+      const usePacTotals = pacTotals && Object.keys(pacTotals).length > 0;
+      console.log("Setting totals in fetchInvoices:", { usePacTotals, pacTotals, computedTotals: totals, budgets });
+      setData({ invoices, total: usePacTotals ? pacTotals : totals, budget: budgets });
     } catch (err) {
       console.error("Error loading invoices:", err);
     }
@@ -353,6 +356,47 @@ const InvoiceLogs = () => {
     } catch (error) {
       console.error("Error loading budget data:", error);
       setBudgetData({});
+    }
+  };
+
+  // Fetch PAC input totals from pac_input_data collection
+  const fetchPacTotals = async (storeId, yearMonth) => {
+    try {
+      const formattedStoreId = storeId.startsWith('store_') ? storeId : `store_${storeId.padStart(3, '0')}`;
+      const docId = `${formattedStoreId}_${yearMonth}`;
+
+      const docRef = doc(db, "pac_input_data", docId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const pacData = docSnap.data();
+
+        const totalsMapping = {
+          'FOOD': pacData.purchases?.food || 0,
+          'CONDIMENT': pacData.purchases?.condiment || 0,
+          'PAPER': pacData.purchases?.paper || 0,
+          'NONPRODUCT': pacData.purchases?.non_product || 0,
+          'TRAVEL': pacData.purchases?.travel || 0,
+          'ADV-OTHER': pacData.purchases?.advertising_other || 0,
+          'PROMO': pacData.purchases?.promotion || 0,
+          'OUTSIDE SVC': pacData.purchases?.outside_services || 0,
+          'LINEN': pacData.purchases?.linen || 0,
+          'OP. SUPPLY': pacData.purchases?.operating_supply || 0,
+          'M+R': pacData.purchases?.maintenance_repair || 0,
+          'SML EQUIP': pacData.purchases?.small_equipment || 0,
+          'UTILITIES': pacData.purchases?.utilities || 0,
+          'OFFICE': pacData.purchases?.office || 0,
+          'TRAINING': pacData.purchases?.training || 0,
+          'CR': pacData.purchases?.crew_relations || 0
+        };
+
+        setPacTotals(totalsMapping);
+      } else {
+        setPacTotals({});
+      }
+    } catch (error) {
+      console.error("Error loading PAC input totals:", error);
+      setPacTotals({});
     }
   };
 
