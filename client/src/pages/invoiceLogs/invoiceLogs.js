@@ -7,24 +7,48 @@ import {
   DialogActions,
   Button,
   IconButton,
+  Alert,
+  Select,
+  MenuItem,
+  Box,
 } from "@mui/material";
-import { GetApp, Close, AccessibilityNewSharp } from "@mui/icons-material";
+import {
+  GetApp,
+  Close,
+  AccessibilityNewSharp,
+  Lock,
+  Lock as LockIcon,
+} from "@mui/icons-material";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import "./invoiceLogs.css";
-import { collection, query, where, getDocs, getDoc, deleteDoc, doc, updateDoc, setDoc } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  getDoc,
+  deleteDoc,
+  doc,
+  updateDoc,
+  setDoc,
+} from "firebase/firestore";
 import { db } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext";
 import { getAuth } from "firebase/auth";
 import { useAuth } from "../../context/AuthContext";
+import MonthLockService from "../../services/monthLockService";
 
 const InvoiceLogs = () => {
   // const { currentUser, userRole } = useAuth();
   // console.log("Logged in user:", currentUser?.email);
   // console.log("User role:", userRole);
   const { userRole } = useAuth();
-  console.log("User role from invoicelogs is: ", userRole)
+  console.log("User role from invoicelogs is: ", userRole);
 
+  // Month locking state
+  const [monthLockStatus, setMonthLockStatus] = useState(null);
+  const [lockedMonths, setLockedMonths] = useState([]);
 
   useEffect(() => {
     document.title = "PAC Pro - Invoice Logs";
@@ -40,8 +64,12 @@ const InvoiceLogs = () => {
     column: null,
     direction: "asc",
   });
-  const [selectedMonth, setSelectedMonth] = useState("");
-  const [selectedYear, setSelectedYear] = useState("");
+  const currentDate = new Date();
+  const currentMonth = String(currentDate.getMonth() + 1); // getMonth() returns 0-11, so add 1
+  const currentYear = String(currentDate.getFullYear());
+
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [selectedYear, setSelectedYear] = useState(currentYear);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [showRecentlyDeleted, setShowRecentlyDeleted] = useState(false);
@@ -74,14 +102,17 @@ const InvoiceLogs = () => {
 
     // If the array exists, sum all the numbers in it
     if (Array.isArray(categoryArray)) {
-      const sum = categoryArray.reduce((sum, num) => sum + (Number(num) || 0), 0);
+      const sum = categoryArray.reduce(
+        (sum, num) => sum + (Number(num) || 0),
+        0
+      );
       return sum;
     }
 
     return 0;
   };
 
-//this function makes sure we can only edit/delete the current month in the invoice. 
+  //this function makes sure we can only edit/delete the current month in the invoice.
   const isCurrentMonth = (dateStr) => {
     const date = new Date(dateStr);
     const now = new Date();
@@ -91,25 +122,34 @@ const InvoiceLogs = () => {
     );
   };
   const handleDelete = async (invoice) => {
-    const confirm = window.confirm("Are you sure you want to delete this invoice?");
+    // Check if the invoice's month is locked
+    if (isInvoiceMonthLocked(invoice.invoiceMonth, invoice.invoiceYear)) {
+      alert(
+        "Cannot delete invoice: The month for this invoice is locked and cannot be modified."
+      );
+      return;
+    }
+
+    const confirm = window.confirm(
+      "Are you sure you want to delete this invoice?"
+    );
     if (!confirm) return;
-  
+
     try {
       // 1. Move the invoice to 'recentlyDeleted' collection
       const deletedRef = doc(db, "recentlyDeleted", invoice.id);
       await setDoc(deletedRef, invoice);
-  
+
       // 2. Now delete it from the 'invoices' collection
       await deleteDoc(doc(db, "invoices", invoice.id));
-  
+
       alert("Invoice moved to Recently Deleted.");
-  
+
       // 3. Refresh invoices on the page
-      setData(prev => ({
+      setData((prev) => ({
         ...prev,
-        invoices: prev.invoices.filter(inv => inv.id !== invoice.id),
+        invoices: prev.invoices.filter((inv) => inv.id !== invoice.id),
       }));
-  
     } catch (err) {
       console.error("Failed to move invoice to Recently Deleted:", err);
       alert("Error deleting invoice.");
@@ -117,18 +157,20 @@ const InvoiceLogs = () => {
   };
 
   const handleRestore = async (invoice) => {
-    const confirm = window.confirm("Are you sure you want to restore this invoice?");
+    const confirm = window.confirm(
+      "Are you sure you want to restore this invoice?"
+    );
     if (!confirm) return;
     try {
       // 1. Copy back to "invoices"
       const restoredRef = doc(db, "invoices", invoice.id);
       await setDoc(restoredRef, invoice);
-  
+
       // 2. Then delete from "recentlyDeleted"
       await deleteDoc(doc(db, "recentlyDeleted", invoice.id));
-  
+
       alert("Invoice restored successfully!");
-  
+
       // Optionally refresh your page or re-fetch data here
       fetchInvoices();
       fetchRecentlyDeleted();
@@ -139,21 +181,30 @@ const InvoiceLogs = () => {
   };
 
   const handlePermanentDelete = async (invoice) => {
-    const confirm = window.confirm("Are you sure you want to delete this invoice from recently deleted");
+    const confirm = window.confirm(
+      "Are you sure you want to delete this invoice from recently deleted"
+    );
     if (!confirm) return;
     try {
       await deleteDoc(doc(db, "recentlyDeleted", invoice.id));
       alert("Invoice Deleted!");
       fetchInvoices();
       fetchRecentlyDeleted();
-    }catch(err) {
-      console.log("failed to delete the invoice from recentlydeleted, ", err)
-      alert("failed to delete the invoice")
+    } catch (err) {
+      console.log("failed to delete the invoice from recentlydeleted, ", err);
+      alert("failed to delete the invoice");
     }
   };
-  
-  
+
   const handleEdit = (invoice) => {
+    // Check if the invoice's month is locked
+    if (isInvoiceMonthLocked(invoice.invoiceMonth, invoice.invoiceYear)) {
+      alert(
+        "Cannot edit invoice: The month for this invoice is locked and cannot be modified."
+      );
+      return;
+    }
+
     setEditInvoiceData({ ...invoice }); // clone it so we can modify safely
     setEditDialogOpen(true);
   };
@@ -163,33 +214,28 @@ const InvoiceLogs = () => {
       const invoiceRef = doc(db, "invoices", invoiceID);
       await updateDoc(invoiceRef, {
         locked: true,
-      })
-      alert("Invoice locked.")
-     
+      });
+      alert("Invoice locked.");
+
       fetchInvoices(); // refresh from Firestore
     } catch (error) {
       console.error("Error locking invoice:", error);
       alert("Failed to lock invoice.");
     }
-
-
-
   };
 
   const unlockInvoice = async (invoiceID) => {
-    try{
+    try {
       const invoiceRef = doc(db, "invoices", invoiceID);
       await updateDoc(invoiceRef, {
         locked: false,
-      })
-      alert("Invoice unlocked.")
-
-    }catch(error) {
+      });
+      alert("Invoice unlocked.");
+    } catch (error) {
       console.error("Error unlocking invoice:", error);
       alert("Failed to unlock invoice.");
     }
   };
-
 
   const submitEdit = async (updatedInvoice) => {
     try {
@@ -204,8 +250,6 @@ const InvoiceLogs = () => {
       alert("Failed to update invoice.");
     }
   };
-  
-  
 
   // Fetch invoice categories from "invoiceCategories" collection
   useEffect(() => {
@@ -236,13 +280,88 @@ const InvoiceLogs = () => {
   useEffect(() => {
     if (selectedStore) {
       const currentDate = new Date();
-      const month = selectedMonth || (currentDate.getMonth() + 1);
+      const month = selectedMonth || currentDate.getMonth() + 1;
       const year = selectedYear || currentDate.getFullYear();
-      const yearMonth = `${year}${String(month).padStart(2, '0')}`;
-      
+      const yearMonth = `${year}${String(month).padStart(2, "0")}`;
+
       fetchBudgetData(selectedStore, yearMonth);
     }
   }, [selectedStore, selectedMonth, selectedYear]);
+
+  // Check if the selected month is locked
+  const checkMonthLock = async () => {
+    try {
+      if (!selectedStore || !selectedMonth || !selectedYear) return;
+
+      const monthNames = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+      ];
+
+      const monthName = monthNames[selectedMonth - 1];
+      const lockStatus = await MonthLockService.getMonthLockStatus(
+        selectedStore,
+        monthName,
+        selectedYear
+      );
+      setMonthLockStatus(lockStatus);
+    } catch (error) {
+      console.error("Error checking month lock:", error);
+      setMonthLockStatus({ is_locked: false });
+    }
+  };
+
+  const fetchLockedMonths = async () => {
+    try {
+      if (!selectedStore) return;
+
+      const locked = await MonthLockService.getAllLockedMonths(selectedStore);
+      setLockedMonths(locked);
+    } catch (error) {
+      console.error("Error fetching locked months:", error);
+    }
+  };
+
+  useEffect(() => {
+    checkMonthLock();
+    fetchLockedMonths();
+  }, [selectedStore, selectedMonth, selectedYear]);
+
+  const isMonthLocked = () => {
+    return monthLockStatus?.is_locked || false;
+  };
+
+  const isInvoiceMonthLocked = (invoiceMonth, invoiceYear) => {
+    if (!invoiceMonth || !invoiceYear) return false;
+
+    const monthNames = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+
+    const monthName = monthNames[invoiceMonth - 1];
+    return MonthLockService.isMonthLocked(monthName, invoiceYear, lockedMonths);
+  };
 
   async function fetchInvoices() {
     try {
@@ -251,23 +370,19 @@ const InvoiceLogs = () => {
         collection(db, "invoices"),
         where("storeID", "==", selectedStore)
       );
-      
+
       let snapshot = await getDocs(q);
-      
+
       // If no results, try with "001" format (assuming selectedStore might be "store_001")
       if (snapshot.docs.length === 0 && selectedStore) {
-        q = query(
-          collection(db, "invoices"),
-          where("storeID", "==", "001")
-        );
+        q = query(collection(db, "invoices"), where("storeID", "==", "001"));
         snapshot = await getDocs(q);
       }
-      
+
       const invoices = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
-
 
       // Compute totals using the category amounts stored in the categories map.
       const totals = {};
@@ -287,7 +402,10 @@ const InvoiceLogs = () => {
         budgets[col.id] = budgetData[col.id] || Number(col.budget) || 0;
       });
 
-      console.log("Setting budget data in fetchInvoices:", { budgetData, budgets });
+      console.log("Setting budget data in fetchInvoices:", {
+        budgetData,
+        budgets,
+      });
       setData({ invoices, total: totals, budget: budgets });
     } catch (err) {
       console.error("Error loading invoices:", err);
@@ -299,7 +417,7 @@ const InvoiceLogs = () => {
       const snapshot = await getDocs(collection(db, "recentlyDeleted"));
       const deleted = snapshot.docs.map((doc) => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
       }));
       setRecentlyDeleted(deleted);
     } catch (error) {
@@ -311,39 +429,46 @@ const InvoiceLogs = () => {
   const fetchBudgetData = async (storeId, yearMonth) => {
     try {
       // Convert storeId to the format used in pac_projections (e.g., "001" -> "store_001")
-      const formattedStoreId = storeId.startsWith('store_') ? storeId : `store_${storeId.padStart(3, '0')}`;
+      const formattedStoreId = storeId.startsWith("store_")
+        ? storeId
+        : `store_${storeId.padStart(3, "0")}`;
       const docId = `${formattedStoreId}_${yearMonth}`;
-      
-      console.log("Fetching budget data for:", { storeId, formattedStoreId, yearMonth, docId });
-      
+
+      console.log("Fetching budget data for:", {
+        storeId,
+        formattedStoreId,
+        yearMonth,
+        docId,
+      });
+
       // Try to get the document directly by ID first
       const docRef = doc(db, "pac_projections", docId);
       const docSnap = await getDoc(docRef);
-      
+
       if (docSnap.exists()) {
         const projectionsData = docSnap.data();
         console.log("Found projections data:", projectionsData);
-        
+
         // Map pac_projections purchases data to invoice categories
         const budgetMapping = {
-          'FOOD': projectionsData.purchases?.food || 0,
-          'CONDIMENT': projectionsData.purchases?.condiment || 0,
-          'PAPER': projectionsData.purchases?.paper || 0,
-          'NONPRODUCT': projectionsData.purchases?.non_product || 0,
-          'TRAVEL': projectionsData.purchases?.travel || 0,
-          'ADV-OTHER': projectionsData.purchases?.advertising_other || 0,
-          'PROMO': projectionsData.purchases?.promotion || 0,
-          'OUTSIDE SVC': projectionsData.purchases?.outside_services || 0,
-          'LINEN': projectionsData.purchases?.linen || 0,
-          'OP. SUPPLY': projectionsData.purchases?.operating_supply || 0,
-          'M+R': projectionsData.purchases?.maintenance_repair || 0,
-          'SML EQUIP': projectionsData.purchases?.small_equipment || 0,
-          'UTILITIES': projectionsData.purchases?.utilities || 0,
-          'OFFICE': projectionsData.purchases?.office || 0,
-          'TRAINING': projectionsData.purchases?.training || 0,
-          'CR': projectionsData.purchases?.crew_relations || 0
+          FOOD: projectionsData.purchases?.food || 0,
+          CONDIMENT: projectionsData.purchases?.condiment || 0,
+          PAPER: projectionsData.purchases?.paper || 0,
+          NONPRODUCT: projectionsData.purchases?.non_product || 0,
+          TRAVEL: projectionsData.purchases?.travel || 0,
+          "ADV-OTHER": projectionsData.purchases?.advertising_other || 0,
+          PROMO: projectionsData.purchases?.promotion || 0,
+          "OUTSIDE SVC": projectionsData.purchases?.outside_services || 0,
+          LINEN: projectionsData.purchases?.linen || 0,
+          "OP. SUPPLY": projectionsData.purchases?.operating_supply || 0,
+          "M+R": projectionsData.purchases?.maintenance_repair || 0,
+          "SML EQUIP": projectionsData.purchases?.small_equipment || 0,
+          UTILITIES: projectionsData.purchases?.utilities || 0,
+          OFFICE: projectionsData.purchases?.office || 0,
+          TRAINING: projectionsData.purchases?.training || 0,
+          CR: projectionsData.purchases?.crew_relations || 0,
         };
-        
+
         setBudgetData(budgetMapping);
         console.log("Budget data loaded:", budgetMapping);
       } else {
@@ -591,11 +716,9 @@ const InvoiceLogs = () => {
     const filtered = filterInvoices(data.invoices);
     const sorted = sortInvoices(filtered);
 
-
     return sorted.map((inv, i) => {
       const canEdit = isCurrentMonth(inv.invoiceDate) && !inv.locked;
-      
-    
+
       return (
         <tr key={i} className="invoice-row" onClick={() => handleRowClick(inv)}>
           <td className="tableCell">{inv.storeID}</td>
@@ -607,11 +730,11 @@ const InvoiceLogs = () => {
           </td>
           <td className="tableCell">{inv.companyName}</td>
           <td className="tableCell invoiceNumberCell">{inv.invoiceNumber}</td>
-    
+
           {monetaryColumns.map((col, j) => {
             const categoryName = col.id; // Use col.id instead of col.name
             const amount = getCategoryValue(inv, categoryName);
-    
+
             return (
               <td key={j} className="tableCell categoryCell">
                 {amount !== 0 && !isNaN(amount)
@@ -625,55 +748,54 @@ const InvoiceLogs = () => {
               </td>
             );
           })}
-    
+
           <td className="tableCell">
-          {(canEdit || userRole === "Supervisor" || userRole === "Admin") && (
-            <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation(); 
-                  handleEdit(inv);
-                  // console.log(inv)
-                }}
-              >
-                Edit
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation(); 
-                  handleDelete(inv);
-                  
-                }}
-              >
-                Delete
-              </button>
-              <button
-                onClick={(e) => {
-                  console.log(e)
-                  e.stopPropagation(); 
-                  lockInvoice(inv.id);  
-                }}
-              >
-                Lock
-              </button>
-              <button
-                onClick={(e) => {
-                  console.log(e)
-                  e.stopPropagation(); 
-                  unlockInvoice(inv.id);  
-                }}
-              >
-                Unlock
-              </button>
-            </>
-          )}
-        </td>
+            {(canEdit || userRole === "Supervisor" || userRole === "Admin") && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEdit(inv);
+                    // console.log(inv)
+                  }}
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(inv);
+                  }}
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={(e) => {
+                    console.log(e);
+                    e.stopPropagation();
+                    lockInvoice(inv.id);
+                  }}
+                >
+                  Lock
+                </button>
+                <button
+                  onClick={(e) => {
+                    console.log(e);
+                    e.stopPropagation();
+                    unlockInvoice(inv.id);
+                  }}
+                >
+                  Unlock
+                </button>
+              </>
+            )}
+          </td>
         </tr>
       );
     });
-  }
+  };
 
-  //   return sorted.map((inv, i) => (      
+  //   return sorted.map((inv, i) => (
   //     <tr key={i} className="invoice-row" onClick={() => handleRowClick(inv)}>
   //       <td className="tableCell">{inv.storeID}</td>
   //       <td className="tableCell dateCell">
@@ -788,11 +910,19 @@ const InvoiceLogs = () => {
   const formRef = useRef(null); // place this at the top of your component
 
   const EditDialog = React.memo(() => (
-    <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
+    <Dialog
+      open={editDialogOpen}
+      onClose={() => setEditDialogOpen(false)}
+      maxWidth="sm"
+      fullWidth
+    >
       <DialogTitle>Edit Invoice</DialogTitle>
       <DialogContent dividers>
         {editInvoiceData && (
-          <form ref={formRef} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <form
+            ref={formRef}
+            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+          >
             <input
               name="companyName"
               type="text"
@@ -808,18 +938,16 @@ const InvoiceLogs = () => {
             {Object.entries(editInvoiceData.categories).map(([key, value]) => (
               <div key={key}>
                 <label>{key}</label>
-                <input
-                  name={key}
-                  type="number"
-                  defaultValue={value[0]}
-                />
+                <input name={key} type="number" defaultValue={value[0]} />
               </div>
             ))}
           </form>
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => setEditDialogOpen(false)} color="secondary">Cancel</Button>
+        <Button onClick={() => setEditDialogOpen(false)} color="secondary">
+          Cancel
+        </Button>
         <Button
           onClick={() => {
             if (formRef.current) {
@@ -831,9 +959,9 @@ const InvoiceLogs = () => {
                 categories: Object.fromEntries(
                   Object.entries(editInvoiceData.categories).map(([key]) => [
                     key,
-                    [Number(formData.get(key)) || 0]
+                    [Number(formData.get(key)) || 0],
                   ])
-                )
+                ),
               };
               setEditInvoiceData(updated);
               submitEdit(updated);
@@ -846,7 +974,6 @@ const InvoiceLogs = () => {
       </DialogActions>
     </Dialog>
   ));
-  
 
   // Export choice dialog
   const ExportDialog = () => (
@@ -892,26 +1019,65 @@ const InvoiceLogs = () => {
         <h1 className="Header">Invoice Log</h1>
         <div className="topBarControls">
           <div className="filterDropdowns">
-            <select
+            <Select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
+              sx={{ minWidth: 150, marginRight: 2 }}
             >
-              {months.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-            <select
+              {months.map((m) => {
+                if (m.value === "") {
+                  return (
+                    <MenuItem key={m.value} value={m.value}>
+                      {m.label}
+                    </MenuItem>
+                  );
+                }
+                const monthNames = [
+                  "",
+                  "January",
+                  "February",
+                  "March",
+                  "April",
+                  "May",
+                  "June",
+                  "July",
+                  "August",
+                  "September",
+                  "October",
+                  "November",
+                  "December",
+                ];
+                const monthName = monthNames[parseInt(m.value)];
+                const isLocked = MonthLockService.isMonthLocked(
+                  monthName,
+                  selectedYear,
+                  lockedMonths
+                );
+                return (
+                  <MenuItem key={m.value} value={m.value}>
+                    <Box display="flex" alignItems="center" gap={1}>
+                      {isLocked && (
+                        <LockIcon
+                          sx={{ fontSize: 16, color: "warning.main" }}
+                        />
+                      )}
+                      {m.label}
+                    </Box>
+                  </MenuItem>
+                );
+              })}
+            </Select>
+            <Select
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
+              sx={{ minWidth: 120 }}
             >
               {years.map((y) => (
-                <option key={y.value} value={y.value}>
+                <MenuItem key={y.value} value={y.value}>
                   {y.label}
-                </option>
+                </MenuItem>
               ))}
-            </select>
+            </Select>
             <Button
               variant="contained"
               color="primary"
@@ -921,31 +1087,40 @@ const InvoiceLogs = () => {
               Export
             </Button>
             <Button
-            variant="contained"
-            style={{
-              backgroundColor: "#ff5252", 
-              color: "white",
-              fontWeight: "bold",
-              fontSize: "12px",
-              padding: "2%",
-              borderRadius: "8px",
-              width: "auto",
-              minWidth: "150px",
-              textTransform: "none", 
-              boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.2)",
-            }}
-            onClick={() => {
-              setShowRecentlyDeleted(true);
-              fetchRecentlyDeleted()
-              // Handle open modal or navigate to Recently Deleted
-              console.log("Open Recently Deleted Modal");
-            }}
-          >
-            Recently Deleted
-          </Button>
+              variant="contained"
+              style={{
+                backgroundColor: "#ff5252",
+                color: "white",
+                fontWeight: "bold",
+                fontSize: "12px",
+                padding: "2%",
+                borderRadius: "8px",
+                width: "auto",
+                minWidth: "150px",
+                textTransform: "none",
+                boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.2)",
+              }}
+              onClick={() => {
+                setShowRecentlyDeleted(true);
+                fetchRecentlyDeleted();
+                // Handle open modal or navigate to Recently Deleted
+                console.log("Open Recently Deleted Modal");
+              }}
+            >
+              Recently Deleted
+            </Button>
           </div>
         </div>
       </div>
+
+      {/* Month Lock Warning */}
+      {isMonthLocked() && (
+        <Alert severity="warning" icon={<Lock />} sx={{ mt: 2, mb: 2 }}>
+          The selected month ({selectedMonth}/{selectedYear}) is locked and
+          cannot be modified. Invoices in locked months cannot be edited or
+          deleted.
+        </Alert>
+      )}
 
       {activeSearchColumn && (
         <div className="searchBox">
@@ -996,76 +1171,87 @@ const InvoiceLogs = () => {
       <InvoiceDialog />
       <EditDialog />
       {showRecentlyDeleted && (
-      <div style={{
-        position: "fixed",
-        top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: "rgba(0,0,0,0.5)",
-        zIndex: 9999,
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center"
-      }}>
-        <div style={{
-          background: "white",
-          padding: "30px",
-          borderRadius: "10px",
-          minWidth: "300px",
-          textAlign: "center",
-          position: "relative"
-        }}>
-          <h2>Recently Deleted</h2>
-          {recentlyDeleted.length === 0 ? (
-          <p>No recently deleted invoices.</p>
-            ) : (
-          <div style={{ maxHeight: "300px", overflowY: "auto" }}>
-            {recentlyDeleted.map((inv) => (
-              <div key={inv.id} style={{
-                padding: "10px",
-                borderBottom: "1px solid #ddd",
-                textAlign: "left"
-              }}>
-                <strong>{inv.companyName || "Unnamed Invoice"}</strong>
-                <div style={{ fontSize: "0.8rem", color: "gray" }}>
-                  {inv.invoiceNumber ? `Invoice #${inv.invoiceNumber}` : ""}
-                </div>
-                <div style={{ marginTop: "5px" }}>
-                  <Button
-                    variant="outlined"
-                    style={{ marginRight: "10px", fontSize: "10px" }}
-                    onClick={() => handleRestore(inv)}
-                  >
-                    Restore
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    style={{ fontSize: "10px" }}
-                    onClick={() => handlePermanentDelete(inv)}
-                  >
-                    Delete Permanently
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-          <p>Invoices here will be deleted after 14 days (Not yet working)</p>
-          {/* Later you can map the deleted invoices here */}
-          <Button 
-            variant="contained" 
-            style={{ marginTop: "20px", backgroundColor: "#6A39FE", color: "white" }}
-            onClick={() => setShowRecentlyDeleted(false)}
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            zIndex: 9999,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <div
+            style={{
+              background: "white",
+              padding: "30px",
+              borderRadius: "10px",
+              minWidth: "300px",
+              textAlign: "center",
+              position: "relative",
+            }}
           >
-            Close
-          </Button>
+            <h2>Recently Deleted</h2>
+            {recentlyDeleted.length === 0 ? (
+              <p>No recently deleted invoices.</p>
+            ) : (
+              <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+                {recentlyDeleted.map((inv) => (
+                  <div
+                    key={inv.id}
+                    style={{
+                      padding: "10px",
+                      borderBottom: "1px solid #ddd",
+                      textAlign: "left",
+                    }}
+                  >
+                    <strong>{inv.companyName || "Unnamed Invoice"}</strong>
+                    <div style={{ fontSize: "0.8rem", color: "gray" }}>
+                      {inv.invoiceNumber ? `Invoice #${inv.invoiceNumber}` : ""}
+                    </div>
+                    <div style={{ marginTop: "5px" }}>
+                      <Button
+                        variant="outlined"
+                        style={{ marginRight: "10px", fontSize: "10px" }}
+                        onClick={() => handleRestore(inv)}
+                      >
+                        Restore
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        style={{ fontSize: "10px" }}
+                        onClick={() => handlePermanentDelete(inv)}
+                      >
+                        Delete Permanently
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p>Invoices here will be deleted after 14 days (Not yet working)</p>
+            {/* Later you can map the deleted invoices here */}
+            <Button
+              variant="contained"
+              style={{
+                marginTop: "20px",
+                backgroundColor: "#6A39FE",
+                color: "white",
+              }}
+              onClick={() => setShowRecentlyDeleted(false)}
+            >
+              Close
+            </Button>
+          </div>
         </div>
-      </div>
-    )}
-      
+      )}
     </Container>
   );
-
-  
 };
 
 export default InvoiceLogs;
