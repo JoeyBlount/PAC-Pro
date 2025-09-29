@@ -6,6 +6,7 @@ from datetime import datetime
 import json
 
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
+from pydantic import BaseModel
 from models import PacCalculationResult, PacInputData
 from services.pac_calculation_service import PacCalculationService
 from services.data_ingestion_service import DataIngestionService
@@ -386,3 +387,290 @@ async def read_invoice_compat(
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+# ---------------------------
+# Month Lock Models
+# ---------------------------
+
+class MonthLockRequest(BaseModel):
+    store_id: str
+    month: str
+    year: int
+    user_email: str
+    user_role: str
+
+class MonthLockResponse(BaseModel):
+    success: bool
+    message: str
+    is_locked: bool
+    locked_by: str = None
+    locked_at: str = None
+
+class MonthLockStatus(BaseModel):
+    is_locked: bool
+    locked_by: str = None
+    locked_at: str = None
+    unlocked_by: str = None
+    unlocked_at: str = None
+    store_id: str
+    year_month: str
+
+
+# ---------------------------
+# Month Lock Endpoints
+# ---------------------------
+
+@router.get("/month-locks/{store_id}/{year_month}")
+async def get_month_lock_status(
+    store_id: str,
+    year_month: str,
+) -> MonthLockStatus:
+    """
+    Get the lock status for a specific store and month (YYYYMM format).
+    """
+    try:
+        # Guard Firebase presence/initialization
+        try:
+            import firebase_admin
+            from firebase_admin import firestore
+            if not firebase_admin._apps:
+                raise HTTPException(status_code=503, detail="Firebase not initialized")
+        except ModuleNotFoundError:
+            raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+        db = firestore.client()
+        doc_id = f"{store_id}_{year_month}"
+        
+        lock_ref = db.collection("month_locks").document(doc_id)
+        lock_doc = lock_ref.get()
+        
+        if lock_doc.exists:
+            data = lock_doc.to_dict()
+            return MonthLockStatus(
+                is_locked=data.get("is_locked", False),
+                locked_by=data.get("locked_by"),
+                locked_at=data.get("locked_at").isoformat() if data.get("locked_at") else None,
+                unlocked_by=data.get("unlocked_by"),
+                unlocked_at=data.get("unlocked_at").isoformat() if data.get("unlocked_at") else None,
+                store_id=data.get("store_id", store_id),
+                year_month=data.get("year_month", year_month)
+            )
+        else:
+            return MonthLockStatus(
+                is_locked=False,
+                store_id=store_id,
+                year_month=year_month
+            )
+            
+    except Exception as e:
+        logger.error(f"Error getting month lock status: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting month lock status: {str(e)}")
+
+
+@router.post("/month-locks/lock")
+async def lock_month(request: MonthLockRequest) -> MonthLockResponse:
+    """
+    Lock a specific month for a store.
+    Only General Managers, Supervisors, and Admins can lock months.
+    """
+    try:
+        # Check permissions
+        user_role_lower = request.user_role.lower()
+        if user_role_lower not in ["admin", "general manager", "supervisor"]:
+            raise HTTPException(
+                status_code=403, 
+                detail="Only General Managers, Supervisors, and Admins can lock months."
+            )
+
+        # Guard Firebase presence/initialization
+        try:
+            import firebase_admin
+            from firebase_admin import firestore
+            if not firebase_admin._apps:
+                raise HTTPException(status_code=503, detail="Firebase not initialized")
+        except ModuleNotFoundError:
+            raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+        db = firestore.client()
+        
+        # Convert month name to number
+        month_names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+        
+        if request.month not in month_names:
+            raise HTTPException(status_code=400, detail="Invalid month name")
+            
+        month_index = month_names.index(request.month)
+        year_month = f"{request.year}{month_index + 1:02d}"
+        doc_id = f"{request.store_id}_{year_month}"
+        
+        lock_ref = db.collection("month_locks").document(doc_id)
+        
+        # Get existing lock data to preserve audit trail
+        existing_doc = lock_ref.get()
+        existing_data = existing_doc.to_dict() if existing_doc.exists else {}
+        
+        lock_data = {
+            "store_id": request.store_id,
+            "year_month": year_month,
+            "is_locked": True,
+            "locked_by": request.user_email,
+            "locked_at": firestore.SERVER_TIMESTAMP,
+            "locked_by_role": request.user_role,
+            # Preserve existing audit trail
+            "lock_history": [
+                *existing_data.get("lock_history", []),
+                {
+                    "action": "locked",
+                    "user": request.user_email,
+                    "role": request.user_role,
+                    "timestamp": firestore.SERVER_TIMESTAMP
+                }
+            ]
+        }
+        
+        lock_ref.set(lock_data)
+        
+        return MonthLockResponse(
+            success=True,
+            message="Month locked successfully.",
+            is_locked=True,
+            locked_by=request.user_email,
+            locked_at=datetime.now().isoformat()
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error locking month: {e}")
+        raise HTTPException(status_code=500, detail=f"Error locking month: {str(e)}")
+
+
+@router.post("/month-locks/unlock")
+async def unlock_month(request: MonthLockRequest) -> MonthLockResponse:
+    """
+    Unlock a specific month for a store.
+    Only Admins can unlock months.
+    """
+    try:
+        # Check permissions - only admins can unlock
+        if request.user_role.lower() != "admin":
+            raise HTTPException(
+                status_code=403, 
+                detail="Only Administrators can unlock months."
+            )
+
+        # Guard Firebase presence/initialization
+        try:
+            import firebase_admin
+            from firebase_admin import firestore
+            if not firebase_admin._apps:
+                raise HTTPException(status_code=503, detail="Firebase not initialized")
+        except ModuleNotFoundError:
+            raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+        db = firestore.client()
+        
+        # Convert month name to number
+        month_names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+        
+        if request.month not in month_names:
+            raise HTTPException(status_code=400, detail="Invalid month name")
+            
+        month_index = month_names.index(request.month)
+        year_month = f"{request.year}{month_index + 1:02d}"
+        doc_id = f"{request.store_id}_{year_month}"
+        
+        lock_ref = db.collection("month_locks").document(doc_id)
+        
+        # Get existing lock data to preserve audit trail
+        existing_doc = lock_ref.get()
+        existing_data = existing_doc.to_dict() if existing_doc.exists else {}
+        
+        unlock_data = {
+            "store_id": request.store_id,
+            "year_month": year_month,
+            "is_locked": False,
+            "unlocked_by": request.user_email,
+            "unlocked_at": firestore.SERVER_TIMESTAMP,
+            "unlocked_by_role": request.user_role,
+            # Preserve existing lock data
+            "locked_by": existing_data.get("locked_by"),
+            "locked_at": existing_data.get("locked_at"),
+            "locked_by_role": existing_data.get("locked_by_role"),
+            # Add to audit trail
+            "lock_history": [
+                *existing_data.get("lock_history", []),
+                {
+                    "action": "unlocked",
+                    "user": request.user_email,
+                    "role": request.user_role,
+                    "timestamp": firestore.SERVER_TIMESTAMP
+                }
+            ]
+        }
+        
+        lock_ref.set(unlock_data)
+        
+        return MonthLockResponse(
+            success=True,
+            message="Month unlocked successfully.",
+            is_locked=False,
+            locked_by=existing_data.get("locked_by"),
+            locked_at=existing_data.get("locked_at").isoformat() if existing_data.get("locked_at") else None
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error unlocking month: {e}")
+        raise HTTPException(status_code=500, detail=f"Error unlocking month: {str(e)}")
+
+
+@router.get("/month-locks/{store_id}")
+async def get_all_locked_months(store_id: str) -> Dict[str, Any]:
+    """
+    Get all locked months for a specific store.
+    """
+    try:
+        # Guard Firebase presence/initialization
+        try:
+            import firebase_admin
+            from firebase_admin import firestore
+            if not firebase_admin._apps:
+                raise HTTPException(status_code=503, detail="Firebase not initialized")
+        except ModuleNotFoundError:
+            raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+        db = firestore.client()
+        
+        locks_ref = db.collection("month_locks")
+        query = locks_ref.where("store_id", "==", store_id).where("is_locked", "==", True)
+        
+        locked_months = []
+        for doc in query.stream():
+            data = doc.to_dict()
+            locked_months.append({
+                "id": doc.id,
+                "store_id": data.get("store_id"),
+                "year_month": data.get("year_month"),
+                "locked_by": data.get("locked_by"),
+                "locked_at": data.get("locked_at").isoformat() if data.get("locked_at") else None,
+                "locked_by_role": data.get("locked_by_role")
+            })
+        
+        return {
+            "store_id": store_id,
+            "locked_months": locked_months,
+            "count": len(locked_months)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting locked months: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting locked months: {str(e)}")

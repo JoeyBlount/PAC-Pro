@@ -49,6 +49,22 @@
         "pac_dollars": "number - calculated PAC dollars",
         "calculated_at": "timestamp - calculation time"
       }
+    },
+    "month_locks": {
+      "description": "Month locking system to prevent data modifications",
+      "document_id_format": "{store_id}_{year_month}",
+      "fields": {
+        "store_id": "string - reference to store",
+        "year_month": "string - YYYYMM format",
+        "is_locked": "boolean - whether the month is currently locked",
+        "locked_by": "string - email of user who locked the month",
+        "locked_at": "timestamp - when the month was locked",
+        "locked_by_role": "string - role of user who locked the month",
+        "unlocked_by": "string - email of user who unlocked the month (if applicable)",
+        "unlocked_at": "timestamp - when the month was unlocked (if applicable)",
+        "unlocked_by_role": "string - role of user who unlocked the month (if applicable)",
+        "lock_history": "array - complete audit trail of lock/unlock actions"
+      }
     }
   }
 }
