@@ -274,7 +274,7 @@ const InvoiceLogs = () => {
     if (selectedStore && monetaryColumns.length > 0) {
       fetchInvoices();
     }
-  }, [selectedStore, monetaryColumns, budgetData]);
+  }, [selectedStore, monetaryColumns, budgetData, selectedMonth, selectedYear]);
 
   // Fetch budget data when store or month/year changes
   useEffect(() => {
@@ -384,12 +384,46 @@ const InvoiceLogs = () => {
         ...doc.data(),
       }));
 
+      // Debug logging
+      console.log("Debug - Fetched invoices:", {
+        totalInvoices: invoices.length,
+        selectedStore,
+        invoices: invoices.map((inv) => ({
+          id: inv.id,
+          targetMonth: inv.targetMonth,
+          targetYear: inv.targetYear,
+          dateSubmitted: inv.dateSubmitted,
+          companyName: inv.companyName,
+          storeID: inv.storeID,
+        })),
+      });
+
       // Compute totals using the category amounts stored in the categories map.
+      // Apply the same month/year filtering as individual rows
+      const filteredInvoices = invoices.filter((inv) => {
+        if (selectedMonth || selectedYear) {
+          let invMonth, invYear;
+
+          if (inv.targetMonth && inv.targetYear) {
+            invMonth = inv.targetMonth;
+            invYear = inv.targetYear;
+          } else {
+            const dt = new Date(inv.dateSubmitted);
+            invMonth = dt.getMonth() + 1;
+            invYear = dt.getFullYear();
+          }
+
+          if (selectedMonth && invMonth !== +selectedMonth) return false;
+          if (selectedYear && invYear !== +selectedYear) return false;
+        }
+        return true;
+      });
+
       const totals = {};
       monetaryColumns.forEach((col) => {
         const categoryId = col.id; // This matches the document ID from invoiceCategories
         const categoryName = col.id; // Use col.id as the category name since that's what's stored in invoices
-        totals[categoryId] = invoices.reduce((sum, inv) => {
+        totals[categoryId] = filteredInvoices.reduce((sum, inv) => {
           const categoryValue = getCategoryValue(inv, categoryName);
           return sum + categoryValue;
         }, 0);
@@ -593,9 +627,22 @@ const InvoiceLogs = () => {
             .includes(searchQuery.toLowerCase());
       }
       if (ok && (selectedMonth || selectedYear)) {
-        const dt = new Date(inv.dateSubmitted);
-        if (selectedMonth) ok = ok && dt.getMonth() + 1 === +selectedMonth;
-        if (selectedYear) ok = ok && dt.getFullYear() === +selectedYear;
+        // Always prioritize targetMonth/targetYear for grouping, fall back to dateSubmitted only if not set
+        let invMonth, invYear;
+
+        if (inv.targetMonth && inv.targetYear) {
+          // Use the assigned target month/year (from Invoice Assignment dropdown)
+          invMonth = inv.targetMonth;
+          invYear = inv.targetYear;
+        } else {
+          // Fall back to dateSubmitted for older invoices that don't have targetMonth/targetYear
+          const dt = new Date(inv.dateSubmitted);
+          invMonth = dt.getMonth() + 1;
+          invYear = dt.getFullYear();
+        }
+
+        if (selectedMonth) ok = ok && invMonth === +selectedMonth;
+        if (selectedYear) ok = ok && invYear === +selectedYear;
       }
       return ok;
     });
@@ -646,6 +693,7 @@ const InvoiceLogs = () => {
   const renderHeader = () => {
     if (!data || monetaryColumns.length === 0) return null;
     const fixed = [
+      "Month/Year",
       "Location",
       "Date Submitted",
       "Invoice Date",
@@ -656,7 +704,24 @@ const InvoiceLogs = () => {
       <thead>
         {/* First row - Account Numbers */}
         <tr>
-          <th colSpan="4"></th>
+          {isMonthLocked() ? (
+            <th
+              colSpan="5"
+              style={{
+                backgroundColor: "#fff3cd",
+                border: "1px solid #ffeaa7",
+                padding: "4px",
+                textAlign: "center",
+                fontWeight: "bold",
+                color: "#856404",
+                fontSize: "12px",
+              }}
+            >
+              🔒 Month Locked - No Edits
+            </th>
+          ) : (
+            <th colSpan="5"></th>
+          )}
           <th
             className="tableHeader"
             style={{
@@ -706,7 +771,7 @@ const InvoiceLogs = () => {
     if (!data) {
       return (
         <tr>
-          <td colSpan={monetaryColumns.length + 5}>
+          <td colSpan={monetaryColumns.length + 6}>
             {selectedStore ? "No invoices found." : "Please select a store."}
           </td>
         </tr>
@@ -716,11 +781,33 @@ const InvoiceLogs = () => {
     const filtered = filterInvoices(data.invoices);
     const sorted = sortInvoices(filtered);
 
+    // Debug logging
+    console.log("Debug - Invoice filtering:", {
+      totalInvoices: data.invoices.length,
+      filteredInvoices: filtered.length,
+      selectedMonth,
+      selectedYear,
+      invoices: data.invoices.map((inv) => ({
+        id: inv.id,
+        targetMonth: inv.targetMonth,
+        targetYear: inv.targetYear,
+        dateSubmitted: inv.dateSubmitted,
+        companyName: inv.companyName,
+      })),
+    });
+
     return sorted.map((inv, i) => {
       const canEdit = isCurrentMonth(inv.invoiceDate) && !inv.locked;
 
       return (
         <tr key={i} className="invoice-row" onClick={() => handleRowClick(inv)}>
+          <td className="tableCell">
+            {inv.targetMonth && inv.targetYear
+              ? `${inv.targetMonth}/${inv.targetYear}`
+              : `${new Date(inv.dateSubmitted).getMonth() + 1}/${new Date(
+                  inv.dateSubmitted
+                ).getFullYear()} (legacy)`}
+          </td>
           <td className="tableCell">{inv.storeID}</td>
           <td className="tableCell dateCell">
             {new Date(inv.dateSubmitted).toLocaleDateString("en-US")}
@@ -750,45 +837,49 @@ const InvoiceLogs = () => {
           })}
 
           <td className="tableCell">
-            {(canEdit || userRole === "Supervisor" || userRole === "Admin") && (
-              <>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleEdit(inv);
-                    // console.log(inv)
-                  }}
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(inv);
-                  }}
-                >
-                  Delete
-                </button>
-                <button
-                  onClick={(e) => {
-                    console.log(e);
-                    e.stopPropagation();
-                    lockInvoice(inv.id);
-                  }}
-                >
-                  Lock
-                </button>
-                <button
-                  onClick={(e) => {
-                    console.log(e);
-                    e.stopPropagation();
-                    unlockInvoice(inv.id);
-                  }}
-                >
-                  Unlock
-                </button>
-              </>
-            )}
+            {(canEdit || userRole === "Supervisor" || userRole === "Admin") &&
+              !isInvoiceMonthLocked(
+                inv.targetMonth || new Date(inv.dateSubmitted).getMonth() + 1,
+                inv.targetYear || new Date(inv.dateSubmitted).getFullYear()
+              ) && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEdit(inv);
+                      // console.log(inv)
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(inv);
+                    }}
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      console.log(e);
+                      e.stopPropagation();
+                      lockInvoice(inv.id);
+                    }}
+                  >
+                    Lock
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      console.log(e);
+                      e.stopPropagation();
+                      unlockInvoice(inv.id);
+                    }}
+                  >
+                    Unlock
+                  </button>
+                </>
+              )}
           </td>
         </tr>
       );
@@ -835,7 +926,7 @@ const InvoiceLogs = () => {
     const makeRow = (label, values, styleFn) => (
       <tr className="summaryRow">
         <td
-          colSpan={5}
+          colSpan={6}
           className="tableCell"
           style={{ textAlign: "center", fontWeight: "bold" }}
         >
@@ -935,6 +1026,43 @@ const InvoiceLogs = () => {
               placeholder="Invoice Number"
               defaultValue={editInvoiceData.invoiceNumber}
             />
+            <div>
+              <label>Target Month/Year (for grouping):</label>
+              <div style={{ display: "flex", gap: "10px", marginTop: "5px" }}>
+                <select
+                  name="targetMonth"
+                  defaultValue={
+                    editInvoiceData.targetMonth ||
+                    new Date(editInvoiceData.dateSubmitted).getMonth() + 1
+                  }
+                >
+                  <option value="1">January</option>
+                  <option value="2">February</option>
+                  <option value="3">March</option>
+                  <option value="4">April</option>
+                  <option value="5">May</option>
+                  <option value="6">June</option>
+                  <option value="7">July</option>
+                  <option value="8">August</option>
+                  <option value="9">September</option>
+                  <option value="10">October</option>
+                  <option value="11">November</option>
+                  <option value="12">December</option>
+                </select>
+                <select
+                  name="targetYear"
+                  defaultValue={
+                    editInvoiceData.targetYear ||
+                    new Date(editInvoiceData.dateSubmitted).getFullYear()
+                  }
+                >
+                  <option value="2023">2023</option>
+                  <option value="2024">2024</option>
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                </select>
+              </div>
+            </div>
             {Object.entries(editInvoiceData.categories).map(([key, value]) => (
               <div key={key}>
                 <label>{key}</label>
@@ -956,6 +1084,8 @@ const InvoiceLogs = () => {
                 ...editInvoiceData,
                 companyName: formData.get("companyName"),
                 invoiceNumber: formData.get("invoiceNumber"),
+                targetMonth: Number(formData.get("targetMonth")),
+                targetYear: Number(formData.get("targetYear")),
                 categories: Object.fromEntries(
                   Object.entries(editInvoiceData.categories).map(([key]) => [
                     key,
@@ -1113,15 +1243,6 @@ const InvoiceLogs = () => {
         </div>
       </div>
 
-      {/* Month Lock Warning */}
-      {isMonthLocked() && (
-        <Alert severity="warning" icon={<Lock />} sx={{ mt: 2, mb: 2 }}>
-          The selected month ({selectedMonth}/{selectedYear}) is locked and
-          cannot be modified. Invoices in locked months cannot be edited or
-          deleted.
-        </Alert>
-      )}
-
       {activeSearchColumn && (
         <div className="searchBox">
           <label>
@@ -1150,6 +1271,7 @@ const InvoiceLogs = () => {
       <div className="contentWrapper">
         <table className="customTable">
           <colgroup>
+            <col style={{ width: "80px" }} />
             <col style={{ width: "80px" }} />
             <col style={{ width: "110px" }} />
             <col style={{ width: "110px" }} />

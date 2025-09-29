@@ -153,6 +153,8 @@ async def submit_invoice(
     invoice_day: int = Form(...),
     invoice_month: int = Form(...),
     invoice_year: int = Form(...),
+    target_month: int = Form(...),
+    target_year: int = Form(...),
     store_id: str = Form(...),
     user_email: str = Form(...),
     categories: str = Form(...),  # JSON string of categories
@@ -188,6 +190,8 @@ async def submit_invoice(
             validation_errors.append("Company name is required")
         if not invoice_day or not invoice_month or not invoice_year:
             validation_errors.append("Invoice date (day, month, year) is required")
+        if not target_month or not target_year:
+            validation_errors.append("Target month/year is required")
         if not store_id:
             validation_errors.append("Store ID is required")
         if not user_email:
@@ -220,6 +224,8 @@ async def submit_invoice(
             'invoiceNumber': invoice_number,
             'companyName': company_name,
             'invoiceDate': invoice_date,
+            'targetMonth': target_month,
+            'targetYear': target_year,
             'storeID': store_id,
             'user_email': user_email,
             'categories': categories_dict,

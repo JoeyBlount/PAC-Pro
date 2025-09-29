@@ -1010,7 +1010,12 @@ const PAC = () => {
                         <TextField
                           size="small"
                           variant="outlined"
-                          sx={{ width: "150px", backgroundColor: "#ffffff" }}
+                          sx={{
+                            width: "150px",
+                            backgroundColor: isMonthLocked()
+                              ? "#f5f5f5"
+                              : "#ffffff",
+                          }}
                           slotProps={{
                             input: {
                               startAdornment: (
@@ -1028,6 +1033,7 @@ const PAC = () => {
                               e.target.value
                             )
                           }
+                          disabled={isMonthLocked()}
                         />
                       ) : (
                         <item>${expense.projectedDollar || "0.00"}</item>
@@ -1043,7 +1049,12 @@ const PAC = () => {
                           <TextField
                             size="small"
                             variant="outlined"
-                            sx={{ width: "125px", backgroundColor: "#ffffff" }}
+                            sx={{
+                              width: "125px",
+                              backgroundColor: isMonthLocked()
+                                ? "#f5f5f5"
+                                : "#ffffff",
+                            }}
                             slotProps={{
                               input: {
                                 endAdornment: (
@@ -1061,6 +1072,7 @@ const PAC = () => {
                                 e.target.value
                               )
                             }
+                            disabled={isMonthLocked()}
                           />
                         ) : (
                           <item>{expense.projectedPercent || "0"}%</item>
@@ -1101,7 +1113,19 @@ const PAC = () => {
             textAlign="center"
             sx={{ paddingTop: "10px", paddingBottom: "10px" }}
           >
-            <Button variant="contained" size="large" onClick={handleApply}>
+            <Button
+              variant="contained"
+              size="large"
+              onClick={handleApply}
+              disabled={isMonthLocked()}
+              sx={{
+                backgroundColor: isMonthLocked() ? "#f5f5f5" : "#1976d2",
+                color: isMonthLocked() ? "#999999" : "white",
+                "&:hover": {
+                  backgroundColor: isMonthLocked() ? "#f5f5f5" : "#42a5f5",
+                },
+              }}
+            >
               Apply
             </Button>
           </Box>
@@ -1461,6 +1485,8 @@ const PAC = () => {
             month={month}
             projections={projections}
             isMonthLocked={isMonthLocked()}
+            monthLockStatus={monthLockStatus}
+            lastUpdatedTimestamp={lastUpdatedTimestamp}
           />
         </Container>
       )}{" "}
