@@ -7,10 +7,6 @@ html {
   background-color: #f7f7f7;
 }
 
-body {
-  padding-top: 80px;
-}
-
 /* Top bar styling */
 .topBar {
   display: flex;

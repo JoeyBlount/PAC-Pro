@@ -10,6 +10,8 @@ import { loginRequest } from "../../authconfig";
 import { auth, googleAuthProvider } from "../../config/firebase-config";
 import { signInWithPopup } from "firebase/auth";
 import { getFirestore, doc, getDoc } from "firebase/firestore"; // Firebase Firestore functions
+import backgroundImage from "./bg.webp";
+import logo from "./logo.png";
 
 const Login = () => {
   React.useEffect(() => {
@@ -53,7 +55,7 @@ const Login = () => {
     }
   };
 
-  //for debugging to see if user is actually logged out or not
+  // For debugging to see if user is actually logged out or not
 
   // For debugging to see if the user is logged out or not
   if (user) {
@@ -81,7 +83,7 @@ const Login = () => {
         console.log("Email not found in the database:", userEmail);
         navigate("/not-allowed"); // Navigate to 'not allowed' page if email is not in DB
       }
-      console.log("google login result: ", result);
+      console.log("Google login result: ", result);
       localStorage.setItem("user", JSON.stringify(result.user));
     } catch (error) {
       console.error("Google Login Error:", error);
@@ -92,18 +94,21 @@ const Login = () => {
     navigate("/signupscreen")
   };
 
-
-
   return (
     <Box
       sx={{
-        height: "100vh",
+        position: 'relative',
+        height: '100vh',
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        backgroundColor: "#1976d2", // Blue background
+        backgroundImage: `url(${backgroundImage})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundColor: "#1976d2"
       }}
-    >
+    >      
+      {/*Login box*/}
       <Container
         maxWidth="xs"
         sx={{
@@ -114,9 +119,23 @@ const Login = () => {
           textAlign: "center",
         }}
       >
-        <Typography variant="h4" fontWeight="bold" mb={3}>
-          Sign in
+        <Box
+          sx={{
+            maxWidth: "100%",
+          }}
+        >
+          <img src={logo} 
+            style={{ maxWidth: '100%', height: 'auto' }}  
+          />
+        </Box>
+
+        <Box sx={{padding: '10px'}}/>
+        
+        <Typography variant="h4" fontWeight="bold">
+          Sign In
         </Typography>
+
+        <Box sx={{padding: '10px'}}/>
 
         <Button
           variant="contained"
@@ -133,6 +152,8 @@ const Login = () => {
         >
           Login with Google
         </Button>
+
+        <Box sx={{padding: '10px'}}/>
 
         <Button
           variant="contained"
