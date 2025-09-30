@@ -206,12 +206,36 @@ const applyPac = (rows) => {
   return next;
 };
 
+ const applyTravelThruTrainingPercents = (rows) => {
+    const next = rows.map(r => ({ ...r }));
+
+    const psProj = Number(next.find(r => r.name === "Product Sales")?.projectedDollar) || 0;
+    const psHist = Number(next.find(r => r.name === "Product Sales")?.historicalDollar) || 0;
+
+    const startIdx = next.findIndex(r => r.name === "Travel");
+    const endIdx = next.findIndex(r => r.name === "Training");
+
+    if (startIdx !== -1 && endIdx !== -1 && endIdx >= startIdx) {
+      for (let i = startIdx; i <= endIdx; i++) {
+        const proj$ = Number(next[i].projectedDollar) || 0;
+        const hist$ = Number(next[i].historicalDollar) || 0;
+
+        next[i].projectedPercent = psProj > 0 ? ((proj$ / psProj) * 100).toFixed(2) : "0.00";
+        next[i].historicalPercent = psHist > 0 ? ((hist$ / psHist) * 100).toFixed(2) : "0.00";
+      }
+    }
+
+    return next;
+  };
+
 // Call this after any change/seed so totals & PAC are coherent
 const applyAll = (rows) =>
   applySalesPercents(
     applyPac(
       applyControllables(
-        recalcFromPercents(rows)
+        applyTravelThruTrainingPercents(   
+          recalcFromPercents(rows)
+        )
       )
     )
   );
@@ -889,8 +913,8 @@ const PAC = () => {
         pacGoal: Number(pacGoal) || 0,
         projections: projections.map(p => ({
           name: p.name,
-          projectedDollar: p.projectedDollar,
-          projectedPercent: p.projectedPercent,
+          projectedDollar: Number (p.projectedDollar),
+          projectedPercent: Number (p.projectedPercent),
         })),
         updatedAt: serverTimestamp(),
       });
@@ -1418,6 +1442,7 @@ const PAC = () => {
                           <span>${expense.projectedDollar || 0}</span>
                         )}
                       </TableCell>
+
 
                       <TableCell>
                         <FormControl>
