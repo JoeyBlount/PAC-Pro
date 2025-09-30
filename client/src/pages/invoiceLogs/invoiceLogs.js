@@ -18,6 +18,27 @@ import { StoreContext } from "../../context/storeContext";
 import { getAuth } from "firebase/auth";
 import { useAuth } from "../../context/AuthContext";
 
+// Map Invoice Log category IDs -> PAC "projections[].name"
+const PROJECTION_LOOKUP = {
+  'FOOD': 'Base Food',
+  'CONDIMENT': 'Condiment',
+  'PAPER': 'Paper',
+  'NONPRODUCT': null,            // not present in PAC; default 0
+  'TRAVEL': 'Travel',
+  'ADV-OTHER': 'Adv Other',
+  'PROMO': 'Promotion',
+  'OUTSIDE SVC': 'Outside Services',
+  'LINEN': 'Linen',
+  'OP. SUPPLY': 'OP. Supply',
+  'M+R': 'Maint. & Repair',
+  'SML EQUIP': 'Small Equipment',
+  'UTILITIES': 'Utilities',
+  'OFFICE': 'Office',
+  'TRAINING': 'Training',
+  'CR': 'Crew Relations',
+};
+
+
 const InvoiceLogs = () => {
   // const { currentUser, userRole } = useAuth();
   // console.log("Logged in user:", currentUser?.email);
@@ -81,7 +102,7 @@ const InvoiceLogs = () => {
     return 0;
   };
 
-//this function makes sure we can only edit/delete the current month in the invoice. 
+  //this function makes sure we can only edit/delete the current month in the invoice. 
   const isCurrentMonth = (dateStr) => {
     const date = new Date(dateStr);
     const now = new Date();
@@ -93,23 +114,23 @@ const InvoiceLogs = () => {
   const handleDelete = async (invoice) => {
     const confirm = window.confirm("Are you sure you want to delete this invoice?");
     if (!confirm) return;
-  
+
     try {
       // 1. Move the invoice to 'recentlyDeleted' collection
       const deletedRef = doc(db, "recentlyDeleted", invoice.id);
       await setDoc(deletedRef, invoice);
-  
+
       // 2. Now delete it from the 'invoices' collection
       await deleteDoc(doc(db, "invoices", invoice.id));
-  
+
       alert("Invoice moved to Recently Deleted.");
-  
+
       // 3. Refresh invoices on the page
       setData(prev => ({
         ...prev,
         invoices: prev.invoices.filter(inv => inv.id !== invoice.id),
       }));
-  
+
     } catch (err) {
       console.error("Failed to move invoice to Recently Deleted:", err);
       alert("Error deleting invoice.");
@@ -123,12 +144,12 @@ const InvoiceLogs = () => {
       // 1. Copy back to "invoices"
       const restoredRef = doc(db, "invoices", invoice.id);
       await setDoc(restoredRef, invoice);
-  
+
       // 2. Then delete from "recentlyDeleted"
       await deleteDoc(doc(db, "recentlyDeleted", invoice.id));
-  
+
       alert("Invoice restored successfully!");
-  
+
       // Optionally refresh your page or re-fetch data here
       fetchInvoices();
       fetchRecentlyDeleted();
@@ -146,13 +167,13 @@ const InvoiceLogs = () => {
       alert("Invoice Deleted!");
       fetchInvoices();
       fetchRecentlyDeleted();
-    }catch(err) {
+    } catch (err) {
       console.log("failed to delete the invoice from recentlydeleted, ", err)
       alert("failed to delete the invoice")
     }
   };
-  
-  
+
+
   const handleEdit = (invoice) => {
     setEditInvoiceData({ ...invoice }); // clone it so we can modify safely
     setEditDialogOpen(true);
@@ -165,7 +186,7 @@ const InvoiceLogs = () => {
         locked: true,
       })
       alert("Invoice locked.")
-     
+
       fetchInvoices(); // refresh from Firestore
     } catch (error) {
       console.error("Error locking invoice:", error);
@@ -177,14 +198,14 @@ const InvoiceLogs = () => {
   };
 
   const unlockInvoice = async (invoiceID) => {
-    try{
+    try {
       const invoiceRef = doc(db, "invoices", invoiceID);
       await updateDoc(invoiceRef, {
         locked: false,
       })
       alert("Invoice unlocked.")
 
-    }catch(error) {
+    } catch (error) {
       console.error("Error unlocking invoice:", error);
       alert("Failed to unlock invoice.");
     }
@@ -204,8 +225,8 @@ const InvoiceLogs = () => {
       alert("Failed to update invoice.");
     }
   };
-  
-  
+
+
 
   // Fetch invoice categories from "invoiceCategories" collection
   useEffect(() => {
@@ -239,10 +260,11 @@ const InvoiceLogs = () => {
       const month = selectedMonth || (currentDate.getMonth() + 1);
       const year = selectedYear || currentDate.getFullYear();
       const yearMonth = `${year}${String(month).padStart(2, '0')}`;
-      
+
       fetchBudgetData(selectedStore, yearMonth);
     }
-  }, [selectedStore, selectedMonth, selectedYear]);
+  }, [selectedStore, selectedMonth, selectedYear, monetaryColumns]);
+
 
   async function fetchInvoices() {
     try {
@@ -251,9 +273,9 @@ const InvoiceLogs = () => {
         collection(db, "invoices"),
         where("storeID", "==", selectedStore)
       );
-      
+
       let snapshot = await getDocs(q);
-      
+
       // If no results, try with "001" format (assuming selectedStore might be "store_001")
       if (snapshot.docs.length === 0 && selectedStore) {
         q = query(
@@ -262,7 +284,7 @@ const InvoiceLogs = () => {
         );
         snapshot = await getDocs(q);
       }
-      
+
       const invoices = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
@@ -307,54 +329,58 @@ const InvoiceLogs = () => {
     }
   };
 
-  // Fetch budget data from pac_projections collection
   const fetchBudgetData = async (storeId, yearMonth) => {
     try {
-      // Convert storeId to the format used in pac_projections (e.g., "001" -> "store_001")
-      const formattedStoreId = storeId.startsWith('store_') ? storeId : `store_${storeId.padStart(3, '0')}`;
-      const docId = `${formattedStoreId}_${yearMonth}`;
-      
-      console.log("Fetching budget data for:", { storeId, formattedStoreId, yearMonth, docId });
-      
-      // Try to get the document directly by ID first
-      const docRef = doc(db, "pac_projections", docId);
-      const docSnap = await getDoc(docRef);
-      
-      if (docSnap.exists()) {
-        const projectionsData = docSnap.data();
-        console.log("Found projections data:", projectionsData);
-        
-        // Map pac_projections purchases data to invoice categories
-        const budgetMapping = {
-          'FOOD': projectionsData.purchases?.food || 0,
-          'CONDIMENT': projectionsData.purchases?.condiment || 0,
-          'PAPER': projectionsData.purchases?.paper || 0,
-          'NONPRODUCT': projectionsData.purchases?.non_product || 0,
-          'TRAVEL': projectionsData.purchases?.travel || 0,
-          'ADV-OTHER': projectionsData.purchases?.advertising_other || 0,
-          'PROMO': projectionsData.purchases?.promotion || 0,
-          'OUTSIDE SVC': projectionsData.purchases?.outside_services || 0,
-          'LINEN': projectionsData.purchases?.linen || 0,
-          'OP. SUPPLY': projectionsData.purchases?.operating_supply || 0,
-          'M+R': projectionsData.purchases?.maintenance_repair || 0,
-          'SML EQUIP': projectionsData.purchases?.small_equipment || 0,
-          'UTILITIES': projectionsData.purchases?.utilities || 0,
-          'OFFICE': projectionsData.purchases?.office || 0,
-          'TRAINING': projectionsData.purchases?.training || 0,
-          'CR': projectionsData.purchases?.crew_relations || 0
-        };
-        
-        setBudgetData(budgetMapping);
-        console.log("Budget data loaded:", budgetMapping);
-      } else {
-        console.log("No projections data found for", docId);
+      if (!storeId || !/^\d{6}$/.test(String(yearMonth))) {
         setBudgetData({});
+        return;
       }
-    } catch (error) {
-      console.error("Error loading budget data:", error);
+
+      const ensureStoreFmt = (s) => s?.startsWith('store_') ? s : `store_${String(s).padStart(3, '0')}`;
+
+      // Try doc IDs in this order to avoid editing PAC.js:
+      const tryIds = [
+        `${storeId}_${yearMonth}`,             // e.g. store_001_202509  (matches PAC if storeId already has prefix)
+        `${ensureStoreFmt(storeId)}_${yearMonth}`, // e.g. store_001_202509 (fallback if storeId is "001")
+      ];
+
+      let snap = null;
+      for (const id of tryIds) {
+        const ref = doc(db, 'pac-projections', id); // <-- hyphen collection name
+        const test = await getDoc(ref);
+        if (test.exists()) { snap = test; break; }
+      }
+
+      if (!snap?.exists()) {
+        console.log('No PAC projections found for', tryIds);
+        setBudgetData({});
+        return;
+      }
+
+      const pac = snap.data() || {};
+      const rows = Array.isArray(pac.projections) ? pac.projections : [];
+
+      // Build budget map aligned to your table's categories
+      const nextBudget = {};
+      monetaryColumns.forEach((col) => {
+        const catId = col.id; // e.g., 'FOOD', 'ADV-OTHER'
+        const projName = PROJECTION_LOOKUP[catId];
+        if (!projName) {
+          nextBudget[catId] = 0;
+          return;
+        }
+        const match = rows.find((r) => r?.name === projName);
+        const val = Number(match?.projectedDollar) || 0;
+        nextBudget[catId] = val;
+      });
+
+      setBudgetData(nextBudget);
+    } catch (err) {
+      console.error('Error loading budget data:', err);
       setBudgetData({});
     }
   };
+
 
   // Export functions remain unchanged
   const handleExportPDF = async () => {
@@ -594,8 +620,8 @@ const InvoiceLogs = () => {
 
     return sorted.map((inv, i) => {
       const canEdit = isCurrentMonth(inv.invoiceDate) && !inv.locked;
-      
-    
+
+
       return (
         <tr key={i} className="invoice-row" onClick={() => handleRowClick(inv)}>
           <td className="tableCell">{inv.storeID}</td>
@@ -607,67 +633,67 @@ const InvoiceLogs = () => {
           </td>
           <td className="tableCell">{inv.companyName}</td>
           <td className="tableCell invoiceNumberCell">{inv.invoiceNumber}</td>
-    
+
           {monetaryColumns.map((col, j) => {
             const categoryName = col.id; // Use col.id instead of col.name
             const amount = getCategoryValue(inv, categoryName);
-    
+
             return (
               <td key={j} className="tableCell categoryCell">
                 {amount !== 0 && !isNaN(amount)
                   ? amount.toLocaleString("en-US", {
-                      style: "currency",
-                      currency: "USD",
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 0,
-                    })
+                    style: "currency",
+                    currency: "USD",
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                  })
                   : ""}
               </td>
             );
           })}
-    
+
           <td className="tableCell">
-          {(canEdit || userRole === "Supervisor" || userRole === "Admin") && (
-            <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation(); 
-                  handleEdit(inv);
-                  // console.log(inv)
-                }}
-              >
-                Edit
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation(); 
-                  handleDelete(inv);
-                  
-                }}
-              >
-                Delete
-              </button>
-              <button
-                onClick={(e) => {
-                  console.log(e)
-                  e.stopPropagation(); 
-                  lockInvoice(inv.id);  
-                }}
-              >
-                Lock
-              </button>
-              <button
-                onClick={(e) => {
-                  console.log(e)
-                  e.stopPropagation(); 
-                  unlockInvoice(inv.id);  
-                }}
-              >
-                Unlock
-              </button>
-            </>
-          )}
-        </td>
+            {(canEdit || userRole === "Supervisor" || userRole === "Admin") && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEdit(inv);
+                    // console.log(inv)
+                  }}
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(inv);
+
+                  }}
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={(e) => {
+                    console.log(e)
+                    e.stopPropagation();
+                    lockInvoice(inv.id);
+                  }}
+                >
+                  Lock
+                </button>
+                <button
+                  onClick={(e) => {
+                    console.log(e)
+                    e.stopPropagation();
+                    unlockInvoice(inv.id);
+                  }}
+                >
+                  Unlock
+                </button>
+              </>
+            )}
+          </td>
         </tr>
       );
     });
@@ -846,7 +872,7 @@ const InvoiceLogs = () => {
       </DialogActions>
     </Dialog>
   ));
-  
+
 
   // Export choice dialog
   const ExportDialog = () => (
@@ -921,28 +947,28 @@ const InvoiceLogs = () => {
               Export
             </Button>
             <Button
-            variant="contained"
-            style={{
-              backgroundColor: "#ff5252", 
-              color: "white",
-              fontWeight: "bold",
-              fontSize: "12px",
-              padding: "2%",
-              borderRadius: "8px",
-              width: "auto",
-              minWidth: "150px",
-              textTransform: "none", 
-              boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.2)",
-            }}
-            onClick={() => {
-              setShowRecentlyDeleted(true);
-              fetchRecentlyDeleted()
-              // Handle open modal or navigate to Recently Deleted
-              console.log("Open Recently Deleted Modal");
-            }}
-          >
-            Recently Deleted
-          </Button>
+              variant="contained"
+              style={{
+                backgroundColor: "#ff5252",
+                color: "white",
+                fontWeight: "bold",
+                fontSize: "12px",
+                padding: "2%",
+                borderRadius: "8px",
+                width: "auto",
+                minWidth: "150px",
+                textTransform: "none",
+                boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.2)",
+              }}
+              onClick={() => {
+                setShowRecentlyDeleted(true);
+                fetchRecentlyDeleted()
+                // Handle open modal or navigate to Recently Deleted
+                console.log("Open Recently Deleted Modal");
+              }}
+            >
+              Recently Deleted
+            </Button>
           </div>
         </div>
       </div>
@@ -996,76 +1022,76 @@ const InvoiceLogs = () => {
       <InvoiceDialog />
       <EditDialog />
       {showRecentlyDeleted && (
-      <div style={{
-        position: "fixed",
-        top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: "rgba(0,0,0,0.5)",
-        zIndex: 9999,
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center"
-      }}>
         <div style={{
-          background: "white",
-          padding: "30px",
-          borderRadius: "10px",
-          minWidth: "300px",
-          textAlign: "center",
-          position: "relative"
+          position: "fixed",
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.5)",
+          zIndex: 9999,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center"
         }}>
-          <h2>Recently Deleted</h2>
-          {recentlyDeleted.length === 0 ? (
-          <p>No recently deleted invoices.</p>
+          <div style={{
+            background: "white",
+            padding: "30px",
+            borderRadius: "10px",
+            minWidth: "300px",
+            textAlign: "center",
+            position: "relative"
+          }}>
+            <h2>Recently Deleted</h2>
+            {recentlyDeleted.length === 0 ? (
+              <p>No recently deleted invoices.</p>
             ) : (
-          <div style={{ maxHeight: "300px", overflowY: "auto" }}>
-            {recentlyDeleted.map((inv) => (
-              <div key={inv.id} style={{
-                padding: "10px",
-                borderBottom: "1px solid #ddd",
-                textAlign: "left"
-              }}>
-                <strong>{inv.companyName || "Unnamed Invoice"}</strong>
-                <div style={{ fontSize: "0.8rem", color: "gray" }}>
-                  {inv.invoiceNumber ? `Invoice #${inv.invoiceNumber}` : ""}
-                </div>
-                <div style={{ marginTop: "5px" }}>
-                  <Button
-                    variant="outlined"
-                    style={{ marginRight: "10px", fontSize: "10px" }}
-                    onClick={() => handleRestore(inv)}
-                  >
-                    Restore
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    style={{ fontSize: "10px" }}
-                    onClick={() => handlePermanentDelete(inv)}
-                  >
-                    Delete Permanently
-                  </Button>
-                </div>
+              <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+                {recentlyDeleted.map((inv) => (
+                  <div key={inv.id} style={{
+                    padding: "10px",
+                    borderBottom: "1px solid #ddd",
+                    textAlign: "left"
+                  }}>
+                    <strong>{inv.companyName || "Unnamed Invoice"}</strong>
+                    <div style={{ fontSize: "0.8rem", color: "gray" }}>
+                      {inv.invoiceNumber ? `Invoice #${inv.invoiceNumber}` : ""}
+                    </div>
+                    <div style={{ marginTop: "5px" }}>
+                      <Button
+                        variant="outlined"
+                        style={{ marginRight: "10px", fontSize: "10px" }}
+                        onClick={() => handleRestore(inv)}
+                      >
+                        Restore
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        style={{ fontSize: "10px" }}
+                        onClick={() => handlePermanentDelete(inv)}
+                      >
+                        Delete Permanently
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+            <p>Invoices here will be deleted after 14 days (Not yet working)</p>
+            {/* Later you can map the deleted invoices here */}
+            <Button
+              variant="contained"
+              style={{ marginTop: "20px", backgroundColor: "#6A39FE", color: "white" }}
+              onClick={() => setShowRecentlyDeleted(false)}
+            >
+              Close
+            </Button>
           </div>
-        )}
-          <p>Invoices here will be deleted after 14 days (Not yet working)</p>
-          {/* Later you can map the deleted invoices here */}
-          <Button 
-            variant="contained" 
-            style={{ marginTop: "20px", backgroundColor: "#6A39FE", color: "white" }}
-            onClick={() => setShowRecentlyDeleted(false)}
-          >
-            Close
-          </Button>
         </div>
-      </div>
-    )}
-      
+      )}
+
     </Container>
   );
 
-  
+
 };
 
 export default InvoiceLogs;
