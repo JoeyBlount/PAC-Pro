@@ -39,6 +39,26 @@ import { getAuth } from "firebase/auth";
 import { useAuth } from "../../context/AuthContext";
 import MonthLockService from "../../services/monthLockService";
 
+// Map Invoice Log category IDs -> PAC "projections[].name"
+const PROJECTION_LOOKUP = {
+  FOOD: "Base Food",
+  CONDIMENT: "Condiment",
+  PAPER: "Paper",
+  NONPRODUCT: null, // not present in PAC; default 0
+  TRAVEL: "Travel",
+  "ADV-OTHER": "Adv Other",
+  PROMO: "Promotion",
+  "OUTSIDE SVC": "Outside Services",
+  LINEN: "Linen",
+  "OP. SUPPLY": "OP. Supply",
+  "M+R": "Maint. & Repair",
+  "SML EQUIP": "Small Equipment",
+  UTILITIES: "Utilities",
+  OFFICE: "Office",
+  TRAINING: "Training",
+  CR: "Crew Relations",
+};
+
 const InvoiceLogs = () => {
   // const { currentUser, userRole } = useAuth();
   // console.log("Logged in user:", currentUser?.email);
@@ -286,7 +306,7 @@ const InvoiceLogs = () => {
 
       fetchBudgetData(selectedStore, yearMonth);
     }
-  }, [selectedStore, selectedMonth, selectedYear]);
+  }, [selectedStore, selectedMonth, selectedYear, monetaryColumns]);
 
   // Check if the selected month is locked
   const checkMonthLock = async () => {
@@ -459,58 +479,58 @@ const InvoiceLogs = () => {
     }
   };
 
-  // Fetch budget data from pac_projections collection
   const fetchBudgetData = async (storeId, yearMonth) => {
     try {
-      // Convert storeId to the format used in pac_projections (e.g., "001" -> "store_001")
-      const formattedStoreId = storeId.startsWith("store_")
-        ? storeId
-        : `store_${storeId.padStart(3, "0")}`;
-      const docId = `${formattedStoreId}_${yearMonth}`;
+      if (!storeId || !/^\d{6}$/.test(String(yearMonth))) {
+        setBudgetData({});
+        return;
+      }
 
-      console.log("Fetching budget data for:", {
-        storeId,
-        formattedStoreId,
-        yearMonth,
-        docId,
+      const ensureStoreFmt = (s) =>
+        s?.startsWith("store_") ? s : `store_${String(s).padStart(3, "0")}`;
+
+      // Try doc IDs in this order to avoid editing PAC.js:
+      const tryIds = [
+        `${storeId}_${yearMonth}`, // e.g. store_001_202509  (matches PAC if storeId already has prefix)
+        `${ensureStoreFmt(storeId)}_${yearMonth}`, // e.g. store_001_202509 (fallback if storeId is "001")
+      ];
+
+      let snap = null;
+      for (const id of tryIds) {
+        const ref = doc(db, "pac-projections", id); // <-- hyphen collection name
+        const test = await getDoc(ref);
+        if (test.exists()) {
+          snap = test;
+          break;
+        }
+      }
+
+      if (!snap?.exists()) {
+        console.log("No PAC projections found for", tryIds);
+        setBudgetData({});
+        return;
+      }
+
+      const pac = snap.data() || {};
+      const rows = Array.isArray(pac.projections) ? pac.projections : [];
+
+      // Build budget map aligned to your table's categories
+      const nextBudget = {};
+      monetaryColumns.forEach((col) => {
+        const catId = col.id; // e.g., 'FOOD', 'ADV-OTHER'
+        const projName = PROJECTION_LOOKUP[catId];
+        if (!projName) {
+          nextBudget[catId] = 0;
+          return;
+        }
+        const match = rows.find((r) => r?.name === projName);
+        const val = Number(match?.projectedDollar) || 0;
+        nextBudget[catId] = val;
       });
 
-      // Try to get the document directly by ID first
-      const docRef = doc(db, "pac_projections", docId);
-      const docSnap = await getDoc(docRef);
-
-      if (docSnap.exists()) {
-        const projectionsData = docSnap.data();
-        console.log("Found projections data:", projectionsData);
-
-        // Map pac_projections purchases data to invoice categories
-        const budgetMapping = {
-          FOOD: projectionsData.purchases?.food || 0,
-          CONDIMENT: projectionsData.purchases?.condiment || 0,
-          PAPER: projectionsData.purchases?.paper || 0,
-          NONPRODUCT: projectionsData.purchases?.non_product || 0,
-          TRAVEL: projectionsData.purchases?.travel || 0,
-          "ADV-OTHER": projectionsData.purchases?.advertising_other || 0,
-          PROMO: projectionsData.purchases?.promotion || 0,
-          "OUTSIDE SVC": projectionsData.purchases?.outside_services || 0,
-          LINEN: projectionsData.purchases?.linen || 0,
-          "OP. SUPPLY": projectionsData.purchases?.operating_supply || 0,
-          "M+R": projectionsData.purchases?.maintenance_repair || 0,
-          "SML EQUIP": projectionsData.purchases?.small_equipment || 0,
-          UTILITIES: projectionsData.purchases?.utilities || 0,
-          OFFICE: projectionsData.purchases?.office || 0,
-          TRAINING: projectionsData.purchases?.training || 0,
-          CR: projectionsData.purchases?.crew_relations || 0,
-        };
-
-        setBudgetData(budgetMapping);
-        console.log("Budget data loaded:", budgetMapping);
-      } else {
-        console.log("No projections data found for", docId);
-        setBudgetData({});
-      }
-    } catch (error) {
-      console.error("Error loading budget data:", error);
+      setBudgetData(nextBudget);
+    } catch (err) {
+      console.error("Error loading budget data:", err);
       setBudgetData({});
     }
   };
