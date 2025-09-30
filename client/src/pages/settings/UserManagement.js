@@ -17,8 +17,7 @@ import {
   InputLabel,
   FormControl,
 } from "@mui/material";
-import { collection, getDocs, addDoc, deleteDoc, doc, setDoc, updateDoc } from "firebase/firestore";
-import { db } from "../../config/firebase-config";
+// Firebase imports removed - now using backend API
 import CloseIcon from "@mui/icons-material/Close";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from '@mui/icons-material/Edit'; // For editing role
@@ -47,7 +46,20 @@ const UserManagement = () => {
   }, [canViewUsers]);
 
   const fetchUsers = async () => {
-    // ... (fetchUsers logic remains the same)
+    try {
+      const response = await fetch('http://localhost:5140/api/pac/userManagement/fetch');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+      }
+      const data = await response.json();
+      console.log("Fetched users data:", data.users); // Debug log
+      setUsers(data.users || []);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      alert(`Failed to fetch users: ${error.message}`);
+    }
   };
 
   // --- Delete Handlers ---
@@ -66,7 +78,32 @@ const UserManagement = () => {
   };
 
   const handleDeleteConfirm = async () => {
-    // ... (handleDeleteConfirm logic remains the same)
+    if (!selectedUser) return;
+
+    try {
+      const response = await fetch(`http://localhost:5140/api/pac/userManagement/delete?user_email=${encodeURIComponent(selectedUser.email)}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log("User deleted successfully:", result);
+      
+      fetchUsers(); // Refresh the user list
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      alert(`Failed to delete user: ${error.message}`);
+    }
+    
+    setDeleteDialogOpen(false);
+    setSelectedUser(null);
   };
 
   // --- Add Handlers ---
@@ -81,30 +118,35 @@ const UserManagement = () => {
       return;
     }
 
-    // Check if email already exists
-    const emailExists = users.some(user => user.email === newUser.email);
-    if (emailExists) {
-      alert("A user with this email already exists.");
-      return;
-    }
-
     if (newUser.firstName && newUser.lastName && newUser.email && newUser.role) {
       try {
-        const userRef = doc(db, "users", newUser.email);
-        await setDoc(userRef, {
-          firstName: newUser.firstName,
-          lastName: newUser.lastName,
-          email: newUser.email,
-          role: newUser.role,
-          createdAt: new Date().toISOString(),
-          acceptState: false,
+        const response = await fetch('http://localhost:5140/api/pac/userManagement/add', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            firstName: newUser.firstName,
+            lastName: newUser.lastName,
+            email: newUser.email,
+            role: newUser.role,
+          }),
         });
-        fetchUsers();
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log("User added successfully:", result);
+        
+        fetchUsers(); // Refresh the user list
         setAddDialogOpen(false);
         setNewUser({ firstName: "", lastName: "", email: "", role: "" });
       } catch (error) {
         console.error("Error adding user:", error);
-        alert("Error adding user.");
+        alert(`Failed to add user: ${error.message}`);
       }
     } else {
       alert("Please fill in all fields.");
@@ -138,18 +180,28 @@ const UserManagement = () => {
     }
 
     try {
-      const userRef = doc(db, "users", editingUser.email); // Use email as ID
-      await updateDoc(userRef, {
-        role: editingUser.role
+      const response = await fetch(`http://localhost:5140/api/pac/userManagement/edit?user_email=${encodeURIComponent(editingUser.email)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          role: editingUser.role
+        }),
       });
-      // Update local state
-      setUsers(users.map(user =>
-        user.id === editingUser.id ? { ...user, role: editingUser.role } : user
-      ));
-      fetchUsers(); // Or refetch for consistency
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log("User role updated successfully:", result);
+      
+      fetchUsers(); // Refresh the user list
     } catch (error) {
       console.error("Error updating user role:", error);
-      alert("Failed to update role.");
+      alert(`Failed to update role: ${error.message}`);
     }
     setEditDialogOpen(false);
     setEditingUser({ id: null, email: null, role: "" });
@@ -183,9 +235,9 @@ const UserManagement = () => {
 
       {/* User List */}
       <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-        {users.map((user) => (
+        {users.map((user, index) => (
           <Paper
-            key={user.id}
+            key={user.email || `user-${index}`}
             elevation={3}
             sx={{ width: "100%", p: 2, mb: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}
           >
