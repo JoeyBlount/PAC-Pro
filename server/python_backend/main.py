@@ -27,7 +27,7 @@ def initialize_firebase() -> bool:
     if not FIREBASE_AVAILABLE:
         return False
     if firebase_admin._apps:
-        print("✅ Firebase already initialized")
+        print("[OK] Firebase already initialized")
         return True
 
     base_path = os.environ.get("PROJECT_ROOT", ".")
@@ -36,18 +36,18 @@ def initialize_firebase() -> bool:
         cred_path = "config/firebase-service-account.json"
 
     if os.path.exists(cred_path):
-        print(f"🔑 Initializing Firebase with credentials: {cred_path}")
+        print(f"[INIT] Initializing Firebase with credentials: {cred_path}")
         try:
             cred = credentials.Certificate(cred_path)
             firebase_admin.initialize_app(cred)
-            print("✅ Firebase initialized successfully")
+            print("[OK] Firebase initialized successfully")
             return True
         except Exception as e:
-            print(f"❌ Firebase initialization failed: {e}")
+            print(f"[ERROR] Firebase initialization failed: {e}")
             return False
     else:
-        print(f"⚠️ Firebase service account key not found at: {cred_path}")
-        print('📝 Set PROJECT_ROOT env to your project root (e.g., setx PROJECT_ROOT "C:\\path\\to\\PAC-Pro")')
+        print(f"[WARNING] Firebase service account key not found at: {cred_path}")
+        print('[INFO] Set PROJECT_ROOT env to your project root (e.g., setx PROJECT_ROOT "C:\\path\\to\\PAC-Pro")')
         return False
 
 FIREBASE_INITIALIZED = initialize_firebase()
@@ -329,14 +329,14 @@ if __name__ == "__main__":
     import uvicorn
 
     system = platform.system()
-    print("🚀 Starting PAC Backend Server...")
-    print(f"📱 Platform: {system} {platform.machine()}")
-    print(f"🐍 Python: {platform.python_version()}")
-    print(f"📁 PROJECT_ROOT: {os.environ.get('PROJECT_ROOT', 'not set (using relative paths)')}")
-    print(f"🔥 Firebase: {'✅ Available & Initialized' if FIREBASE_INITIALIZED else '⚠️ Not Available (Mock Mode)'}")
-    print("🌐 Server: http://127.0.0.1:5140")
-    print("📚 Docs:   http://127.0.0.1:5140/docs")
-    print("❤️ Health: http://127.0.0.1:5140/api/pac/health\n")
+    print("[START] Starting PAC Backend Server...")
+    print(f"[INFO] Platform: {system} {platform.machine()}")
+    print(f"[INFO] Python: {platform.python_version()}")
+    print(f"[INFO] PROJECT_ROOT: {os.environ.get('PROJECT_ROOT', 'not set (using relative paths)')}")
+    print(f"[INFO] Firebase: {'Available & Initialized' if FIREBASE_INITIALIZED else 'Not Available (Mock Mode)'}")
+    print("[INFO] Server: http://127.0.0.1:5140")
+    print("[INFO] Docs:   http://127.0.0.1:5140/docs")
+    print("[INFO] Health: http://127.0.0.1:5140/api/pac/health\n")
 
     uvicorn.run(
         "main:app",

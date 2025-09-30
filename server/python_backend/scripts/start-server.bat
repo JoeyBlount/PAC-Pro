@@ -21,7 +21,7 @@ echo Starting Python backend server...
 echo.
 
 REM Start the backend server
-C:\Users\%USERNAME%\AppData\Local\Programs\Python\Python312-arm64\python.exe main.py
+python main.py
 
 echo.
 echo Press any key to exit...
