@@ -5,7 +5,7 @@ from typing import Dict, Any
 from datetime import datetime
 import json
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Query
 from pydantic import BaseModel
 from models import PacCalculationResult, PacInputData
 from services.pac_calculation_service import PacCalculationService
@@ -13,6 +13,7 @@ from services.data_ingestion_service import DataIngestionService
 from services.account_mapping_service import AccountMappingService
 from services.invoice_reader import InvoiceReader
 from services.invoice_submit import InvoiceSubmitService
+from services.user_management_service import UserManagementService
 import logging
 
 
@@ -46,6 +47,13 @@ def get_invoice_submit_service() -> InvoiceSubmitService:
     return InvoiceSubmitService()
 
 
+def get_user_management_service() -> UserManagementService:
+    """
+    Get the user management service instance.
+    """
+    return UserManagementService()
+
+
 # ---- Helpers ----
 def is_valid_year_month(year_month: str) -> bool:
     """Validate yearMonth format (YYYYMM)"""
@@ -58,6 +66,120 @@ def is_valid_year_month(year_month: str) -> bool:
         return 2000 <= year <= 2100 and 1 <= month <= 12
     except ValueError:
         return False
+
+
+# ---- User Management Routes ----
+@router.get("/userManagement/fetch")
+async def fetch_users(
+    user_service: UserManagementService = Depends(get_user_management_service),
+) -> Dict[str, Any]:
+    """
+    Fetch all users from the 'users' collection in Firestore.
+    """
+    if not user_service.is_available():
+        raise HTTPException(
+            status_code=503, 
+            detail="User management service not available - Firebase not initialized"
+        )
+    
+    try:
+        users = await user_service.fetch_users()
+        return {"users": users, "count": len(users)}
+    except Exception as e:
+        logger.error(f"Error fetching users: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch users: {str(e)}")
+
+
+@router.post("/userManagement/add")
+async def add_user(
+    user_data: Dict[str, Any],
+    user_service: UserManagementService = Depends(get_user_management_service),
+) -> Dict[str, Any]:
+    """
+    Add a new user to the 'users' collection in Firestore.
+    """
+    if not user_service.is_available():
+        raise HTTPException(
+            status_code=503, 
+            detail="User management service not available - Firebase not initialized"
+        )
+    
+    try:
+        # Validate required fields
+        required_fields = ["firstName", "lastName", "email", "role"]
+        for field in required_fields:
+            if not user_data.get(field):
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Missing required field: {field}"
+                )
+        
+        # Add timestamp and accept state
+        user_data["createdAt"] = datetime.now().isoformat()
+        user_data["acceptState"] = False
+        
+        result = await user_service.add_user(user_data)
+        return {"success": True, "message": "User added successfully", "user": result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding user: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to add user: {str(e)}")
+
+
+@router.put("/userManagement/edit")
+async def edit_user(
+    user_email: str = Query(..., description="Email of the user to edit"),
+    user_data: Dict[str, Any] = None,
+    user_service: UserManagementService = Depends(get_user_management_service),
+) -> Dict[str, Any]:
+    """
+    Edit a user in the 'users' collection in Firestore.
+    """
+    if not user_service.is_available():
+        raise HTTPException(
+            status_code=503, 
+            detail="User management service not available - Firebase not initialized"
+        )
+    
+    try:
+        if not user_email:
+            raise HTTPException(status_code=400, detail="User email is required")
+        
+        result = await user_service.edit_user(user_email, user_data)
+        return {"success": True, "message": "User updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error editing user: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to edit user: {str(e)}")
+
+
+@router.delete("/userManagement/delete")
+async def delete_user(
+    user_email: str = Query(..., description="Email of the user to delete"),
+    user_service: UserManagementService = Depends(get_user_management_service),
+) -> Dict[str, Any]:
+    """
+    Delete a user from the 'users' collection in Firestore.
+    """
+    if not user_service.is_available():
+        raise HTTPException(
+            status_code=503, 
+            detail="User management service not available - Firebase not initialized"
+        )
+    
+    try:
+        if not user_email:
+            raise HTTPException(status_code=400, detail="User email is required")
+        
+        result = await user_service.delete_user(user_email)
+        return {"success": True, "message": "User deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting user: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
 
 
 # ---- PAC Routes ----
