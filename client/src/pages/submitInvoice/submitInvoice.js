@@ -2,8 +2,20 @@ import React, { useState, useEffect, useContext } from "react";
 import { auth, db } from "../../config/firebase-config";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { StoreContext } from "../../context/storeContext";
+import { useAuth } from "../../context/AuthContext";
+import MonthLockService from "../../services/monthLockService";
 import styles from "./submitInvoice.module.css";
 import { invoiceCatList } from "../settings/InvoiceSettings";
+import {
+  Alert,
+  TextField,
+  Select,
+  MenuItem,
+  Box,
+  InputLabel,
+  FormControl,
+} from "@mui/material";
+import LockIcon from "@mui/icons-material/Lock";
 
 const generateUUID = () => {
   return Math.random().toString(36).slice(2);
@@ -11,6 +23,7 @@ const generateUUID = () => {
 
 const SubmitInvoice = () => {
   const { selectedStore } = useContext(StoreContext);
+  const { userRole } = useAuth();
   const [imageUpload, setImageUpload] = useState(null);
   const [imageUrls, setImageUrls] = useState([]);
   const [extras, setExtras] = useState([]);
@@ -19,9 +32,7 @@ const SubmitInvoice = () => {
 
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [companyName, setCompanyName] = useState("");
-  const [invoiceDay, setInvoiceDay] = useState(new Date().getDate());
-  const [invoiceMonth, setInvoiceMonth] = useState(new Date().getMonth() + 1);
-  const [invoiceYear, setInvoiceYear] = useState(new Date().getFullYear());
+  const [invoiceDate, setInvoiceDate] = useState(new Date());
   const [confirmedItems, setConfirmedItems] = useState([]);
   const [userData, setUserData] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -30,11 +41,24 @@ const SubmitInvoice = () => {
   const [calendarViewDate, setCalendarViewDate] = useState(new Date());
   const [calendarPosition, setCalendarPosition] = useState({ top: 200, left: '50%' });
 
+  // Month locking state
+  const [monthLockStatus, setMonthLockStatus] = useState(null);
+  const [lockedMonths, setLockedMonths] = useState([]);
+
+  // Separate month/year selectors for controlling which month the invoice gets added to
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1; // getMonth() returns 0-11, so add 1
+  const currentYear = currentDate.getFullYear();
+
+  const [targetMonth, setTargetMonth] = useState(currentMonth);
+  const [targetYear, setTargetYear] = useState(currentYear);
+
   const user = auth.currentUser;
 
   useEffect(() => {
     document.title = "PAC Pro - Submit Invoice";
   }, []);
+
 
   // Close calendar when clicking outside
   useEffect(() => {
@@ -59,6 +83,60 @@ const SubmitInvoice = () => {
     };
   }, [showCalendar]);
 
+  // Check if the selected month is locked
+  const checkMonthLock = async () => {
+    try {
+      if (!selectedStore || !targetMonth || !targetYear) return;
+
+      const monthNames = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+      ];
+
+      const monthName = monthNames[targetMonth - 1];
+      const lockStatus = await MonthLockService.getMonthLockStatus(
+        selectedStore,
+        monthName,
+        targetYear
+      );
+      setMonthLockStatus(lockStatus);
+    } catch (error) {
+      console.error("Error checking month lock:", error);
+      setMonthLockStatus({ is_locked: false });
+    }
+  };
+
+  // Fetch locked months for dropdown display
+  const fetchLockedMonths = async () => {
+    try {
+      if (!selectedStore) return;
+      const locked = await MonthLockService.getAllLockedMonths(selectedStore);
+      setLockedMonths(locked);
+    } catch (error) {
+      console.error("Error fetching locked months:", error);
+    }
+  };
+
+  useEffect(() => {
+    checkMonthLock();
+    fetchLockedMonths();
+  }, [selectedStore, targetMonth, targetYear]);
+
+  const isMonthLocked = () => {
+    return monthLockStatus?.is_locked || false;
+  };
+
+
   // Fetch user data from Firestore
   useEffect(() => {
     const fetchData = async () => {
@@ -75,7 +153,7 @@ const SubmitInvoice = () => {
           if (!userSnapshot.empty) {
             const userData = userSnapshot.docs[0].data();
             setUserData(userData);
-            setIsAdmin(userData.role === 'admin' || userData.role === 'Admin');
+            setIsAdmin(userData.role === "admin" || userData.role === "Admin");
           }
         }
       } catch (error) {
@@ -86,26 +164,6 @@ const SubmitInvoice = () => {
     fetchData();
   }, []);
 
-  // lock previous months/years for non-admins
-  const isMonthDisabled = (monthNumber) => {
-    if (isAdmin) return false;
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1;
-
-    // Any month in a past year is locked
-    if (invoiceYear < currentYear) return true;
-    // In current year, months before current month are locked
-    if (invoiceYear === currentYear && monthNumber < currentMonth) return true;
-
-    return false; // future months and current month remain selectable
-  };
-  const isYearDisabled = (yearNumber) => {
-    if (isAdmin) return false;
-    const currentYear = new Date().getFullYear();
-    return yearNumber < currentYear; // lock/grey any previous year
-  };
-
   const normalizeCategory = (rawCategory) => {
     const category = rawCategory?.toUpperCase().trim();
     const mapping = {
@@ -114,7 +172,7 @@ const SubmitInvoice = () => {
       OFFICE: "PAPER",
       SNACK: "FOOD",
       BEVERAGE: "FOOD",
-      GAS: "TRAVEL"
+      GAS: "TRAVEL",
     };
     if (invoiceCatList.includes(category)) return category;
     if (mapping[category]) return mapping[category];
@@ -181,7 +239,7 @@ const SubmitInvoice = () => {
     try {
       const res = await fetch("http://localhost:5140/api/invoiceread/read", {
         method: "POST",
-        body: formData
+        body: formData,
       });
 
       const data = await res.json();
@@ -195,11 +253,13 @@ const SubmitInvoice = () => {
 
       if (data.invoiceDate) {
         const [mm, dd, yyyy] = data.invoiceDate.split("/");
+
         const newDate = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
         setSelectedDate(newDate);
         setInvoiceMonth(parseInt(mm));
         setInvoiceDay(parseInt(dd));
         setInvoiceYear(parseInt(yyyy));
+
       }
 
       if (data.items && Array.isArray(data.items)) {
@@ -207,7 +267,7 @@ const SubmitInvoice = () => {
           id: generateUUID(),
           category: normalizeCategory(item.category),
           amount: item.amount?.toFixed(2) || "",
-          confirmed: false
+          confirmed: false,
         }));
         setExtras(newExtras);
         setConfirmedItems([]);
@@ -223,39 +283,54 @@ const SubmitInvoice = () => {
   };
 
   const handleAdd = () => {
-    setExtras((prev) => [...prev, { id: generateUUID(), category: "", amount: "", confirmed: false }]);
+    setExtras((prev) => [
+      ...prev,
+      { id: generateUUID(), category: "", amount: "", confirmed: false },
+    ]);
   };
 
   const handleRemove = (idx) => {
     const itemToRemove = extras[idx];
+
     const isConfirmed = confirmedItems.some(item => item.id === itemToRemove.id);
     
+
+
+
     if (isConfirmed) {
-      const proceed = window.confirm("This item is confirmed. Are you sure you want to remove it?");
+      const proceed = window.confirm(
+        "This item is confirmed. Are you sure you want to remove it?"
+      );
       if (!proceed) return;
     }
-    
+
     setExtras((prev) => {
       const newExtras = prev.filter((_, i) => i !== idx);
       return newExtras;
     });
     setConfirmedItems((prev) => {
+
       const newConfirmed = prev.filter(item => item.id !== itemToRemove.id);
+
       return newConfirmed;
     });
   };
 
   const handleConfirm = (idx) => {
     try {
+
       const rowCategory = extras[idx].category;
-      if (rowCategory === "") throw new Error("Cannot Confirm: Must choose category");
+      if (rowCategory === "")
+        throw new Error("Cannot Confirm: Must choose category");
 
       const raw = String(extras[idx].amount).trim();
       const amountRe = /^-?\d+(\.\d{1,2})?$/;
       if (!amountRe.test(raw)) throw new Error("Invalid amount format");
 
       const rowAmount = parseFloat(raw);
-      const existing = confirmedItems.find((item) => item.category === rowCategory);
+      const existing = confirmedItems.find(
+        (item) => item.category === rowCategory
+      );
       if (existing) {
         const proceed = window.confirm(
           `${rowCategory} has already been confirmed. Add another?`
@@ -264,11 +339,13 @@ const SubmitInvoice = () => {
       }
 
       setConfirmedItems((prev) => {
+
         const newConfirmed = [...prev, { id: extras[idx].id, category: rowCategory, amount: rowAmount }];
         return newConfirmed;
       });
       setExtras((prev) => {
         const newExtras = prev.map((r, i) => (i === idx ? { ...r, confirmed: true } : r));
+
         return newExtras;
       });
     } catch (error) {
@@ -278,65 +355,94 @@ const SubmitInvoice = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Check if all extras are confirmed
-    const unconfirmedExtras = extras.filter(extra => !extra.confirmed);
-    if (unconfirmedExtras.length > 0) {
-      const unconfirmedList = unconfirmedExtras.map(extra => 
-        `${extra.category || 'No category'}: $${extra.amount || 'No amount'}`
-      ).join('\n');
-      
-      alert(`Please confirm or remove the following unconfirmed items before submitting:\n\n${unconfirmedList}`);
+
+    // Check if month is locked
+    if (isMonthLocked()) {
+      alert(
+        "Cannot submit invoice: The selected month is locked and cannot be modified."
+      );
       return;
     }
-    
-    if (!window.confirm("Please double-check all entries before submitting invoice...")) return;
+
+    // Check if all extras are confirmed
+    const unconfirmedExtras = extras.filter((extra) => !extra.confirmed);
+    if (unconfirmedExtras.length > 0) {
+      const unconfirmedList = unconfirmedExtras
+        .map(
+          (extra) =>
+            `${extra.category || "No category"}: $${
+              extra.amount || "No amount"
+            }`
+        )
+        .join("\n");
+
+      alert(
+        `Please confirm or remove the following unconfirmed items before submitting:\n\n${unconfirmedList}`
+      );
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "Please double-check all entries before submitting invoice..."
+      )
+    )
+      return;
     try {
       await verifyInput();
 
       // Prepare invoice data for backend
-      const invoiceFields = confirmedItems.reduce((acc, { category, amount }) => {
-        if (!acc[category]) acc[category] = [];
-        acc[category].push(amount);
-        return acc;
-      }, {});
+      const invoiceFields = confirmedItems.reduce(
+        (acc, { category, amount }) => {
+          if (!acc[category]) acc[category] = [];
+          acc[category].push(amount);
+          return acc;
+        },
+        {}
+      );
 
       // Create FormData for the backend request
       const formData = new FormData();
       formData.append("image", imageUpload);
       formData.append("invoice_number", invoiceNumber);
       formData.append("company_name", companyName);
-      formData.append("invoice_day", invoiceDay.toString());
-      formData.append("invoice_month", invoiceMonth.toString());
-      formData.append("invoice_year", invoiceYear.toString());
+      formData.append("invoice_day", invoiceDate.getDate().toString());
+      formData.append("invoice_month", (invoiceDate.getMonth() + 1).toString());
+      formData.append("invoice_year", invoiceDate.getFullYear().toString());
+      formData.append("target_month", targetMonth.toString());
+      formData.append("target_year", targetYear.toString());
       formData.append("store_id", selectedStore);
       formData.append("user_email", user.email);
       formData.append("categories", JSON.stringify(invoiceFields));
 
       // Submit to backend
-      const response = await fetch("http://localhost:5140/api/pac/invoices/submit", {
-        method: "POST",
-        body: formData
-      });
+      const response = await fetch(
+        "http://localhost:5140/api/pac/invoices/submit",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
       const result = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(result.detail || "Failed to submit invoice");
       }
 
       alert("Invoice submitted successfully!");
-      
+
       // Reset form
       setInvoiceNumber("");
+
       setInvoiceMonth(new Date().getMonth() + 1);
       setInvoiceYear(new Date().getFullYear());
       setSelectedDate(new Date());
+
       setExtras([]);
       setConfirmedItems([]);
       setCompanyName("");
       setImageUpload(null);
-      
     } catch (error) {
       alert("Error submitting invoice: " + error.message);
     }
@@ -344,23 +450,41 @@ const SubmitInvoice = () => {
 
   const verifyInput = async () => {
     if (invoiceNumber === "") throw new Error("Invoice Number Required");
-    const d = new Date(invoiceYear, invoiceMonth - 1, invoiceDay);
-    if (
-      d.getFullYear() !== invoiceYear ||
-      d.getMonth() + 1 !== invoiceMonth ||
-      d.getDate() !== invoiceDay
-    )
-      throw new Error("Invalid Date Selected");
+    if (!invoiceDate) throw new Error("Invoice Date Required");
     if (!imageUpload) throw new Error("Image Upload Required");
     if (!selectedStore) throw new Error("Store Selection Required");
   };
 
-
   return (
     <div className={styles.pageContainer}>
       <div className={styles.topBar}>Submit Invoice</div>
+
+      {/* Month Lock Warning */}
+      {isMonthLocked() && (
+        <Alert severity="warning" icon={<LockIcon />} sx={{ m: 2 }}>
+          The selected month ({targetMonth}/{targetYear}) is locked and cannot
+          be modified. Please select a different month or contact an
+          administrator to unlock this month.
+        </Alert>
+      )}
+
       <div className={styles.formContainer}>
         <form onSubmit={handleSubmit}>
+          {/* Store Number Display */}
+          <div className={styles.formGroup}>
+            <label>Store Number</label>
+            <div
+              style={{
+                padding: "8px 12px",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                backgroundColor: "#f5f5f5",
+              }}
+            >
+              {selectedStore || "No store selected"}
+            </div>
+          </div>
+
           <div className={styles.formGroup}>
             <label>Invoice #</label>
             <input
@@ -368,12 +492,8 @@ const SubmitInvoice = () => {
               placeholder="Enter Invoice Number"
               value={invoiceNumber}
               onChange={(e) => setInvoiceNumber(e.target.value)}
+              disabled={isMonthLocked()}
             />
-          </div>
-
-          <div className={styles.formGroup}>
-            <label>Store Number</label>
-            <input type="text" value={selectedStore || ""} readOnly />
           </div>
 
           <div className={styles.formGroup}>
@@ -383,11 +503,14 @@ const SubmitInvoice = () => {
               placeholder="Enter Company Name"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
+              disabled={isMonthLocked()}
             />
           </div>
 
+          {/* Invoice Date Picker */}
           <div className={styles.formGroup}>
             <label>Invoice Date</label>
+
             <div className={styles.datePickerContainer} style={{position: 'relative'}} data-date-picker>
                 <input
                   type="text"
@@ -518,6 +641,7 @@ const SubmitInvoice = () => {
                 Previous dates are locked for your role. Contact an admin if you need changes.
               </small>
             )}
+
           </div>
 
           {extras.map((row, idx) => (
@@ -528,13 +652,19 @@ const SubmitInvoice = () => {
                 onChange={(e) => {
                   const val = e.target.value;
                   setExtras((prev) =>
-                    prev.map((r, i) => (i === idx ? { ...r, category: val, confirmed: false } : r))
+                    prev.map((r, i) =>
+                      i === idx ? { ...r, category: val, confirmed: false } : r
+                    )
                   );
                 }}
               >
-                <option value="" disabled>Choose Category</option>
+                <option value="" disabled>
+                  Choose Category
+                </option>
                 {invoiceCatList.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
                 ))}
               </select>
 
@@ -548,18 +678,28 @@ const SubmitInvoice = () => {
                   onChange={(e) => {
                     const val = e.target.value;
                     setExtras((prev) =>
-                      prev.map((r, i) => (i === idx ? { ...r, amount: val, confirmed: false } : r))
+                      prev.map((r, i) =>
+                        i === idx ? { ...r, amount: val, confirmed: false } : r
+                      )
                     );
                   }}
                 />
                 {row.confirmed && <span className={styles.checkmark}>✓</span>}
               </div>
               {!row.confirmed && (
-                <button type="button" className={styles.confirmBtn} onClick={() => handleConfirm(idx)}>
+                <button
+                  type="button"
+                  className={styles.confirmBtn}
+                  onClick={() => handleConfirm(idx)}
+                >
                   Confirm
                 </button>
               )}
-              <button type="button" className={styles.removeBtn} onClick={() => handleRemove(idx)}>
+              <button
+                type="button"
+                className={styles.removeBtn}
+                onClick={() => handleRemove(idx)}
+              >
                 Remove
               </button>
             </div>
@@ -572,8 +712,19 @@ const SubmitInvoice = () => {
           </div>
 
           <div className={styles.buttonRow}>
-            <input type="file" onChange={(e) => setImageUpload(e.target.files[0])} />
-            <button type="submit" className={styles.submitBtn}>Submit Invoice</button>
+            <input
+              type="file"
+              onChange={(e) => setImageUpload(e.target.files[0])}
+            />
+            <button
+              type="submit"
+              className={styles.submitBtn}
+              disabled={isMonthLocked()}
+            >
+              {isMonthLocked()
+                ? "Month Locked - Cannot Submit"
+                : "Submit Invoice"}
+            </button>
             <button
               type="button"
               className={styles.readUploadBtn}

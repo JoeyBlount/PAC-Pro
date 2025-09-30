@@ -36,7 +36,7 @@ function App() {
   return (
     <div>
       <NavBar />
-      <Box sx={{top: '40px', marginLeft: '80px'}}>
+      <Box sx={{top: '40px', marginLeft: '80px', marginTop: '80px'}}>
         <Outlet />
       </Box>
     </div>
