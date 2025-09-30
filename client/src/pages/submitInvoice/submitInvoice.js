@@ -444,6 +444,7 @@ const SubmitInvoice = () => {
               onChange={(e) => setInvoiceDate(new Date(e.target.value))}
               size="small"
               sx={{ width: "100%" }}
+              disabled={isMonthLocked()}
               InputLabelProps={{
                 shrink: true,
               }}
@@ -461,7 +462,6 @@ const SubmitInvoice = () => {
                   value={targetMonth}
                   onChange={(e) => setTargetMonth(e.target.value)}
                   label="Month"
-                  disabled={isMonthLocked()}
                 >
                   {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => {
                     const monthNames = [
@@ -507,7 +507,6 @@ const SubmitInvoice = () => {
                   value={targetYear}
                   onChange={(e) => setTargetYear(e.target.value)}
                   label="Year"
-                  disabled={isMonthLocked()}
                 >
                   {Array.from(
                     { length: 11 },
@@ -531,7 +530,7 @@ const SubmitInvoice = () => {
             <div key={idx} className={styles.extraRow}>
               <select
                 value={row.category}
-                disabled={row.confirmed}
+                disabled={row.confirmed || isMonthLocked()}
                 onChange={(e) => {
                   const val = e.target.value;
                   setExtras((prev) =>
@@ -557,7 +556,7 @@ const SubmitInvoice = () => {
                   type="text"
                   placeholder="Amount"
                   value={row.amount}
-                  disabled={row.confirmed}
+                  disabled={row.confirmed || isMonthLocked()}
                   onChange={(e) => {
                     const val = e.target.value;
                     setExtras((prev) =>
@@ -569,7 +568,7 @@ const SubmitInvoice = () => {
                 />
                 {row.confirmed && <span className={styles.checkmark}>✓</span>}
               </div>
-              {!row.confirmed && (
+              {!row.confirmed && !isMonthLocked() && (
                 <button
                   type="button"
                   className={styles.confirmBtn}
@@ -578,18 +577,25 @@ const SubmitInvoice = () => {
                   Confirm
                 </button>
               )}
-              <button
-                type="button"
-                className={styles.removeBtn}
-                onClick={() => handleRemove(idx)}
-              >
-                Remove
-              </button>
+              {!isMonthLocked() && (
+                <button
+                  type="button"
+                  className={styles.removeBtn}
+                  onClick={() => handleRemove(idx)}
+                >
+                  Remove
+                </button>
+              )}
             </div>
           ))}
 
           <div className={styles.formGroup}>
-            <button type="button" className={styles.addBtn} onClick={handleAdd}>
+            <button
+              type="button"
+              className={styles.addBtn}
+              onClick={handleAdd}
+              disabled={isMonthLocked()}
+            >
               + Add New Amount
             </button>
           </div>
@@ -598,6 +604,7 @@ const SubmitInvoice = () => {
             <input
               type="file"
               onChange={(e) => setImageUpload(e.target.files[0])}
+              disabled={isMonthLocked()}
             />
             <button
               type="submit"
@@ -612,7 +619,7 @@ const SubmitInvoice = () => {
               type="button"
               className={styles.readUploadBtn}
               onClick={handleReadFromUpload}
-              disabled={loadingUpload}
+              disabled={loadingUpload || isMonthLocked()}
             >
               {loadingUpload ? "Reading..." : "Read from Upload"}
             </button>

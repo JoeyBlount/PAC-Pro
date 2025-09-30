@@ -146,6 +146,12 @@ const printStyles = `
       display: none !important;
     }
     
+    .print-status, .print-timestamp {
+      font-size: 10px;
+      margin: 5px 0;
+      page-break-after: avoid;
+    }
+    
     /* Ensure content fits on one page */
     .print-table {
       page-break-inside: avoid;
@@ -166,7 +172,15 @@ const printStyles = `
   }
 `;
 
-const PacTab = ({ storeId, year, month, projections = [] }) => {
+const PacTab = ({
+  storeId,
+  year,
+  month,
+  projections = [],
+  isMonthLocked = false,
+  monthLockStatus = null,
+  lastUpdatedTimestamp = null,
+}) => {
   const [pacData, setPacData] = useState(null);
   const [projectionsData, setProjectionsData] = useState(null);
 
@@ -201,7 +215,7 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
 
     const getProjectedValueAsNumber = (expenseName) => {
       if (!projectionsData) return 0;
-      
+
       // Map expense names to the correct backend field structure
       const expenseMap = {
         "Product Net Sales": projectionsData.product_net_sales,
@@ -212,18 +226,23 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
         "Total Waste": projectionsData.controllable_expenses?.total_waste,
         Paper: projectionsData.controllable_expenses?.paper,
         "Crew Labor": projectionsData.controllable_expenses?.crew_labor,
-        "Management Labor": projectionsData.controllable_expenses?.management_labor,
+        "Management Labor":
+          projectionsData.controllable_expenses?.management_labor,
         "Payroll Tax": projectionsData.controllable_expenses?.payroll_tax,
         Travel: projectionsData.controllable_expenses?.travel,
         Advertising: projectionsData.controllable_expenses?.advertising,
-        "Advertising Other": projectionsData.controllable_expenses?.advertising_other,
+        "Advertising Other":
+          projectionsData.controllable_expenses?.advertising_other,
         "Adv Other": projectionsData.controllable_expenses?.advertising_other, // Alternative naming
         Promotion: projectionsData.controllable_expenses?.promotion,
-        "Outside Services": projectionsData.controllable_expenses?.outside_services,
+        "Outside Services":
+          projectionsData.controllable_expenses?.outside_services,
         Linen: projectionsData.controllable_expenses?.linen,
         "Operating Supply": projectionsData.controllable_expenses?.op_supply,
-        "Maintenance & Repair": projectionsData.controllable_expenses?.maintenance_repair,
-        "Small Equipment": projectionsData.controllable_expenses?.small_equipment,
+        "Maintenance & Repair":
+          projectionsData.controllable_expenses?.maintenance_repair,
+        "Small Equipment":
+          projectionsData.controllable_expenses?.small_equipment,
         Utilities: projectionsData.controllable_expenses?.utilities,
         Office: projectionsData.controllable_expenses?.office,
         "Cash +/-": projectionsData.controllable_expenses?.cash_adjustments,
@@ -231,25 +250,25 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
         "Total Controllable": projectionsData.total_controllable_dollars,
         "P.A.C.": projectionsData.pac_dollars,
       };
-      
+
       const expenseData = expenseMap[expenseName];
       if (!expenseData) return 0;
-      
+
       // Handle different data structures
-      if (typeof expenseData === 'number') {
+      if (typeof expenseData === "number") {
         // Direct number (for sales, totals, P.A.C.)
         return expenseData;
-      } else if (expenseData && typeof expenseData === 'object') {
+      } else if (expenseData && typeof expenseData === "object") {
         // Object with dollars/percent structure
         return parseFloat(expenseData.dollars || 0);
       }
-      
+
       return 0;
     };
 
     const getProjectedValue = (expenseName, type) => {
       if (!projectionsData) return "-";
-      
+
       // Map expense names to the correct backend field structure
       const expenseMap = {
         "Product Net Sales": projectionsData.product_net_sales,
@@ -260,18 +279,23 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
         "Total Waste": projectionsData.controllable_expenses?.total_waste,
         Paper: projectionsData.controllable_expenses?.paper,
         "Crew Labor": projectionsData.controllable_expenses?.crew_labor,
-        "Management Labor": projectionsData.controllable_expenses?.management_labor,
+        "Management Labor":
+          projectionsData.controllable_expenses?.management_labor,
         "Payroll Tax": projectionsData.controllable_expenses?.payroll_tax,
         Travel: projectionsData.controllable_expenses?.travel,
         Advertising: projectionsData.controllable_expenses?.advertising,
-        "Advertising Other": projectionsData.controllable_expenses?.advertising_other,
+        "Advertising Other":
+          projectionsData.controllable_expenses?.advertising_other,
         "Adv Other": projectionsData.controllable_expenses?.advertising_other, // Alternative naming
         Promotion: projectionsData.controllable_expenses?.promotion,
-        "Outside Services": projectionsData.controllable_expenses?.outside_services,
+        "Outside Services":
+          projectionsData.controllable_expenses?.outside_services,
         Linen: projectionsData.controllable_expenses?.linen,
         "Operating Supply": projectionsData.controllable_expenses?.op_supply,
-        "Maintenance & Repair": projectionsData.controllable_expenses?.maintenance_repair,
-        "Small Equipment": projectionsData.controllable_expenses?.small_equipment,
+        "Maintenance & Repair":
+          projectionsData.controllable_expenses?.maintenance_repair,
+        "Small Equipment":
+          projectionsData.controllable_expenses?.small_equipment,
         Utilities: projectionsData.controllable_expenses?.utilities,
         Office: projectionsData.controllable_expenses?.office,
         "Cash +/-": projectionsData.controllable_expenses?.cash_adjustments,
@@ -279,35 +303,41 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
         "Total Controllable": projectionsData.total_controllable_dollars,
         "P.A.C.": projectionsData.pac_dollars,
       };
-      
+
       const expenseData = expenseMap[expenseName];
       if (!expenseData) return "-";
-      
+
       // Handle different data structures
       let value;
-      if (typeof expenseData === 'number') {
+      if (typeof expenseData === "number") {
         // Direct number (for sales, totals, P.A.C.)
         value = expenseData;
-      } else if (expenseData && typeof expenseData === 'object') {
+      } else if (expenseData && typeof expenseData === "object") {
         // Object with dollars/percent structure
         value = expenseData.dollars;
       } else {
         return "-";
       }
-      
+
       if (value === null || value === undefined) return "-";
-      
+
       if (type === "dollar") {
         return formatCurrency(parseFloat(value));
       } else if (type === "percent") {
         // For percentage, use the percent from the object if available, otherwise calculate
-        if (expenseData && typeof expenseData === 'object' && expenseData.percent !== undefined) {
+        if (
+          expenseData &&
+          typeof expenseData === "object" &&
+          expenseData.percent !== undefined
+        ) {
           return formatPercentage(expenseData.percent);
         } else {
           // Calculate percentage based on net sales
-          const projectedNetSales = projectionsData.product_net_sales || projectionsData.all_net_sales;
+          const projectedNetSales =
+            projectionsData.product_net_sales || projectionsData.all_net_sales;
           if (!projectedNetSales || projectedNetSales === 0) return "-";
-          const percentage = (parseFloat(value) / parseFloat(projectedNetSales)) * 100;
+          const percentage =
+            (parseFloat(value) / parseFloat(projectedNetSales)) * 100;
           return formatPercentage(percentage);
         }
       }
@@ -357,10 +387,24 @@ const PacTab = ({ storeId, year, month, projections = [] }) => {
       return diff < 0 ? "text-red" : diff > 0 ? "text-green" : "";
     };
 
+    // Generate status information for print
+    let statusInfo = "";
+    if (isMonthLocked) {
+      statusInfo += `<div class="print-status" style="text-align: center; margin-bottom: 10px; padding: 5px; background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404; font-weight: bold;">
+        🔒 Month Locked by ${monthLockStatus?.locked_by || "Unknown"}
+      </div>`;
+    }
+    if (lastUpdatedTimestamp) {
+      statusInfo += `<div class="print-timestamp" style="text-align: center; margin-bottom: 10px; padding: 5px; background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; font-weight: bold;">
+        Last Updated: ${lastUpdatedTimestamp.toLocaleString()}
+      </div>`;
+    }
+
     return `
       <div class="print-header">
         PAC Report - ${storeId} - ${month} ${year}
       </div>
+      ${statusInfo}
       <table class="print-table">
         <thead>
           <tr>

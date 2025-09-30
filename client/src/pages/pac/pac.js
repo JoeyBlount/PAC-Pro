@@ -1815,6 +1815,8 @@ const PAC = () => {
             month={month}
             projections={projections}
             isMonthLocked={isMonthLocked()}
+            monthLockStatus={monthLockStatus}
+            lastUpdatedTimestamp={lastUpdatedTimestamp}
           />
         </Container>
       )}{" "}

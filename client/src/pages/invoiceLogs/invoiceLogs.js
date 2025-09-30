@@ -41,24 +41,23 @@ import MonthLockService from "../../services/monthLockService";
 
 // Map Invoice Log category IDs -> PAC "projections[].name"
 const PROJECTION_LOOKUP = {
-  'FOOD': 'Base Food',
-  'CONDIMENT': 'Condiment',
-  'PAPER': 'Paper',
-  'NONPRODUCT': null,            // not present in PAC; default 0
-  'TRAVEL': 'Travel',
-  'ADV-OTHER': 'Adv Other',
-  'PROMO': 'Promotion',
-  'OUTSIDE SVC': 'Outside Services',
-  'LINEN': 'Linen',
-  'OP. SUPPLY': 'OP. Supply',
-  'M+R': 'Maint. & Repair',
-  'SML EQUIP': 'Small Equipment',
-  'UTILITIES': 'Utilities',
-  'OFFICE': 'Office',
-  'TRAINING': 'Training',
-  'CR': 'Crew Relations',
+  FOOD: "Base Food",
+  CONDIMENT: "Condiment",
+  PAPER: "Paper",
+  NONPRODUCT: null, // not present in PAC; default 0
+  TRAVEL: "Travel",
+  "ADV-OTHER": "Adv Other",
+  PROMO: "Promotion",
+  "OUTSIDE SVC": "Outside Services",
+  LINEN: "Linen",
+  "OP. SUPPLY": "OP. Supply",
+  "M+R": "Maint. & Repair",
+  "SML EQUIP": "Small Equipment",
+  UTILITIES: "Utilities",
+  OFFICE: "Office",
+  TRAINING: "Training",
+  CR: "Crew Relations",
 };
-
 
 const InvoiceLogs = () => {
   // const { currentUser, userRole } = useAuth();
@@ -171,7 +170,6 @@ const InvoiceLogs = () => {
         ...prev,
         invoices: prev.invoices.filter((inv) => inv.id !== invoice.id),
       }));
-  
     } catch (err) {
       console.error("Failed to move invoice to Recently Deleted:", err);
       alert("Error deleting invoice.");
@@ -212,12 +210,11 @@ const InvoiceLogs = () => {
       alert("Invoice Deleted!");
       fetchInvoices();
       fetchRecentlyDeleted();
-    }catch(err) {
-      console.log("failed to delete the invoice from recentlydeleted, ", err)
-      alert("failed to delete the invoice")
+    } catch (err) {
+      console.log("failed to delete the invoice from recentlydeleted, ", err);
+      alert("failed to delete the invoice");
     }
   };
-
 
   const handleEdit = (invoice) => {
     // Check if the invoice's month is locked
@@ -237,9 +234,9 @@ const InvoiceLogs = () => {
       const invoiceRef = doc(db, "invoices", invoiceID);
       await updateDoc(invoiceRef, {
         locked: true,
-      })
-      alert("Invoice locked.")
-     
+      });
+      alert("Invoice locked.");
+
       fetchInvoices(); // refresh from Firestore
     } catch (error) {
       console.error("Error locking invoice:", error);
@@ -252,10 +249,9 @@ const InvoiceLogs = () => {
       const invoiceRef = doc(db, "invoices", invoiceID);
       await updateDoc(invoiceRef, {
         locked: false,
-      })
-      alert("Invoice unlocked.")
-
-    }catch(error) {
+      });
+      alert("Invoice unlocked.");
+    } catch (error) {
       console.error("Error unlocking invoice:", error);
       alert("Failed to unlock invoice.");
     }
@@ -274,8 +270,6 @@ const InvoiceLogs = () => {
       alert("Failed to update invoice.");
     }
   };
-  
-  
 
   // Fetch invoice categories from "invoiceCategories" collection
   useEffect(() => {
@@ -300,7 +294,7 @@ const InvoiceLogs = () => {
     if (selectedStore && monetaryColumns.length > 0) {
       fetchInvoices();
     }
-  }, [selectedStore, monetaryColumns, budgetData]);
+  }, [selectedStore, monetaryColumns, budgetData, selectedMonth, selectedYear]);
 
   // Fetch budget data when store or month/year changes
   useEffect(() => {
@@ -308,12 +302,11 @@ const InvoiceLogs = () => {
       const currentDate = new Date();
       const month = selectedMonth || currentDate.getMonth() + 1;
       const year = selectedYear || currentDate.getFullYear();
-      const yearMonth = `${year}${String(month).padStart(2, '0')}`;
-      
+      const yearMonth = `${year}${String(month).padStart(2, "0")}`;
+
       fetchBudgetData(selectedStore, yearMonth);
     }
   }, [selectedStore, selectedMonth, selectedYear, monetaryColumns]);
-
 
   // Check if the selected month is locked
   const checkMonthLock = async () => {
@@ -411,12 +404,46 @@ const InvoiceLogs = () => {
         ...doc.data(),
       }));
 
+      // Debug logging
+      console.log("Debug - Fetched invoices:", {
+        totalInvoices: invoices.length,
+        selectedStore,
+        invoices: invoices.map((inv) => ({
+          id: inv.id,
+          targetMonth: inv.targetMonth,
+          targetYear: inv.targetYear,
+          dateSubmitted: inv.dateSubmitted,
+          companyName: inv.companyName,
+          storeID: inv.storeID,
+        })),
+      });
+
       // Compute totals using the category amounts stored in the categories map.
+      // Apply the same month/year filtering as individual rows
+      const filteredInvoices = invoices.filter((inv) => {
+        if (selectedMonth || selectedYear) {
+          let invMonth, invYear;
+
+          if (inv.targetMonth && inv.targetYear) {
+            invMonth = inv.targetMonth;
+            invYear = inv.targetYear;
+          } else {
+            const dt = new Date(inv.dateSubmitted);
+            invMonth = dt.getMonth() + 1;
+            invYear = dt.getFullYear();
+          }
+
+          if (selectedMonth && invMonth !== +selectedMonth) return false;
+          if (selectedYear && invYear !== +selectedYear) return false;
+        }
+        return true;
+      });
+
       const totals = {};
       monetaryColumns.forEach((col) => {
         const categoryId = col.id; // This matches the document ID from invoiceCategories
         const categoryName = col.id; // Use col.id as the category name since that's what's stored in invoices
-        totals[categoryId] = invoices.reduce((sum, inv) => {
+        totals[categoryId] = filteredInvoices.reduce((sum, inv) => {
           const categoryValue = getCategoryValue(inv, categoryName);
           return sum + categoryValue;
         }, 0);
@@ -459,23 +486,27 @@ const InvoiceLogs = () => {
         return;
       }
 
-      const ensureStoreFmt = (s) => s?.startsWith('store_') ? s : `store_${String(s).padStart(3, '0')}`;
+      const ensureStoreFmt = (s) =>
+        s?.startsWith("store_") ? s : `store_${String(s).padStart(3, "0")}`;
 
       // Try doc IDs in this order to avoid editing PAC.js:
       const tryIds = [
-        `${storeId}_${yearMonth}`,             // e.g. store_001_202509  (matches PAC if storeId already has prefix)
+        `${storeId}_${yearMonth}`, // e.g. store_001_202509  (matches PAC if storeId already has prefix)
         `${ensureStoreFmt(storeId)}_${yearMonth}`, // e.g. store_001_202509 (fallback if storeId is "001")
       ];
 
       let snap = null;
       for (const id of tryIds) {
-        const ref = doc(db, 'pac-projections', id); // <-- hyphen collection name
+        const ref = doc(db, "pac-projections", id); // <-- hyphen collection name
         const test = await getDoc(ref);
-        if (test.exists()) { snap = test; break; }
+        if (test.exists()) {
+          snap = test;
+          break;
+        }
       }
 
       if (!snap?.exists()) {
-        console.log('No PAC projections found for', tryIds);
+        console.log("No PAC projections found for", tryIds);
         setBudgetData({});
         return;
       }
@@ -499,11 +530,10 @@ const InvoiceLogs = () => {
 
       setBudgetData(nextBudget);
     } catch (err) {
-      console.error('Error loading budget data:', err);
+      console.error("Error loading budget data:", err);
       setBudgetData({});
     }
   };
-
 
   // Export functions remain unchanged
   const handleExportPDF = async () => {
@@ -617,9 +647,22 @@ const InvoiceLogs = () => {
             .includes(searchQuery.toLowerCase());
       }
       if (ok && (selectedMonth || selectedYear)) {
-        const dt = new Date(inv.dateSubmitted);
-        if (selectedMonth) ok = ok && dt.getMonth() + 1 === +selectedMonth;
-        if (selectedYear) ok = ok && dt.getFullYear() === +selectedYear;
+        // Always prioritize targetMonth/targetYear for grouping, fall back to dateSubmitted only if not set
+        let invMonth, invYear;
+
+        if (inv.targetMonth && inv.targetYear) {
+          // Use the assigned target month/year (from Invoice Assignment dropdown)
+          invMonth = inv.targetMonth;
+          invYear = inv.targetYear;
+        } else {
+          // Fall back to dateSubmitted for older invoices that don't have targetMonth/targetYear
+          const dt = new Date(inv.dateSubmitted);
+          invMonth = dt.getMonth() + 1;
+          invYear = dt.getFullYear();
+        }
+
+        if (selectedMonth) ok = ok && invMonth === +selectedMonth;
+        if (selectedYear) ok = ok && invYear === +selectedYear;
       }
       return ok;
     });
@@ -670,6 +713,7 @@ const InvoiceLogs = () => {
   const renderHeader = () => {
     if (!data || monetaryColumns.length === 0) return null;
     const fixed = [
+      "Month/Year",
       "Location",
       "Date Submitted",
       "Invoice Date",
@@ -680,7 +724,24 @@ const InvoiceLogs = () => {
       <thead>
         {/* First row - Account Numbers */}
         <tr>
-          <th colSpan="4"></th>
+          {isMonthLocked() ? (
+            <th
+              colSpan="5"
+              style={{
+                backgroundColor: "#fff3cd",
+                border: "1px solid #ffeaa7",
+                padding: "4px",
+                textAlign: "center",
+                fontWeight: "bold",
+                color: "#856404",
+                fontSize: "12px",
+              }}
+            >
+              🔒 Month Locked - No Edits
+            </th>
+          ) : (
+            <th colSpan="5"></th>
+          )}
           <th
             className="tableHeader"
             style={{
@@ -730,7 +791,7 @@ const InvoiceLogs = () => {
     if (!data) {
       return (
         <tr>
-          <td colSpan={monetaryColumns.length + 5}>
+          <td colSpan={monetaryColumns.length + 6}>
             {selectedStore ? "No invoices found." : "Please select a store."}
           </td>
         </tr>
@@ -740,12 +801,33 @@ const InvoiceLogs = () => {
     const filtered = filterInvoices(data.invoices);
     const sorted = sortInvoices(filtered);
 
+    // Debug logging
+    console.log("Debug - Invoice filtering:", {
+      totalInvoices: data.invoices.length,
+      filteredInvoices: filtered.length,
+      selectedMonth,
+      selectedYear,
+      invoices: data.invoices.map((inv) => ({
+        id: inv.id,
+        targetMonth: inv.targetMonth,
+        targetYear: inv.targetYear,
+        dateSubmitted: inv.dateSubmitted,
+        companyName: inv.companyName,
+      })),
+    });
+
     return sorted.map((inv, i) => {
       const canEdit = isCurrentMonth(inv.invoiceDate) && !inv.locked;
-      
-    
+
       return (
         <tr key={i} className="invoice-row" onClick={() => handleRowClick(inv)}>
+          <td className="tableCell">
+            {inv.targetMonth && inv.targetYear
+              ? `${inv.targetMonth}/${inv.targetYear}`
+              : `${new Date(inv.dateSubmitted).getMonth() + 1}/${new Date(
+                  inv.dateSubmitted
+                ).getFullYear()} (legacy)`}
+          </td>
           <td className="tableCell">{inv.storeID}</td>
           <td className="tableCell dateCell">
             {new Date(inv.dateSubmitted).toLocaleDateString("en-US")}
@@ -764,58 +846,61 @@ const InvoiceLogs = () => {
               <td key={j} className="tableCell categoryCell">
                 {amount !== 0 && !isNaN(amount)
                   ? amount.toLocaleString("en-US", {
-                    style: "currency",
-                    currency: "USD",
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0,
-                  })
+                      style: "currency",
+                      currency: "USD",
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    })
                   : ""}
               </td>
             );
           })}
 
           <td className="tableCell">
-          {(canEdit || userRole === "Supervisor" || userRole === "Admin") && (
-            <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation(); 
-                  handleEdit(inv);
-                  // console.log(inv)
-                }}
-              >
-                Edit
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation(); 
-                  handleDelete(inv);
-                  
-                }}
-              >
-                Delete
-              </button>
-              <button
-                onClick={(e) => {
-                  console.log(e)
-                  e.stopPropagation(); 
-                  lockInvoice(inv.id);  
-                }}
-              >
-                Lock
-              </button>
-              <button
-                onClick={(e) => {
-                  console.log(e)
-                  e.stopPropagation(); 
-                  unlockInvoice(inv.id);  
-                }}
-              >
-                Unlock
-              </button>
-            </>
-          )}
-        </td>
+            {(canEdit || userRole === "Supervisor" || userRole === "Admin") &&
+              !isInvoiceMonthLocked(
+                inv.targetMonth || new Date(inv.dateSubmitted).getMonth() + 1,
+                inv.targetYear || new Date(inv.dateSubmitted).getFullYear()
+              ) && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEdit(inv);
+                      // console.log(inv)
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(inv);
+                    }}
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      console.log(e);
+                      e.stopPropagation();
+                      lockInvoice(inv.id);
+                    }}
+                  >
+                    Lock
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      console.log(e);
+                      e.stopPropagation();
+                      unlockInvoice(inv.id);
+                    }}
+                  >
+                    Unlock
+                  </button>
+                </>
+              )}
+          </td>
         </tr>
       );
     });
@@ -861,7 +946,7 @@ const InvoiceLogs = () => {
     const makeRow = (label, values, styleFn) => (
       <tr className="summaryRow">
         <td
-          colSpan={5}
+          colSpan={6}
           className="tableCell"
           style={{ textAlign: "center", fontWeight: "bold" }}
         >
@@ -961,6 +1046,43 @@ const InvoiceLogs = () => {
               placeholder="Invoice Number"
               defaultValue={editInvoiceData.invoiceNumber}
             />
+            <div>
+              <label>Target Month/Year (for grouping):</label>
+              <div style={{ display: "flex", gap: "10px", marginTop: "5px" }}>
+                <select
+                  name="targetMonth"
+                  defaultValue={
+                    editInvoiceData.targetMonth ||
+                    new Date(editInvoiceData.dateSubmitted).getMonth() + 1
+                  }
+                >
+                  <option value="1">January</option>
+                  <option value="2">February</option>
+                  <option value="3">March</option>
+                  <option value="4">April</option>
+                  <option value="5">May</option>
+                  <option value="6">June</option>
+                  <option value="7">July</option>
+                  <option value="8">August</option>
+                  <option value="9">September</option>
+                  <option value="10">October</option>
+                  <option value="11">November</option>
+                  <option value="12">December</option>
+                </select>
+                <select
+                  name="targetYear"
+                  defaultValue={
+                    editInvoiceData.targetYear ||
+                    new Date(editInvoiceData.dateSubmitted).getFullYear()
+                  }
+                >
+                  <option value="2023">2023</option>
+                  <option value="2024">2024</option>
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                </select>
+              </div>
+            </div>
             {Object.entries(editInvoiceData.categories).map(([key, value]) => (
               <div key={key}>
                 <label>{key}</label>
@@ -982,6 +1104,8 @@ const InvoiceLogs = () => {
                 ...editInvoiceData,
                 companyName: formData.get("companyName"),
                 invoiceNumber: formData.get("invoiceNumber"),
+                targetMonth: Number(formData.get("targetMonth")),
+                targetYear: Number(formData.get("targetYear")),
                 categories: Object.fromEntries(
                   Object.entries(editInvoiceData.categories).map(([key]) => [
                     key,
@@ -1000,7 +1124,6 @@ const InvoiceLogs = () => {
       </DialogActions>
     </Dialog>
   ));
-  
 
   // Export choice dialog
   const ExportDialog = () => (
@@ -1114,40 +1237,31 @@ const InvoiceLogs = () => {
               Export
             </Button>
             <Button
-            variant="contained"
-            style={{
-              backgroundColor: "#ff5252", 
-              color: "white",
-              fontWeight: "bold",
-              fontSize: "12px",
-              padding: "2%",
-              borderRadius: "8px",
-              width: "auto",
-              minWidth: "150px",
-              textTransform: "none", 
-              boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.2)",
-            }}
-            onClick={() => {
-              setShowRecentlyDeleted(true);
-              fetchRecentlyDeleted()
-              // Handle open modal or navigate to Recently Deleted
-              console.log("Open Recently Deleted Modal");
-            }}
-          >
-            Recently Deleted
-          </Button>
+              variant="contained"
+              style={{
+                backgroundColor: "#ff5252",
+                color: "white",
+                fontWeight: "bold",
+                fontSize: "12px",
+                padding: "2%",
+                borderRadius: "8px",
+                width: "auto",
+                minWidth: "150px",
+                textTransform: "none",
+                boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.2)",
+              }}
+              onClick={() => {
+                setShowRecentlyDeleted(true);
+                fetchRecentlyDeleted();
+                // Handle open modal or navigate to Recently Deleted
+                console.log("Open Recently Deleted Modal");
+              }}
+            >
+              Recently Deleted
+            </Button>
           </div>
         </div>
       </div>
-
-      {/* Month Lock Warning */}
-      {isMonthLocked() && (
-        <Alert severity="warning" icon={<Lock />} sx={{ mt: 2, mb: 2 }}>
-          The selected month ({selectedMonth}/{selectedYear}) is locked and
-          cannot be modified. Invoices in locked months cannot be edited or
-          deleted.
-        </Alert>
-      )}
 
       {activeSearchColumn && (
         <div className="searchBox">
@@ -1177,6 +1291,7 @@ const InvoiceLogs = () => {
       <div className="contentWrapper">
         <table className="customTable">
           <colgroup>
+            <col style={{ width: "80px" }} />
             <col style={{ width: "80px" }} />
             <col style={{ width: "110px" }} />
             <col style={{ width: "110px" }} />
@@ -1226,55 +1341,59 @@ const InvoiceLogs = () => {
             {recentlyDeleted.length === 0 ? (
               <p>No recently deleted invoices.</p>
             ) : (
-          <div style={{ maxHeight: "300px", overflowY: "auto" }}>
-            {recentlyDeleted.map((inv) => (
-              <div key={inv.id} style={{
-                padding: "10px",
-                borderBottom: "1px solid #ddd",
-                textAlign: "left"
-              }}>
-                <strong>{inv.companyName || "Unnamed Invoice"}</strong>
-                <div style={{ fontSize: "0.8rem", color: "gray" }}>
-                  {inv.invoiceNumber ? `Invoice #${inv.invoiceNumber}` : ""}
-                </div>
-                <div style={{ marginTop: "5px" }}>
-                  <Button
-                    variant="outlined"
-                    style={{ marginRight: "10px", fontSize: "10px" }}
-                    onClick={() => handleRestore(inv)}
+              <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+                {recentlyDeleted.map((inv) => (
+                  <div
+                    key={inv.id}
+                    style={{
+                      padding: "10px",
+                      borderBottom: "1px solid #ddd",
+                      textAlign: "left",
+                    }}
                   >
-                    Restore
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    style={{ fontSize: "10px" }}
-                    onClick={() => handlePermanentDelete(inv)}
-                  >
-                    Delete Permanently
-                  </Button>
-                </div>
+                    <strong>{inv.companyName || "Unnamed Invoice"}</strong>
+                    <div style={{ fontSize: "0.8rem", color: "gray" }}>
+                      {inv.invoiceNumber ? `Invoice #${inv.invoiceNumber}` : ""}
+                    </div>
+                    <div style={{ marginTop: "5px" }}>
+                      <Button
+                        variant="outlined"
+                        style={{ marginRight: "10px", fontSize: "10px" }}
+                        onClick={() => handleRestore(inv)}
+                      >
+                        Restore
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        style={{ fontSize: "10px" }}
+                        onClick={() => handlePermanentDelete(inv)}
+                      >
+                        Delete Permanently
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+            <p>Invoices here will be deleted after 14 days (Not yet working)</p>
+            {/* Later you can map the deleted invoices here */}
+            <Button
+              variant="contained"
+              style={{
+                marginTop: "20px",
+                backgroundColor: "#6A39FE",
+                color: "white",
+              }}
+              onClick={() => setShowRecentlyDeleted(false)}
+            >
+              Close
+            </Button>
           </div>
-        )}
-          <p>Invoices here will be deleted after 14 days (Not yet working)</p>
-          {/* Later you can map the deleted invoices here */}
-          <Button 
-            variant="contained" 
-            style={{ marginTop: "20px", backgroundColor: "#6A39FE", color: "white" }}
-            onClick={() => setShowRecentlyDeleted(false)}
-          >
-            Close
-          </Button>
         </div>
-      </div>
-    )}
-      
+      )}
     </Container>
   );
-
-  
 };
 
 export default InvoiceLogs;
