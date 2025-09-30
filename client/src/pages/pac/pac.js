@@ -51,10 +51,7 @@ const recalcFromPercents = (rows) => {
   // These rows' $ are (% of Product Sales $)
   const PCT_OF_PS = new Set([
     "Base Food", "Employee Meal", "Condiment", "Total Waste", "Paper",
-    "Crew Labor", "Management Labor",
-    "Travel", "Adv Other", "Promotion", "Outside Services",
-    "Linen", "OP. Supply", "Maint. & Repair", "Small Equipment",
-    "Utilities", "Office", "Cash +/-", "Crew Relations", "Training"
+    "Crew Labor", "Management Labor"
   ]);
 
   next.forEach(r => {
