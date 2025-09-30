@@ -36,6 +36,10 @@ const SubmitInvoice = () => {
   const [confirmedItems, setConfirmedItems] = useState([]);
   const [userData, setUserData] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [calendarViewDate, setCalendarViewDate] = useState(new Date());
+  const [calendarPosition, setCalendarPosition] = useState({ top: 200, left: '50%' });
 
   // Month locking state
   const [monthLockStatus, setMonthLockStatus] = useState(null);
@@ -54,6 +58,30 @@ const SubmitInvoice = () => {
   useEffect(() => {
     document.title = "PAC Pro - Submit Invoice";
   }, []);
+
+
+  // Close calendar when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showCalendar) {
+        // Check if the click is inside the calendar popup or date picker container
+        const calendarPopup = event.target.closest('[data-calendar-popup]');
+        const datePickerContainer = event.target.closest('[data-date-picker]');
+        
+        if (!calendarPopup && !datePickerContainer) {
+          setShowCalendar(false);
+        }
+      }
+    };
+
+    if (showCalendar) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCalendar]);
 
   // Check if the selected month is locked
   const checkMonthLock = async () => {
@@ -108,6 +136,7 @@ const SubmitInvoice = () => {
     return monthLockStatus?.is_locked || false;
   };
 
+
   // Fetch user data from Firestore
   useEffect(() => {
     const fetchData = async () => {
@@ -150,6 +179,54 @@ const SubmitInvoice = () => {
     return "";
   };
 
+  // Calendar functions
+  const formatDate = (date) => {
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  };
+
+  const handleDateSelect = (date) => {
+    setSelectedDate(date);
+    setCalendarViewDate(date); // Update view to show the selected month
+    setInvoiceDay(date.getDate());
+    setInvoiceMonth(date.getMonth() + 1);
+    setInvoiceYear(date.getFullYear());
+    setShowCalendar(false);
+  };
+
+  const isDateDisabled = (date) => {
+    if (isAdmin) return false;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const currentDay = now.getDate();
+    
+    // Disable dates before current date
+    return date < new Date(currentYear, currentMonth, currentDay);
+  };
+
+  const generateCalendarDays = () => {
+    const year = calendarViewDate.getFullYear();
+    const month = calendarViewDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay());
+    
+    const days = [];
+    const currentDate = new Date(startDate);
+    
+    for (let i = 0; i < 42; i++) {
+      days.push(new Date(currentDate));
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return days;
+  };
+
   const handleReadFromUpload = async () => {
     if (!imageUpload) {
       alert("Please upload an image first.");
@@ -176,12 +253,13 @@ const SubmitInvoice = () => {
 
       if (data.invoiceDate) {
         const [mm, dd, yyyy] = data.invoiceDate.split("/");
-        const newDate = new Date(
-          parseInt(yyyy),
-          parseInt(mm) - 1,
-          parseInt(dd)
-        );
-        setInvoiceDate(newDate);
+
+        const newDate = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+        setSelectedDate(newDate);
+        setInvoiceMonth(parseInt(mm));
+        setInvoiceDay(parseInt(dd));
+        setInvoiceYear(parseInt(yyyy));
+
       }
 
       if (data.items && Array.isArray(data.items)) {
@@ -213,12 +291,11 @@ const SubmitInvoice = () => {
 
   const handleRemove = (idx) => {
     const itemToRemove = extras[idx];
-    const isConfirmed = confirmedItems.some(
-      (item) => item.id === itemToRemove.id
-    );
 
-    console.log("handleRemove - OLD extras:", extras);
-    console.log("handleRemove - OLD confirmedItems:", confirmedItems);
+    const isConfirmed = confirmedItems.some(item => item.id === itemToRemove.id);
+    
+
+
 
     if (isConfirmed) {
       const proceed = window.confirm(
@@ -229,20 +306,18 @@ const SubmitInvoice = () => {
 
     setExtras((prev) => {
       const newExtras = prev.filter((_, i) => i !== idx);
-      console.log("handleRemove - NEW extras:", newExtras);
       return newExtras;
     });
     setConfirmedItems((prev) => {
-      const newConfirmed = prev.filter((item) => item.id !== itemToRemove.id);
-      console.log("handleRemove - NEW confirmedItems:", newConfirmed);
+
+      const newConfirmed = prev.filter(item => item.id !== itemToRemove.id);
+
       return newConfirmed;
     });
   };
 
   const handleConfirm = (idx) => {
     try {
-      console.log("handleConfirm - OLD extras:", extras);
-      console.log("handleConfirm - OLD confirmedItems:", confirmedItems);
 
       const rowCategory = extras[idx].category;
       if (rowCategory === "")
@@ -264,18 +339,13 @@ const SubmitInvoice = () => {
       }
 
       setConfirmedItems((prev) => {
-        const newConfirmed = [
-          ...prev,
-          { id: extras[idx].id, category: rowCategory, amount: rowAmount },
-        ];
-        console.log("handleConfirm - NEW confirmedItems:", newConfirmed);
+
+        const newConfirmed = [...prev, { id: extras[idx].id, category: rowCategory, amount: rowAmount }];
         return newConfirmed;
       });
       setExtras((prev) => {
-        const newExtras = prev.map((r, i) =>
-          i === idx ? { ...r, confirmed: true } : r
-        );
-        console.log("handleConfirm - NEW extras:", newExtras);
+        const newExtras = prev.map((r, i) => (i === idx ? { ...r, confirmed: true } : r));
+
         return newExtras;
       });
     } catch (error) {
@@ -364,9 +434,11 @@ const SubmitInvoice = () => {
 
       // Reset form
       setInvoiceNumber("");
-      setInvoiceDate(new Date());
-      setTargetMonth(currentMonth);
-      setTargetYear(currentYear);
+
+      setInvoiceMonth(new Date().getMonth() + 1);
+      setInvoiceYear(new Date().getFullYear());
+      setSelectedDate(new Date());
+
       setExtras([]);
       setConfirmedItems([]);
       setCompanyName("");
@@ -438,93 +510,138 @@ const SubmitInvoice = () => {
           {/* Invoice Date Picker */}
           <div className={styles.formGroup}>
             <label>Invoice Date</label>
-            <TextField
-              type="date"
-              value={invoiceDate ? invoiceDate.toISOString().split("T")[0] : ""}
-              onChange={(e) => setInvoiceDate(new Date(e.target.value))}
-              size="small"
-              sx={{ width: "100%" }}
-              InputLabelProps={{
-                shrink: true,
-              }}
-            />
-          </div>
 
-          {/* Month/Year Selectors for Invoice Assignment */}
-          <div className={styles.formGroup}>
-            <label>Invoice Assignment Month/Year</label>
-            <Box display="flex" gap={2} alignItems="center">
-              {/* Month Dropdown */}
-              <FormControl sx={{ minWidth: 150 }}>
-                <InputLabel>Month</InputLabel>
-                <Select
-                  value={targetMonth}
-                  onChange={(e) => setTargetMonth(e.target.value)}
-                  label="Month"
-                  disabled={isMonthLocked()}
+            <div className={styles.datePickerContainer} style={{position: 'relative'}} data-date-picker>
+                <input
+                  type="text"
+                  value={formatDate(selectedDate)}
+                  readOnly
+                  className={styles.dateInput}
+                  onClick={(e) => {
+                    const rect = e.target.getBoundingClientRect();
+                    setCalendarPosition({
+                      top: rect.bottom + window.scrollY + 5,
+                      left: rect.left + window.scrollX
+                    });
+                    // Set calendar view to show the selected date's month
+                    setCalendarViewDate(selectedDate);
+                    setShowCalendar(!showCalendar);
+                  }}
+                  placeholder="Select Date"
+                />
+                <button
+                  type="button"
+                  className={styles.calendarButton}
+                  onClick={(e) => {
+                    const rect = e.target.getBoundingClientRect();
+                    setCalendarPosition({
+                      top: rect.bottom + window.scrollY + 5,
+                      left: rect.left + window.scrollX
+                    });
+                    // Set calendar view to show the selected date's month
+                    setCalendarViewDate(selectedDate);
+                    setShowCalendar(!showCalendar);
+                  }}
                 >
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => {
-                    const monthNames = [
-                      "January",
-                      "February",
-                      "March",
-                      "April",
-                      "May",
-                      "June",
-                      "July",
-                      "August",
-                      "September",
-                      "October",
-                      "November",
-                      "December",
-                    ];
-                    const monthName = monthNames[month - 1];
-                    const isLocked = MonthLockService.isMonthLocked(
-                      monthName,
-                      targetYear,
-                      lockedMonths
-                    );
-                    return (
-                      <MenuItem key={month} value={month}>
-                        <Box display="flex" alignItems="center" gap={1}>
-                          {isLocked && (
-                            <LockIcon
-                              sx={{ fontSize: 16, color: "warning.main" }}
-                            />
-                          )}
-                          {monthName}
-                        </Box>
-                      </MenuItem>
-                    );
-                  })}
-                </Select>
-              </FormControl>
+                  📅
+                </button>
+            </div>
+            
+            {showCalendar && (
+              <div 
+                data-calendar-popup
+                style={{
+                  position: 'fixed',
+                  top: `${calendarPosition.top}px`,
+                  left: `${calendarPosition.left}px`,
+                  background: 'white',
+                  border: '1px solid #ccc',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                  padding: '15px',
+                  zIndex: 999999,
+                  width: '280px',
+                  maxHeight: '400px',
+                  overflow: 'auto'
+                }}
+              >
+              <div className={styles.calendarHeader}>
+                  <button
+                    type="button"
+                    className={styles.calendarNav}
+                    onClick={() => {
+                      const newDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1);
+                      setCalendarViewDate(newDate);
+                    }}
+                  >
+                    ‹
+                  </button>
+                  <span className={styles.calendarMonthYear}>
+                    {calendarViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  </span>
+                  <button
+                    type="button"
+                    className={styles.calendarNav}
+                    onClick={() => {
+                      const newDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 1);
+                      setCalendarViewDate(newDate);
+                    }}
+                  >
+                    ›
+                  </button>
+                </div>
+                
+                <div className={styles.calendarGrid}>
+                  <div className={styles.calendarWeekdays}>
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                      <div key={day} className={styles.weekday}>{day}</div>
+                    ))}
+                  </div>
+                  
+                  <div className={styles.calendarDays}>
+                    {generateCalendarDays().map((date, index) => {
+                      const isCurrentMonth = date.getMonth() === calendarViewDate.getMonth();
+                      const isToday = date.toDateString() === new Date().toDateString();
+                      const isSelected = date.toDateString() === selectedDate.toDateString();
+                      const isDisabled = isDateDisabled(date);
+                      
+                      return (
+                        <button
+                          key={index}
+                          type="button"
+                          className={`${styles.calendarDay} ${
+                            !isCurrentMonth ? styles.otherMonth : ''
+                          } ${isToday ? styles.today : ''} ${
+                            isSelected ? styles.selected : ''
+                          } ${isDisabled ? styles.disabled : ''}`}
+                          onClick={() => !isDisabled && handleDateSelect(date)}
+                          disabled={isDisabled}
+                        >
+                          {date.getDate()}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                
+                <div className={styles.calendarFooter}>
+                  <button
+                    type="button"
+                    className={styles.calendarClose}
+                    onClick={() => setShowCalendar(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {!isAdmin && (
+              <small className={styles.helpText}>
+                Previous dates are locked for your role. Contact an admin if you need changes.
+              </small>
+            )}
 
-              {/* Year Dropdown */}
-              <FormControl sx={{ minWidth: 120 }}>
-                <InputLabel>Year</InputLabel>
-                <Select
-                  value={targetYear}
-                  onChange={(e) => setTargetYear(e.target.value)}
-                  label="Year"
-                  disabled={isMonthLocked()}
-                >
-                  {Array.from(
-                    { length: 11 },
-                    (_, i) => new Date().getFullYear() - i
-                  ).map((year) => (
-                    <MenuItem key={year} value={year}>
-                      {year}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-            <p
-              style={{ fontSize: "0.875rem", color: "#666", marginTop: "4px" }}
-            >
-              This controls which month the invoice gets added to in the system.
-            </p>
           </div>
 
           {extras.map((row, idx) => (
