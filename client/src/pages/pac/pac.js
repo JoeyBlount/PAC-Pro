@@ -1,13 +1,53 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
 import { db, auth } from "../../config/firebase-config";
-import { collection, addDoc, query, where, orderBy, limit, getDocs, serverTimestamp, doc, getDoc, setDoc } from "firebase/firestore";
-import { Box, Container, Grid2 as Grid, InputLabel, Tabs, Tab, Table, TableHead, TableRow, TableCell, TableBody, Paper, TableContainer, TextField, Button, Select, MenuItem, InputAdornment, FormControl, FormLabel } from "@mui/material";
+import {
+  collection,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  getDocs,
+  serverTimestamp,
+  doc,
+  getDoc,
+  setDoc,
+} from "firebase/firestore";
+import {
+  Box,
+  Container,
+  Grid2 as Grid,
+  Tabs,
+  Tab,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  Paper,
+  TableContainer,
+  TextField,
+  Button,
+  Select,
+  MenuItem,
+  InputAdornment,
+  FormControl,
+  FormLabel,
+  Alert,
+  Chip,
+} from "@mui/material";
 import { StoreContext } from "../../context/storeContext";
-import PacTab from './PacTab';
-import styles from './pac.css';
+import PacTab from "./PacTab";
 import { useAuth } from "../../context/AuthContext";
-import { Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material";
-
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+} from "@mui/material";
+import MonthLockService from "../../services/monthLockService";
+import LockIcon from "@mui/icons-material/Lock";
+import LockOpenIcon from "@mui/icons-material/LockOpen";
 
 const expenseList = [
   "Product Sales", "All Net Sales",
@@ -179,7 +219,7 @@ const applyAll = (rows) =>
 const PAC = () => {
   const [tabIndex, setTabIndex] = useState(0);
   const currentDate = new Date();
-  const currentMonth = currentDate.toLocaleString('default', { month: 'long' });
+  const currentMonth = currentDate.toLocaleString("default", { month: "long" });
   const [month, setMonth] = useState(currentMonth);
   const [savedData, setSavedData] = useState({});
 
@@ -277,13 +317,11 @@ const PAC = () => {
   const [endingNonProduct, setEndingNonProduct] = useState(0);
   const [endingOpsSupplies, setEndingOpsSupplies] = useState(0);
 
+
   const [userData, setUserData] = useState(null);
 
 
-  const user = auth.currentUser;
-
-
-  const [openHistModal, setOpenHistModal] = useState(false)
+  const [openHistModal, setOpenHistModal] = useState(false);
   const [shouldLoadHist, setShouldLoadHist] = useState(false);
   const [loadedHistPeriod, setLoadedHistPeriod] = useState(null);
 
@@ -291,7 +329,18 @@ const PAC = () => {
 
   const isAdmin = (userRole || "").toLowerCase() === "admin";
 
-  const getPrevPeriod = (y, mName) => {
+  // Month locking state
+  const [monthLockStatus, setMonthLockStatus] = useState(null);
+  const [lastUpdatedTimestamp, setLastUpdatedTimestamp] = useState(null);
+  const [lockedMonths, setLockedMonths] = useState([]);
+
+  // Check if user can lock months (General Manager, Supervisor, or Admin)
+  const canLockMonth = ["admin", "general manager", "supervisor"].includes(
+    (userRole || "").toLowerCase()
+  );
+
+  // Only admins can unlock months
+  const canUnlockMonth = isAdmin; const getPrevPeriod = (y, mName) => {
     const i = months.indexOf(mName);              // 0..11
     const d = new Date(y, i - 1, 1);              // prev month
     return { y: d.getFullYear(), m: d.getMonth() + 1 }; // 1..12
@@ -341,6 +390,101 @@ const PAC = () => {
   useEffect(() => {
     document.title = "PAC Pro - PAC";
   }, []);
+
+  const fetchMonthLockStatus = async () => {
+    try {
+      if (!selectedStore) return;
+
+      const lockStatus = await MonthLockService.getMonthLockStatus(
+        selectedStore,
+        month,
+        year
+      );
+      setMonthLockStatus(lockStatus);
+
+      // Fetch last updated timestamp from pacGen collection
+      const monthIndex = months.indexOf(month);
+      const period = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+
+      const pacQuery = query(
+        pacGenRef,
+        where("Period", "==", period),
+        orderBy("createdAt", "desc"),
+        limit(1)
+      );
+      const pacSnapshot = await getDocs(pacQuery);
+      if (!pacSnapshot.empty) {
+        const doc = pacSnapshot.docs[0];
+        const data = doc.data();
+        setLastUpdatedTimestamp(data.createdAt?.toDate?.() || new Date());
+      }
+    } catch (error) {
+      console.error("Error fetching month lock status:", error);
+    }
+  };
+
+  const fetchLockedMonths = async () => {
+    try {
+      if (!selectedStore) return;
+
+      const locked = await MonthLockService.getAllLockedMonths(selectedStore);
+      setLockedMonths(locked);
+    } catch (error) {
+      console.error("Error fetching locked months:", error);
+    }
+  };
+
+  const handleLockMonth = async () => {
+    if (!selectedStore) {
+      alert("No store selected.");
+      return;
+    }
+
+    const isCurrentlyLocked = monthLockStatus?.is_locked || false;
+
+    try {
+      let result;
+      if (isCurrentlyLocked) {
+        // Unlock month
+        result = await MonthLockService.unlockMonth(
+          selectedStore,
+          month,
+          year,
+          auth.currentUser?.email || "unknown",
+          userRole
+        );
+      } else {
+        // Lock month
+        result = await MonthLockService.lockMonth(
+          selectedStore,
+          month,
+          year,
+          auth.currentUser?.email || "unknown",
+          userRole
+        );
+      }
+
+      if (result.success) {
+        alert(result.message);
+        await fetchMonthLockStatus();
+        await fetchLockedMonths();
+      } else {
+        alert(result.message);
+      }
+    } catch (error) {
+      console.error("Error updating month lock:", error);
+      alert("Failed to update month lock status.");
+    }
+  };
+
+  const isMonthLocked = () => {
+    return monthLockStatus?.is_locked || false;
+  };
+
+  const isCurrentPeriodLocked = () => {
+    return isMonthLocked();
+  };
+
 
   useEffect(() => {
     setProjections(prev =>
@@ -506,12 +650,27 @@ const PAC = () => {
     if (selectedYear > currentYear) return false;
     return targetIdx < currentMonthIdx;
   };
-  const isYearDisabled = (yearNumber) => {
-    if (isAdmin) return false;
-    const currentYear = new Date().getFullYear();
-    return yearNumber < currentYear; // lock/grey any previous year
-  };
 
+  useEffect(() => {
+    setProjections((prev) =>
+      prev.map((expense) => ({
+        ...expense,
+        historicalDollar: "-",
+        historicalPercent: "-",
+      }))
+    );
+
+    // also reset histMonth/year selection if you want
+    setHistMonth(null);
+    setHistYear(null);
+    setShouldLoadHist(false);
+  }, [month, year]);
+
+  // Fetch month lock status when month, year, or store changes
+  useEffect(() => {
+    fetchMonthLockStatus();
+    fetchLockedMonths();
+  }, [month, year, selectedStore]);
 
   useEffect(() => {
     const loadHistoricalData = async () => {
@@ -716,9 +875,12 @@ const PAC = () => {
       return;
     }
 
-    // Build a document ID: store_001_202509 
+    // Build a document ID: store_001_202509
     const monthIndex = months.indexOf(month); // 0–11
-    const docId = `${selectedStore}_${year}${String(monthIndex + 1).padStart(2, "0")}`;
+    const docId = `${selectedStore}_${year}${String(monthIndex + 1).padStart(
+      2,
+      "0"
+    )}`;
 
     try {
       await setDoc(doc(db, "pac-projections", docId), {
@@ -745,10 +907,10 @@ const PAC = () => {
 
 
   const getEmptyHistoricalData = () => {
-    return expenseList.map(expense => ({
+    return expenseList.map((expense) => ({
       name: expense,
       historicalDollar: "-",
-      historicalPercent: "-"
+      historicalPercent: "-",
     }));
   };
 
@@ -814,16 +976,16 @@ const PAC = () => {
       }
     }
     return null;
-  }
+  };
 
   const getCategoryColor = (category) => {
     const colors = {
-      'Sales': '#e3f2fd',
-      'Food & Paper': '#e8f5e9',
-      'Labor': '#fff3e0',
-      'Purchases': '#f3e5f5'
+      Sales: "#e3f2fd",
+      "Food & Paper": "#e8f5e9",
+      Labor: "#fff3e0",
+      Purchases: "#f3e5f5",
     };
-    return colors[category] || '#ffffff';
+    return colors[category] || "#ffffff";
   };
 
   const getProductSales = () => {
@@ -833,9 +995,9 @@ const PAC = () => {
 
   const calculateTotalControllable = (type) => {
     let total = 0;
-    ['Food & Paper', 'Labor', 'Purchases'].forEach(category => {
-      categories[category].forEach(item => {
-        const expense = projections.find(e => e.name === item);
+    ["Food & Paper", "Labor", "Purchases"].forEach((category) => {
+      categories[category].forEach((item) => {
+        const expense = projections.find((e) => e.name === item);
         if (expense) {
           total += parseFloat(expense[`${type}Dollar`]) || 0;
         }
@@ -844,34 +1006,23 @@ const PAC = () => {
     return total;
   };
 
-  const calculatePac = (type) => {
-    const productSales = getProductSales();
-    const totalControllable = calculateTotalControllable(type);
-    return productSales - totalControllable;
-  };
-
-  const calculatePercentage = (value, total) => {
-    return total > 0 ? ((value / total) * 100).toFixed(2) + '%' : '0.00%';
-  };
-
-  const isPacPositive = () => {
-    const actualPac = calculatePac('historical');
-    const projectedPac = calculatePac('projected');
-    return actualPac >= projectedPac;
-  };
-
   // this function saves all the user input data from the generate page into the database
   const handleGenerate = async (e) => {
-    if (!productNetSales ||
+    // Check if current month is locked
+    if (isCurrentPeriodLocked()) {
+      alert("This month is locked and cannot be modified.");
+      return;
+    }
+
+    if (
+      !productNetSales ||
       !cash ||
       !promo ||
       !allNetSales ||
       !advertising ||
-
       !crewLabor ||
       !totalLabor ||
       !payrollTax ||
-
       !completeWaste ||
       !rawWaste ||
       !condiment ||
@@ -879,13 +1030,11 @@ const PAC = () => {
       !unexplained ||
       !discounts ||
       !baseFood ||
-
       !startingFood ||
       !startingCondiment ||
       !startingPaper ||
       !startingNonProduct ||
       !startingOpsSupplies ||
-
       !endingFood ||
       !endingCondiment ||
       !endingPaper ||
@@ -893,11 +1042,8 @@ const PAC = () => {
       !endingOpsSupplies
     ) {
       alert("You must fill out all fields before submitting.");
-    }
-
-    else {
+    } else {
       try {
-
         // using a "period" key for generate
         const monthIndex = [
           "January", "February", "March", "April", "May", "June",
@@ -907,7 +1053,6 @@ const PAC = () => {
 
 
         await addDoc(pacGenRef, {
-
           // month year and time for when it was generated
           Month: month,
           Year: year,
@@ -942,7 +1087,7 @@ const PAC = () => {
           EndingCondiment: parseFloat(endingCondiment),
           EndingPaper: parseFloat(endingPaper),
           EndingNonProduct: parseFloat(endingNonProduct),
-          EndingOpsSupplies: parseFloat(endingOpsSupplies)
+          EndingOpsSupplies: parseFloat(endingOpsSupplies),
         });
         alert("Report generated successfully.");
       } catch (error) {
@@ -950,7 +1095,6 @@ const PAC = () => {
         alert("Failed to generate.");
       }
     }
-
   };
 
   // ----- PAC submit gating -----
@@ -975,56 +1119,67 @@ const PAC = () => {
         <Paper sx={{ padding: '10px' }}>
           <Grid container wrap="wrap" justifyContent="space-between" alignItems="center">
             <Grid item xs={12} sm={6} md={4}>
-              <Box sx={{ padding: '10px', marginLeft: '5px' }}>
+              <Box sx={{ padding: "10px", marginLeft: "5px" }}>
                 <h1 className="Header">PAC</h1>
               </Box>
             </Grid>
-            <Grid container xs={12} sm={6} md={4} wrap="wrap" justifyContent="flex-end" alignItems="center">
+            <Grid
+              container
+              xs={12}
+              sm={6}
+              md={4}
+              wrap="wrap"
+              justifyContent="flex-end"
+              alignItems="center"
+            >
               <Grid item xs={12} sm={6} md={4}>
-                <Box display="flex" flexDirection="row" flexWrap="nowrap" justifyContent="center" gap={1} sx={{ padding: '10px', margin: '0 auto' }}>
+                <Box
+                  display="flex"
+                  flexDirection="row"
+                  flexWrap="nowrap"
+                  justifyContent="center"
+                  gap={1}
+                  sx={{ padding: "10px", margin: "0 auto" }}
+                >
                   {/* Month Dropdown */}
                   <Select
                     value={month}
                     onChange={(e) => {
-                      const next = e.target.value;
-                      if (isMonthDisabled(next, year)) return; // guard
-                      setMonth(next);
+                      setMonth(e.target.value);
                     }}
                     sx={{ width: 200, marginRight: 2 }}
                   >
-                    {months.map((m) => (
-                      <MenuItem
-                        key={m}
-                        value={m}
-                        disabled={isMonthDisabled(m, year)}
-                        title={!isAdmin && isMonthDisabled(month) ? "Locked for your role" : undefined}
-                      >
-                        {m}
-                      </MenuItem>
-                    ))}
+                    {months.map((m) => {
+                      const isLocked = MonthLockService.isMonthLocked(
+                        m,
+                        year,
+                        lockedMonths
+                      );
+                      return (
+                        <MenuItem key={m} value={m}>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            {isLocked && (
+                              <LockIcon
+                                sx={{ fontSize: 16, color: "warning.main" }}
+                              />
+                            )}
+                            {m}
+                          </Box>
+                        </MenuItem>
+                      );
+                    })}
                   </Select>
 
                   {/* Year Dropdown */}
                   <Select
                     value={year}
                     onChange={(e) => {
-                      const nextYear = e.target.value;
-                      if (isYearDisabled(nextYear)) return; // guard
-                      setYear(nextYear);
-
-                      // If the current month becomes invalid after switching years, snap to current month
-                      if (isMonthDisabled(month, nextYear)) {
-                        const safeMonth = months[new Date().getMonth()];
-                        setMonth(safeMonth);
-                      }
+                      setYear(e.target.value);
                     }}
                     sx={{ width: 120, marginRight: 2 }}
                   >
                     {years.map((y) => (
-                      <MenuItem key={y} value={y} disabled={isYearDisabled(y)}
-                        title={!isAdmin && isYearDisabled(year) ? "Locked for your role" : undefined}
-                        className={!isAdmin && isYearDisabled(year) ? styles.disabledOption : undefined}
-                      >
+                      <MenuItem key={y} value={y}>
                         {y}
                       </MenuItem>
                     ))}
@@ -1036,7 +1191,7 @@ const PAC = () => {
                 <Tabs
                   value={tabIndex}
                   onChange={(event, newIndex) => setTabIndex(newIndex)}
-                  sx={{ padding: '10px', margin: '0 auto' }}
+                  sx={{ padding: "10px", margin: "0 auto" }}
                   textColor="primary"
                 >
                   <Tab label="Projections" />
@@ -1543,45 +1698,103 @@ const PAC = () => {
                 </div>
               </div>
 
-              {/* This button calls the handleGenerate function */}
-              <Button
-                variant="contained"
-                color="primary"
-                size="large"
-                sx={{
-                  marginTop: 2,
-                  marginBottom: 8,
-                  width: "250px",
-                  alignSelf: "center",
-                  backgroundColor: "#1976d2",
-                  "&:hover": {
-                    backgroundColor: "#42a5f5",
-                  }
-                }}
-                onClick={handleGenerate}
+              {/* Month Lock Status Alert */}
+              {isMonthLocked() && (
+                <Alert
+                  severity="warning"
+                  icon={<LockIcon />}
+                  sx={{ mt: 2, mb: 2 }}
+                >
+                  This month is locked and cannot be modified. Only administrators
+                  can unlock it.
+                </Alert>
+              )}
+
+              {/* Submit and Lock buttons */}
+              <Box
+                display="flex"
+                gap={2}
+                justifyContent="center"
+                sx={{ mt: 2, mb: 8 }}
               >
-                Generate Report
-              </Button>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  sx={{
+                    width: "250px",
+                    backgroundColor: "#1976d2",
+                    "&:hover": {
+                      backgroundColor: "#42a5f5",
+                    },
+                  }}
+                  onClick={handleGenerate}
+                  disabled={isCurrentPeriodLocked()}
+                >
+                  Submit
+                </Button>
 
-
+                <Button
+                  variant={isMonthLocked() ? "contained" : "outlined"}
+                  color={isMonthLocked() ? "error" : "primary"}
+                  size="large"
+                  startIcon={isMonthLocked() ? <LockOpenIcon /> : <LockIcon />}
+                  sx={{
+                    width: "250px",
+                  }}
+                  onClick={handleLockMonth}
+                  disabled={
+                    (!isMonthLocked() && !canLockMonth) ||
+                    (isMonthLocked() && !canUnlockMonth)
+                  }
+                >
+                  {isMonthLocked() ? "Unlock Month" : "Lock Month"}
+                </Button>
+              </Box>
             </div>
           </Container>
-        )
-      } {/* end of Generate page */}
+        )}{" "}
+      {/* end of Generate page */}
+      {tabIndex === 2 && (
+        <Container>
+          {/* Month status and timestamp display */}
+          <Box
+            display="flex"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ mb: 2 }}
+          >
+            <Box display="flex" gap={2} alignItems="center">
+              {isMonthLocked() && (
+                <Chip
+                  icon={<LockIcon />}
+                  label={`Month Locked by ${monthLockStatus?.locked_by || "Unknown"
+                    }`}
+                  color="warning"
+                  variant="outlined"
+                />
+              )}
+              {lastUpdatedTimestamp && (
+                <Chip
+                  label={`Last Updated: ${lastUpdatedTimestamp.toLocaleString()}`}
+                  color="info"
+                  variant="outlined"
+                />
+              )}
+            </Box>
+          </Box>
 
-      {
-        tabIndex === 2 && (
-          <Container>
-            <PacTab
-              storeId={selectedStore || "store_001"}
-              year={year}
-              month={month}
-              projections={projections}
-            />
-          </Container>
-        )
-      } {/* end of Actual page */}
-    </Box >
+          <PacTab
+            storeId={selectedStore || "store_001"}
+            year={year}
+            month={month}
+            projections={projections}
+            isMonthLocked={isMonthLocked()}
+          />
+        </Container>
+      )}{" "}
+      {/* end of Actual page */}
+    </Box>
   );
 };
 
