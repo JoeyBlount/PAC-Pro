@@ -99,6 +99,8 @@ class InvoiceSubmitService:
                 'imageURL': image_url,
                 'invoiceDate': invoice_data.get('invoiceDate', ''),
                 'invoiceNumber': invoice_data.get('invoiceNumber', ''),
+                'targetMonth': invoice_data.get('targetMonth', ''),
+                'targetYear': invoice_data.get('targetYear', ''),
                 'storeID': invoice_data.get('storeID', ''),
                 'user_email': invoice_data.get('user_email', '')
             }
