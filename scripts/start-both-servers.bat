@@ -11,7 +11,7 @@ echo Starting Backend Server...
 echo.
 
 REM Start backend in a new window
-start "PAC Backend" cmd /k "cd /d %SCRIPT_DIR%\server\python_backend && set PROJECT_ROOT=%SCRIPT_DIR% && C:\Users\%USERNAME%\AppData\Local\Programs\Python\Python312-arm64\python.exe main.py"
+start "PAC Backend" cmd /k "cd /d %SCRIPT_DIR%\server\python_backend && set PROJECT_ROOT=%SCRIPT_DIR% && python main.py"
 
 echo Waiting 5 seconds for backend to start...
 timeout /t 5 /nobreak >nul
