@@ -29,10 +29,16 @@ import {
   Menu as MenuIcon,
   Close as CloseIcon,
   Dashboard,
+
+  Print,
+  Assessment,
+  TrendingUp,
+  BarChart,
   Notifications,
   Delete,
   PersonAdd,
   DoneAll,
+
 } from "@mui/icons-material";
 import { StoreContext } from "../../context/storeContext";
 import {
@@ -67,15 +73,35 @@ function formatRelativeTime(timestamp) {
 export function NavBar() {
   const navigate = useNavigate();
   const [sideNavOpen, setSideNavOpen] = useState(false);
+  const [reportsDropdownOpen, setReportsDropdownOpen] = useState(false);
+  const [reportsHoverTimeout, setReportsHoverTimeout] = useState(null);
   const sideNavRef = React.useRef(null);
+  const reportsRef = React.useRef(null);
 
   const [userData, setUserData] = useState(null);
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // Notifications state
+    // Notifications state (from main)
   const [notifications, setNotifications] = useState([]);
   const [anchorEl, setAnchorEl] = useState(null);
+
+  // reports config for dropdown - PAC Actual report and Invoice Log
+  const reportsList = [
+    {
+      id: 'pac-actual-report',
+      name: 'PAC Actual Report',
+      icon: <Analytics />,
+      path: '/navi/pac',
+      description: 'View and print PAC Actual report'
+    },
+    {
+      id: 'invoice-log-report',
+      name: 'Invoice Log',
+      icon: <ReceiptLong />,
+      path: '/navi/invoiceLogs',
+      description: 'View and print invoice log report'
+    }
+  ];
 
   const { selectedStore, setSelectedStore } = useContext(StoreContext);
 
@@ -114,7 +140,7 @@ export function NavBar() {
     };
 
     fetchData();
-  }, []);
+  }, [selectedStore, setSelectedStore]);
 
   // Notifications listener
   useEffect(() => {
@@ -149,9 +175,93 @@ export function NavBar() {
     return selected ? `${selected.storeID} - ${selected.subName}` : "Select Store";
   };
 
+
+  // Add click outside handler
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        sideNavRef.current &&
+        !sideNavRef.current.contains(event.target) &&
+        !event.target.closest(".hamburgerButton")
+      ) {
+        setSideNavOpen(false);
+      }
+      
+      // Handle reports dropdown click outside
+      if (
+        reportsRef.current &&
+        !reportsRef.current.contains(event.target) &&
+        !event.target.closest(".reports-button")
+      ) {
+        setReportsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      // Clean up timeout on unmount
+      if (reportsHoverTimeout) {
+        clearTimeout(reportsHoverTimeout);
+      }
+    };
+  }, [reportsHoverTimeout]);
+  // Navigate helper
   function handleNav(path) {
     navigate("/navi/" + path);
   }
+
+
+  // Handle report navigation with auto-print
+  function handleReportNavigation(report) {
+    console.log('Navigating to report:', report.name, 'at path:', report.path);
+    navigate(report.path);
+    setReportsDropdownOpen(false);
+    
+    // Auto-trigger print/export after a delay to allow page load
+    setTimeout(() => {
+      console.log('Attempting to auto-trigger print/export for:', report.name);
+      if (report.id === 'pac-actual-report') {
+        const tabButtons = document.querySelectorAll('[role="tab"], .MuiTab-root, button[data-tab]');
+        const actualTab = Array.from(tabButtons).find(btn => 
+          btn.textContent.toLowerCase().includes('actual') ||
+          btn.getAttribute('data-tab') === '2'
+        );
+        if (actualTab) {
+          console.log('Switching to Actual tab...');
+          actualTab.click();
+        }
+        
+        
+        setTimeout(() => {
+          const buttons = document.querySelectorAll('button');
+          const printBtn = Array.from(buttons).find(btn => 
+            btn.textContent.toLowerCase().includes('print report') ||
+            btn.textContent.toLowerCase().includes('print')
+          );
+          if (printBtn) {
+            console.log('Found print button, clicking...');
+            printBtn.click();
+          } else {
+            console.log('No print button found');
+          }
+        }, 1000); // Wait 1 second for tab to load
+      } else if (report.id === 'invoice-log-report') {
+        // For Invoice Log, just open the export dialog
+        const buttons = document.querySelectorAll('button');
+        const exportBtn = Array.from(buttons).find(btn => 
+          btn.textContent.toLowerCase().includes('export')
+        );
+        if (exportBtn) {
+          console.log('Found export button, opening dialog...');
+          exportBtn.click();
+        } else {
+          console.log('No export button found');
+        }
+      }
+    }, 1500); 
+  }
+
+  // Sign out logic
 
   async function handleSignOut() {
     try {
@@ -379,15 +489,71 @@ export function NavBar() {
                 {sideNavOpen && "Submit Invoice"}
               </Button>
             </Tooltip>
-            <Tooltip title="Reports" placement="left">
-              <Button
-                className="navItem"
-                onClick={() => handleNav("reports")}
-                startIcon={<Summarize />}
-              >
-                {sideNavOpen && "Reports"}
-              </Button>
-            </Tooltip>
+            <div 
+              className="reports-container" 
+              ref={reportsRef}
+              onMouseEnter={() => {
+                if (reportsHoverTimeout) {
+                  clearTimeout(reportsHoverTimeout);
+                  setReportsHoverTimeout(null);
+                }
+                setReportsDropdownOpen(true);
+              }}
+              onMouseLeave={() => {
+                const timeout = setTimeout(() => {
+                  setReportsDropdownOpen(false);
+                }, 300); // 300ms delay before closing
+                setReportsHoverTimeout(timeout);
+              }}
+            >
+              <Tooltip title="Reports" placement="left">
+                <Button
+                  className="navItem reports-button"
+                  onClick={() => handleNav("reports")}
+                  startIcon={<Summarize />}
+                >
+                  {sideNavOpen && "Reports"}
+                </Button>
+              </Tooltip>
+              
+              {/* Reports Dropdown */}
+              {reportsDropdownOpen && (
+                <div 
+                  className="reports-dropdown"
+                  onMouseEnter={() => {
+                    if (reportsHoverTimeout) {
+                      clearTimeout(reportsHoverTimeout);
+                      setReportsHoverTimeout(null);
+                    }
+                  }}
+                  onMouseLeave={() => {
+                    const timeout = setTimeout(() => {
+                      setReportsDropdownOpen(false);
+                    }, 300);
+                    setReportsHoverTimeout(timeout);
+                  }}
+                >
+                  {reportsList.map((report) => (
+                    <div
+                      key={report.id}
+                      className="report-item"
+                      onClick={() => handleReportNavigation(report)}
+                    >
+                      <div className="report-icon">
+                        {report.icon}
+                      </div>
+                      <div className="report-content">
+                        <div className="report-name">{report.name}</div>
+                        <div className="report-description">{report.description}</div>
+                      </div>
+                      <div className="report-print-icon">
+                        <Print />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <Tooltip title="PAC" placement="left">
               <Button
                 className="navItem"

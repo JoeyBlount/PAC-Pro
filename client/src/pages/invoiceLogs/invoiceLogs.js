@@ -37,6 +37,7 @@ import { db } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext";
 import { getAuth } from "firebase/auth";
 import { useAuth } from "../../context/AuthContext";
+import { invoiceCatList } from "../settings/InvoiceSettings";
 import MonthLockService from "../../services/monthLockService";
 
 // Map Invoice Log category IDs -> PAC "projections[].name"
@@ -249,9 +250,11 @@ const InvoiceLogs = () => {
       const invoiceRef = doc(db, "invoices", invoiceID);
       await updateDoc(invoiceRef, {
         locked: false,
-      });
-      alert("Invoice unlocked.");
-    } catch (error) {
+            });
+    alert("Invoice unlocked.");
+    fetchInvoices(); // refresh from Firestore
+  } catch (error) {
+
       console.error("Error unlocking invoice:", error);
       alert("Failed to unlock invoice.");
     }
@@ -277,11 +280,17 @@ const InvoiceLogs = () => {
       try {
         const q = query(collection(db, "invoiceCategories"));
         const snapshot = await getDocs(q);
-        const columns = snapshot.docs.map((doc) => ({
+        const allColumns = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(), // Expect each doc to have fields: name, bankAccountNum, etc.
         }));
-        setMonetaryColumns(columns);
+        
+        // Sort columns according to the order defined in InvoiceSettings
+        const orderedColumns = invoiceCatList.map(categoryId => 
+          allColumns.find(col => col.id === categoryId)
+        ).filter(Boolean); // Remove any undefined entries
+        
+        setMonetaryColumns(orderedColumns);
       } catch (error) {
         console.error("Error fetching category columns:", error);
       }
@@ -818,15 +827,18 @@ const InvoiceLogs = () => {
 
     return sorted.map((inv, i) => {
       const canEdit = isCurrentMonth(inv.invoiceDate) && !inv.locked;
+      const isLocked = inv.locked === true; // Explicitly check for true
 
       return (
-        <tr key={i} className="invoice-row" onClick={() => handleRowClick(inv)}>
+        <tr
+          key={i}
+          className={`invoice-row ${isLocked ? 'locked-row' : 'unlocked-row'}`}
+          onClick={() => handleRowClick(inv)}
+        >
           <td className="tableCell">
             {inv.targetMonth && inv.targetYear
               ? `${inv.targetMonth}/${inv.targetYear}`
-              : `${new Date(inv.dateSubmitted).getMonth() + 1}/${new Date(
-                  inv.dateSubmitted
-                ).getFullYear()} (legacy)`}
+              : `${new Date(inv.dateSubmitted).getMonth() + 1}/${new Date(inv.dateSubmitted).getFullYear()} (legacy)`}
           </td>
           <td className="tableCell">{inv.storeID}</td>
           <td className="tableCell dateCell">
@@ -857,50 +869,50 @@ const InvoiceLogs = () => {
           })}
 
           <td className="tableCell">
-            {(canEdit || userRole === "Supervisor" || userRole === "Admin") &&
-              !isInvoiceMonthLocked(
-                inv.targetMonth || new Date(inv.dateSubmitted).getMonth() + 1,
-                inv.targetYear || new Date(inv.dateSubmitted).getFullYear()
-              ) && (
-                <>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEdit(inv);
-                      // console.log(inv)
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(inv);
-                    }}
-                  >
-                    Delete
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      console.log(e);
-                      e.stopPropagation();
-                      lockInvoice(inv.id);
-                    }}
-                  >
-                    Lock
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      console.log(e);
-                      e.stopPropagation();
+          {(canEdit || userRole === "Supervisor" || userRole === "Admin") &&
+            !isInvoiceMonthLocked(
+              inv.targetMonth || new Date(inv.dateSubmitted).getMonth() + 1,
+              inv.targetYear || new Date(inv.dateSubmitted).getFullYear()
+            ) && (
+              <>
+                <button
+                  className="edit-button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEdit(inv);
+                  }}
+                >
+                  ✏️ Edit
+                </button>
+                <button
+                  className="delete-button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(inv);
+                  }}
+                >
+                  🗑️ Delete
+                </button>
+                <button
+                  className={`lock-toggle-button ${isLocked ? 'locked' : 'unlocked'}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    console.log('Invoice lock status:', inv.locked, 'isLocked:', isLocked);
+                    if (isLocked) {
+                      console.log('Unlocking invoice:', inv.id);
                       unlockInvoice(inv.id);
-                    }}
-                  >
-                    Unlock
-                  </button>
-                </>
-              )}
-          </td>
+                    } else {
+                      console.log('Locking invoice:', inv.id);
+                      lockInvoice(inv.id);
+                    }
+                  }}
+                >
+                  {isLocked ? '🔓 Unlock' : '🔒 Lock'}
+                </button>
+              </>
+            )}
+        </td>
+
         </tr>
       );
     });
