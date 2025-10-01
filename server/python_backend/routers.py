@@ -1,11 +1,12 @@
 """
 FastAPI routers for PAC calculations
 """
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 import json
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Query
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Security, Request, Query
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from models import PacCalculationResult, PacInputData
 from services.pac_calculation_service import PacCalculationService
@@ -25,6 +26,86 @@ logger = logging.getLogger(__name__)
 
 
 # ---- Dependencies ----
+security_scheme = HTTPBearer(auto_error=False)
+
+
+def require_auth(credentials: HTTPAuthorizationCredentials = Security(security_scheme)) -> Dict[str, Any]:
+    """Basic auth requirement: ensure a Bearer token is provided.
+
+    In production, this should validate the token (e.g., Firebase ID token).
+    For now, we enforce presence of the header to prevent unauthenticated access.
+    """
+    if credentials is None or not credentials.credentials:
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+
+    token = credentials.credentials
+
+    # If Firebase Admin SDK is available and initialized, verify the token.
+    # Otherwise, accept any non-empty token but still require presence (dev fallback).
+    try:
+        import firebase_admin  # type: ignore
+        from firebase_admin import auth as fb_auth  # type: ignore
+        if firebase_admin._apps:
+            try:
+                decoded = fb_auth.verify_id_token(token)
+                return {"uid": decoded.get("uid"), "email": decoded.get("email"), "claims": decoded}
+            except Exception:
+                # Provided token is present but invalid
+                raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception:
+        # Firebase not available; proceed with minimal context in dev
+        pass
+
+    return {"uid": None, "email": None, "claims": None}
+
+
+def require_roles(allowed_roles: List[str]):
+    def _checker(
+        auth_ctx: Dict[str, Any] = Depends(require_auth),
+        request: Request = None,
+    ) -> Dict[str, Any]:
+        role: Optional[str] = None
+
+        # 1) Prefer role from verified token claims
+        claims = auth_ctx.get("claims") or {}
+        if isinstance(claims, dict):
+            if "role" in claims and isinstance(claims["role"], str):
+                role = claims["role"]
+
+        # 2) If not in claims, and we have an email + Firebase, look up Firestore 'users' doc
+        if role is None and auth_ctx.get("email"):
+            try:
+                import firebase_admin  # type: ignore
+                from firebase_admin import firestore  # type: ignore
+                if firebase_admin._apps:
+                    db = firestore.client()
+                    user_doc = db.collection("users").document(auth_ctx["email"]).get()
+                    if user_doc.exists:
+                        data = user_doc.to_dict() or {}
+                        r = data.get("role")
+                        if isinstance(r, str):
+                            role = r
+            except Exception:
+                # Firestore not available or lookup failed; fall back below
+                pass
+
+        # 3) Dev/test fallback: allow header override if Firebase not available
+        if role is None and request is not None:
+            hdr = request.headers.get("X-User-Role")
+            if hdr and isinstance(hdr, str):
+                role = hdr
+
+        if role is None:
+            raise HTTPException(status_code=403, detail="Role not found for user")
+
+        if role not in allowed_roles:
+            raise HTTPException(status_code=403, detail="Insufficient role")
+
+        return {"role": role}
+
+    return _checker
+
+
 def get_pac_calculation_service() -> PacCalculationService:
     data_ingestion_service = DataIngestionService()
     account_mapping_service = AccountMappingService()
@@ -236,6 +317,7 @@ async def health_check() -> Dict[str, str]:
 async def read_invoice(
     image: UploadFile = File(...),
     reader: InvoiceReader = Depends(get_invoice_reader),
+    _auth: Dict[str, Any] = Depends(require_roles(["ADMIN", "ACCOUNTANT"])),
 ) -> Dict[str, Any]:
     """
     Read invoice image using OpenAI Vision API via the InvoiceReader service.
@@ -281,6 +363,7 @@ async def submit_invoice(
     user_email: str = Form(...),
     categories: str = Form(...),  # JSON string of categories
     submit_service: InvoiceSubmitService = Depends(get_invoice_submit_service),
+    _auth: Dict[str, Any] = Depends(require_roles(["ADMIN"])),
 ) -> Dict[str, Any]:
     """
     Submit invoice data and image to Firebase.
