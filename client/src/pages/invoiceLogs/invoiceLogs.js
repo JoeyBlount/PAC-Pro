@@ -17,6 +17,7 @@ import { db } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext";
 import { getAuth } from "firebase/auth";
 import { useAuth } from "../../context/AuthContext";
+import { invoiceCatList } from "../settings/InvoiceSettings";
 
 const InvoiceLogs = () => {
   // const { currentUser, userRole } = useAuth();
@@ -214,11 +215,17 @@ const InvoiceLogs = () => {
       try {
         const q = query(collection(db, "invoiceCategories"));
         const snapshot = await getDocs(q);
-        const columns = snapshot.docs.map((doc) => ({
+        const allColumns = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(), // Expect each doc to have fields: name, bankAccountNum, etc.
         }));
-        setMonetaryColumns(columns);
+        
+        // Sort columns according to the order defined in InvoiceSettings
+        const orderedColumns = invoiceCatList.map(categoryId => 
+          allColumns.find(col => col.id === categoryId)
+        ).filter(Boolean); // Remove any undefined entries
+        
+        setMonetaryColumns(orderedColumns);
       } catch (error) {
         console.error("Error fetching category columns:", error);
       }

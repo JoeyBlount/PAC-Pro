@@ -161,6 +161,9 @@
 .reports-container {
   position: relative;
   width: 100%;
+  /* Ensure it doesn't break nav bar layout */
+  display: flex;
+  flex-direction: column;
 }
 
 .reports-button {
@@ -178,9 +181,22 @@
   min-width: 280px;
   z-index: 9999;
   padding: 8px 0;
-  /* Make it more visible for debugging */
   opacity: 1;
   visibility: visible;
+  animation: fadeIn 0.2s ease-in-out;
+  /* Ensure it doesn't interfere with nav bar */
+  pointer-events: auto;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .report-item {
