@@ -65,7 +65,7 @@ class InvoiceSubmitService:
             raise RuntimeError(f"Failed to submit invoice: {str(e)}")
     
     async def _upload_image(self, image_file: bytes, image_filename: str) -> str:
-        """Upload image to Firebase Storage and return private download URL"""
+        """Upload image to Firebase Storage and return permanent private download URL"""
         try:
             # Generate unique filename
             unique_filename = f"{image_filename}_{uuid.uuid4()}"
@@ -74,9 +74,11 @@ class InvoiceSubmitService:
             # Upload to Firebase Storage
             blob = self.bucket.blob(blob_name)
             blob.upload_from_string(image_file, content_type='image/jpeg')
-            # Generate a signed URL that expires in 1 hour (3600 seconds)
+            
+            # Generate a signed URL that expires in 10 years (effectively permanent)
+            # This keeps the file private but provides a long-term accessible URL
             download_url = blob.generate_signed_url(
-                expiration=datetime.utcnow() + timedelta(hours=1),
+                expiration=datetime.utcnow() + timedelta(days=3650),  # 10 years
                 method='GET'
             )
             
@@ -96,7 +98,7 @@ class InvoiceSubmitService:
                 'categories': invoice_data.get('categories', {}),
                 'companyName': invoice_data.get('companyName', ''),
                 'dateSubmitted': invoice_data.get('dateSubmitted', ''),
-                'imageURL': image_url,
+                'imageURL': image_url,  # Store the signed URL for direct use in frontend
                 'invoiceDate': invoice_data.get('invoiceDate', ''),
                 'invoiceNumber': invoice_data.get('invoiceNumber', ''),
                 'targetMonth': invoice_data.get('targetMonth', ''),
