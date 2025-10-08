@@ -1,13 +1,22 @@
 // invoicesettings.js (Modified)
 import React, { useState, useEffect } from "react";
-import { collection, doc, getDoc, updateDoc } from "firebase/firestore";
+import { collection, doc, getDoc, updateDoc, setDoc } from "firebase/firestore"; //added setDoc
 import { db } from "../../config/firebase-config";
 import { Container, Typography } from "@mui/material";
 import styles from "./InvoiceSettings.module.css"; 
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 
-export const invoiceCatList = ["FOOD", "CONDIMENT", "NONPRODUCT", "PAPER", "TRAVEL"];
+//export const invoiceCatList = ["FOOD", "CONDIMENT", "NONPRODUCT", "PAPER", "TRAVEL"];
+// All categories from invoice log, organized in PAC page order
+// First 4: Food, Condiment, Paper, Non product (as requested)
+// Then remaining categories from invoice log
+export const invoiceCatList = [
+  "FOOD", "CONDIMENT", "PAPER", "NONPRODUCT", // First 4 as requested
+  "TRAVEL", "ADV-OTHER", "PROMO", "OUTSIDE SVC", 
+  "LINEN", "OP. SUPPLY", "M+R", "SML EQUIP", 
+  "UTILITIES", "OFFICE", "TRAINING", "CREW RELATIONS"
+];
 
 const InvoiceSettings = () => {
   const userRole = ROLES.ADMIN; // This line makes all user who access the invoice settings a admin regardless of their actual role. Delete this line and uncomment the line below when user roles are fixed.
@@ -27,17 +36,40 @@ const InvoiceSettings = () => {
 
   const invoiceCatRef = collection(db, "invoiceCategories");
 
-  //prev broken code flagged here
+  // Fetch categories from database, create missing ones with default values
   const getCategories = async () => {
     const categoryData = [];
     try {
       for (const id of invoiceCatList) {
-        const docRef  = doc(invoiceCatRef, id);
+        const docRef = doc(invoiceCatRef, id);
         const docSnap = await getDoc(docRef);
-        if (!docSnap.exists()) {
-          throw new Error("doc for " + id + " does not exist");
+        
+        if (docSnap.exists()) {
+          // Document exists, use its data
+          categoryData.push({ id, ...docSnap.data() });
+        } else {
+          // Document doesn't exist, create it with default values
+          console.log(`Creating missing category document for: ${id}`);
+          const defaultData = {
+            bankAccountNum: "0000", // Default account number
+            name: id,
+            createdAt: new Date().toISOString(),
+            description: `Account settings for ${id} category`
+          };
+          
+          // created database entries for the other categories in invoice settings and invoice log
+          // Create the document in Firestore
+          try {
+            await setDoc(docRef, defaultData);
+            console.log(`✅ Created Firestore document for: ${id}`);
+          } catch (createError) {
+            console.error(`❌ Failed to create document for ${id}:`, createError);
+            // Still add to local data even if Firestore creation fails
+          }
+          
+          // Add to local data
+          categoryData.push({ id, ...defaultData });
         }
-        categoryData.push({ id, ...docSnap.data() });
       }
     } catch (error) {
       console.error("Failure querying database for categories:", error);
@@ -48,7 +80,10 @@ const InvoiceSettings = () => {
   useEffect(() => {
     if (canActuallyView) { // Only fetch if allowed to view
       getCategories()
-        .then(data => setCategories(data))
+        .then(data => {
+          console.log("Loaded categories:", data);
+          setCategories(data);
+        })
         .catch(err => console.error(err));
     }
   }, [canActuallyView]); // Re-run if view permission changes
@@ -60,7 +95,23 @@ const InvoiceSettings = () => {
         throw new Error("account number must be numeric");
       }
       const ref = doc(invoiceCatRef, id);
-      await updateDoc(ref, { bankAccountNum: newAccount });
+      
+      // Try to update first, if document doesn't exist, create it
+      try {
+        await updateDoc(ref, { bankAccountNum: newAccount });
+      } catch (updateError) {
+        // If update fails, try to create the document
+        if (updateError.code === 'not-found' || updateError.message.includes('not found')) {
+          await setDoc(ref, { 
+            bankAccountNum: newAccount,
+            name: id,
+            createdAt: new Date().toISOString()
+          });
+        } else {
+          throw updateError;
+        }
+      }
+      
       //document is now updated, now re-set the local array to hold the updated value:
       const updatedData = await getCategories();
       setCategories(updatedData);
@@ -100,59 +151,67 @@ const InvoiceSettings = () => {
           </tr>
         </thead>
         <tbody>
-          {categories.map(cat => (
-            <tr key={cat.id}>
-              <td className={styles.cell}>{cat.id}</td>
-              <td className={styles.cell}>
-                {/* Show input only if editing AND user has edit permissions */}
-                {editingId === cat.id && canEditSettings && !isViewOnly ? (
-                  <input
-                    value={editValue}
-                    onChange={e => setEditValue(e.target.value)}
-                  />
-                ) : (
-                  cat.bankAccountNum
-                )}
+          {categories.length === 0 ? (
+            <tr>
+              <td colSpan={canEditSettings && !isViewOnly ? 3 : 2} className={styles.cell}>
+                Loading categories... (Check browser console for details)
               </td>
-              {/* Only show action cell content if user can edit */}
-              {canEditSettings && !isViewOnly && (
+            </tr>
+          ) : (
+            categories.map(cat => (
+              <tr key={cat.id}>
+                <td className={styles.cell}>{cat.id}</td>
                 <td className={styles.cell}>
-                  {editingId === cat.id ? (
-                    <>
+                  {/* Show input only if editing AND user has edit permissions */}
+                  {editingId === cat.id && canEditSettings && !isViewOnly ? (
+                    <input
+                      value={editValue}
+                      onChange={e => setEditValue(e.target.value)}
+                    />
+                  ) : (
+                    cat.bankAccountNum
+                  )}
+                </td>
+                {/* Only show action cell content if user can edit */}
+                {canEditSettings && !isViewOnly && (
+                  <td className={styles.cell}>
+                    {editingId === cat.id ? (
+                      <>
+                        <button
+                          className={styles.editButton}
+                          onClick={() => {
+                            editDoc(cat.id, editValue);
+                            setEditingId(null);
+                          }}
+                        >
+                          Save
+                        </button>
+                        <button
+                          className={styles.editButton}
+                          onClick={() => setEditingId(null)}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
                       <button
                         className={styles.editButton}
                         onClick={() => {
-                          editDoc(cat.id, editValue);
-                          setEditingId(null);
+                          // Only allow entering edit mode if user can edit
+                          if (canEditSettings) {
+                            setEditingId(cat.id);
+                            setEditValue(cat.bankAccountNum);
+                          }
                         }}
                       >
-                        Save
+                        Edit
                       </button>
-                      <button
-                        className={styles.editButton}
-                        onClick={() => setEditingId(null)}
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      className={styles.editButton}
-                      onClick={() => {
-                        // Only allow entering edit mode if user can edit
-                        if (canEditSettings) {
-                          setEditingId(cat.id);
-                          setEditValue(cat.bankAccountNum);
-                        }
-                      }}
-                    >
-                      Edit
-                    </button>
-                  )}
-                </td>
-              )}
-            </tr>
-          ))}
+                    )}
+                  </td>
+                )}
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </Container>
