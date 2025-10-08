@@ -66,6 +66,24 @@ const hasUserInputAmountField = [
   "Promotion"
 ];
 
+// Backend (Generate tab)
+const BASE_URL = "http://127.0.0.1:5140";
+async function api(path, { method = "GET", body } = {}) {
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : { "X-Dev-Email": "dev@example.com" }),
+  };
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : null,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+
 // Add expense(s) to this array to disable projected % text field. Case-senstive.
 const hasUserInputedPercentageField = [
   "Base Food", "Employee Meal", "Condiment", "Total Waste", "Paper",
@@ -1030,96 +1048,140 @@ const PAC = () => {
     return total;
   };
 
-  // this function saves all the user input data from the generate page into the database
-  const handleGenerate = async (e) => {
-    // Check if current month is locked
-    if (isCurrentPeriodLocked()) {
-      alert("This month is locked and cannot be modified.");
-      return;
-    }
+// this function saves all the user input data from the generate page via backend
+const handleGenerate = async (e) => {
+  // Check if current month is locked 
+  if (isCurrentPeriodLocked()) {
+    alert("This month is locked and cannot be modified.");
+    return;
+  }
 
-    if (
-      !productNetSales ||
-      !cash ||
-      !promo ||
-      !allNetSales ||
-      !advertising ||
-      !crewLabor ||
-      !totalLabor ||
-      !payrollTax ||
-      !completeWaste ||
-      !rawWaste ||
-      !condiment ||
-      !variance ||
-      !unexplained ||
-      !discounts ||
-      !baseFood ||
-      !startingFood ||
-      !startingCondiment ||
-      !startingPaper ||
-      !startingNonProduct ||
-      !startingOpsSupplies ||
-      !endingFood ||
-      !endingCondiment ||
-      !endingPaper ||
-      !endingNonProduct ||
-      !endingOpsSupplies
-    ) {
-      alert("You must fill out all fields before submitting.");
-    } else {
-      try {
-        // using a "period" key for generate
-        const monthIndex = [
-          "January", "February", "March", "April", "May", "June",
-          "July", "August", "September", "October", "November", "December"
-        ].indexOf(month);
-        const period = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+  if (
+    !productNetSales ||
+    !cash ||
+    !promo ||
+    !allNetSales ||
+    !advertising ||
+    !crewLabor ||
+    !totalLabor ||
+    !payrollTax ||
+    !completeWaste ||
+    !rawWaste ||
+    !condiment ||
+    !variance ||
+    !unexplained ||
+    !discounts ||
+    !baseFood ||
+    !startingFood ||
+    !startingCondiment ||
+    !startingPaper ||
+    !startingNonProduct ||
+    !startingOpsSupplies ||
+    !endingFood ||
+    !endingCondiment ||
+    !endingPaper ||
+    !endingNonProduct ||
+    !endingOpsSupplies
+  ) {
+    alert("You must fill out all fields before submitting.");
+    return;
+  }
 
+  try {
+    const monthIndex = [
+      "January","February","March","April","May","June",
+      "July","August","September","October","November","December"
+    ].indexOf(month);
+    const period = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+    const payload = {
+      storeId: selectedStore,
+      month,
+      year,
+      period,
 
-        await addDoc(pacGenRef, {
-          // month year and time for when it was generated
-          Month: month,
-          Year: year,
-          Period: period, // period key
-          createdAt: serverTimestamp(),
+      // Sales
+      productNetSales: parseFloat(productNetSales),
+      cash: parseFloat(cash),
+      promo: parseFloat(promo),
+      allNetSales: parseFloat(allNetSales),
+      advertising: parseFloat(advertising),
 
-          ProductNetSales: parseFloat(productNetSales),
-          Cash: parseFloat(cash),
-          Promo: parseFloat(promo),
-          AllNetSales: parseFloat(allNetSales),
-          Advertising: parseFloat(advertising),
+      // Labor
+      crewLabor: parseFloat(crewLabor),
+      totalLabor: parseFloat(totalLabor),
+      payrollTax: parseFloat(payrollTax),
 
-          CrewLabor: parseFloat(crewLabor),
-          TotalLabor: parseFloat(totalLabor),
-          PayrollTax: parseFloat(payrollTax),
+      // Food
+      completeWaste: parseFloat(completeWaste),
+      rawWaste: parseFloat(rawWaste),
+      condiment: parseFloat(condiment),
+      variance: parseFloat(variance),
+      unexplained: parseFloat(unexplained),
+      discounts: parseFloat(discounts),
+      baseFood: parseFloat(baseFood),
 
-          CompleteWaste: parseFloat(completeWaste),
-          RawWaste: parseFloat(rawWaste),
-          Condiment: parseFloat(condiment),
-          Variance: parseFloat(variance),
-          Unexplained: parseFloat(unexplained),
-          Discounts: parseFloat(discounts),
-          BaseFood: parseFloat(baseFood),
+      // Starting inventory
+      startingFood: parseFloat(startingFood),
+      startingCondiment: parseFloat(startingCondiment),
+      startingPaper: parseFloat(startingPaper),
+      startingNonProduct: parseFloat(startingNonProduct),
+      startingOpsSupplies: parseFloat(startingOpsSupplies),
 
-          StartingFood: parseFloat(startingFood),
-          StartingCondiment: parseFloat(startingCondiment),
-          StartingPaper: parseFloat(startingPaper),
-          StartingNonProduct: parseFloat(startingNonProduct),
-          StartingOpsSupplies: parseFloat(startingOpsSupplies),
+      // Ending inventory
+      endingFood: parseFloat(endingFood),
+      endingCondiment: parseFloat(endingCondiment),
+      endingPaper: parseFloat(endingPaper),
+      endingNonProduct: parseFloat(endingNonProduct),
+      endingOpsSupplies: parseFloat(endingOpsSupplies),
+    };
 
-          EndingFood: parseFloat(endingFood),
-          EndingCondiment: parseFloat(endingCondiment),
-          EndingPaper: parseFloat(endingPaper),
-          EndingNonProduct: parseFloat(endingNonProduct),
-          EndingOpsSupplies: parseFloat(endingOpsSupplies),
-        });
-        alert("Report generated successfully.");
-      } catch (error) {
-        console.error("Error saving report:", error);
-        alert("Failed to generate.");
-      }
-    }
-  };
+    await api("/api/pac/generate", { method: "POST", body: payload });
+
+    await addDoc(pacGenRef, {
+      Month: month,
+      Year: year,
+      Period: period,
+      createdAt: serverTimestamp(),
+
+      ProductNetSales: parseFloat(productNetSales),
+      Cash: parseFloat(cash),
+      Promo: parseFloat(promo),
+      AllNetSales: parseFloat(allNetSales),
+      Advertising: parseFloat(advertising),
+
+      CrewLabor: parseFloat(crewLabor),
+      TotalLabor: parseFloat(totalLabor),
+      PayrollTax: parseFloat(payrollTax),
+
+      CompleteWaste: parseFloat(completeWaste),
+      RawWaste: parseFloat(rawWaste),
+      Condiment: parseFloat(condiment),
+      Variance: parseFloat(variance),
+      Unexplained: parseFloat(unexplained),
+      Discounts: parseFloat(discounts),
+      BaseFood: parseFloat(baseFood),
+
+      StartingFood: parseFloat(startingFood),
+      StartingCondiment: parseFloat(startingCondiment),
+      StartingPaper: parseFloat(startingPaper),
+      StartingNonProduct: parseFloat(startingNonProduct),
+      StartingOpsSupplies: parseFloat(startingOpsSupplies),
+
+      EndingFood: parseFloat(endingFood),
+      EndingCondiment: parseFloat(endingCondiment),
+      EndingPaper: parseFloat(endingPaper),
+      EndingNonProduct: parseFloat(endingNonProduct),
+      EndingOpsSupplies: parseFloat(endingOpsSupplies),
+    });
+
+    alert("Report generated successfully.");
+    await fetchMonthLockStatus();
+    await fetchLockedMonths();
+  } catch (error) {
+    console.error("Error saving report:", error);
+    alert("Failed to generate.");
+  }
+};
 
   // ----- PAC submit gating -----
   const goalNumeric = Number(pacGoal);
@@ -1815,6 +1877,8 @@ const PAC = () => {
             month={month}
             projections={projections}
             isMonthLocked={isMonthLocked()}
+            monthLockStatus={monthLockStatus}
+            lastUpdatedTimestamp={lastUpdatedTimestamp}
           />
         </Container>
       )}{" "}
