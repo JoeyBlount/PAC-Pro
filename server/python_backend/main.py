@@ -64,18 +64,20 @@ app = FastAPI(
 )
 
 # CORS (tighten in prod)
+UI_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://[::1]:3000",
-        "*",
-    ],
+    allow_origins=UI_ORIGINS,   # <— NO "*"
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"],        # includes Authorization
 )
+
 
 # -----------------
 # Include routers
