@@ -166,6 +166,7 @@ const applySalesPercents = (rows) => {
 const CONTROLLABLE_START = "Base Food";
 const CONTROLLABLE_END = "Training";
 const fmtUsd = (v) => new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(v || 0));
+const fmtPercent = (v) => new Intl.NumberFormat('en-US', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits:2, }).format(v/100);
 
 const computeControllables = (rows, fieldPrefix) => {
   const s = rows.findIndex(r => r.name === "Base Food");
@@ -1336,7 +1337,7 @@ const handleGenerate = async (e) => {
                             backgroundColor: "background.paper",
                           }}
                         >
-                          {fmtUsd(pacGoal)}
+                          {fmtPercent(pacGoal)}
                         </Box>
                       )}
 
@@ -1353,7 +1354,7 @@ const handleGenerate = async (e) => {
                               backgroundColor: "background.paper",
                             }}
                           >
-                            {fmtUsd(pacGoal)}
+                            {fmtPercent(pacGoal)}
                           </Box>
 
                           {/* Change button only if current/future period */}
