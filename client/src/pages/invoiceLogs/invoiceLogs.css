@@ -7,10 +7,6 @@ html {
   background-color: #f7f7f7;
 }
 
-body {
-  padding-top: 80px;
-}
-
 /* Top bar styling */
 .topBar {
   display: flex;
@@ -154,4 +150,113 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Row color distinction for locked/unlocked invoices */
+.locked-row {
+  background-color: #ffebee !important; /* Light red background for locked */
+  border-left: 4px solid #f44336; /* Red border on left */
+}
+
+.unlocked-row {
+  background-color: #e8f5e9 !important; /* Light green background for unlocked */
+  border-left: 4px solid #4caf50; /* Green border on left */
+}
+
+/* Button styling */
+.edit-button {
+  background: linear-gradient(135deg, #2196f3, #1976d2);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  margin: 2px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(33, 150, 243, 0.3);
+}
+
+.edit-button:hover {
+  background: linear-gradient(135deg, #1976d2, #1565c0);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(33, 150, 243, 0.4);
+}
+
+.delete-button {
+  background: linear-gradient(135deg, #f44336, #d32f2f);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  margin: 2px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(244, 67, 54, 0.3);
+}
+
+.delete-button:hover {
+  background: linear-gradient(135deg, #d32f2f, #c62828);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(244, 67, 54, 0.4);
+}
+
+.lock-toggle-button {
+  border: none;
+  padding: 6px 12px;
+  margin: 2px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  min-width: 80px;
+}
+
+.lock-toggle-button.locked {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+  color: white;
+  box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
+}
+
+.lock-toggle-button.locked:hover {
+  background: linear-gradient(135deg, #f57c00, #ef6c00);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(255, 152, 0, 0.4);
+}
+
+.lock-toggle-button.unlocked {
+  background: linear-gradient(135deg, #4caf50, #388e3c);
+  color: white;
+  box-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
+}
+
+.lock-toggle-button.unlocked:hover {
+  background: linear-gradient(135deg, #388e3c, #2e7d32);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(76, 175, 80, 0.4);
+}
+
+/* Ensure buttons don't interfere with row hover */
+.invoice-row:hover .edit-button,
+.invoice-row:hover .delete-button,
+.invoice-row:hover .lock-toggle-button {
+  opacity: 1;
+}
+
+/* Button container styling */
+.tableCell {
+  white-space: nowrap;
+}
+
+/* Override row hover for locked/unlocked rows */
+.locked-row:hover {
+  background-color: #ffcdd2 !important; /* Slightly darker red on hover */
+}
+
+.unlocked-row:hover {
+  background-color: #c8e6c9 !important; /* Slightly darker green on hover */
 }

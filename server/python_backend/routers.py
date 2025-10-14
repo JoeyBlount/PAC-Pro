@@ -1,17 +1,20 @@
 """
 FastAPI routers for PAC calculations
 """
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 import json
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Security, Request, Query
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel
 from models import PacCalculationResult, PacInputData
 from services.pac_calculation_service import PacCalculationService
 from services.data_ingestion_service import DataIngestionService
 from services.account_mapping_service import AccountMappingService
 from services.invoice_reader import InvoiceReader
 from services.invoice_submit import InvoiceSubmitService
+from services.user_management_service import UserManagementService
 import logging
 
 
@@ -23,6 +26,86 @@ logger = logging.getLogger(__name__)
 
 
 # ---- Dependencies ----
+security_scheme = HTTPBearer(auto_error=False)
+
+
+def require_auth(credentials: HTTPAuthorizationCredentials = Security(security_scheme)) -> Dict[str, Any]:
+    """Basic auth requirement: ensure a Bearer token is provided.
+
+    In production, this should validate the token (e.g., Firebase ID token).
+    For now, we enforce presence of the header to prevent unauthenticated access.
+    """
+    if credentials is None or not credentials.credentials:
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+
+    token = credentials.credentials
+
+    # If Firebase Admin SDK is available and initialized, verify the token.
+    # Otherwise, accept any non-empty token but still require presence (dev fallback).
+    try:
+        import firebase_admin  # type: ignore
+        from firebase_admin import auth as fb_auth  # type: ignore
+        if firebase_admin._apps:
+            try:
+                decoded = fb_auth.verify_id_token(token)
+                return {"uid": decoded.get("uid"), "email": decoded.get("email"), "claims": decoded}
+            except Exception:
+                # Provided token is present but invalid
+                raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception:
+        # Firebase not available; proceed with minimal context in dev
+        pass
+
+    return {"uid": None, "email": None, "claims": None}
+
+
+def require_roles(allowed_roles: List[str]):
+    def _checker(
+        auth_ctx: Dict[str, Any] = Depends(require_auth),
+        request: Request = None,
+    ) -> Dict[str, Any]:
+        role: Optional[str] = None
+
+        # 1) Prefer role from verified token claims
+        claims = auth_ctx.get("claims") or {}
+        if isinstance(claims, dict):
+            if "role" in claims and isinstance(claims["role"], str):
+                role = claims["role"]
+
+        # 2) If not in claims, and we have an email + Firebase, look up Firestore 'users' doc
+        if role is None and auth_ctx.get("email"):
+            try:
+                import firebase_admin  # type: ignore
+                from firebase_admin import firestore  # type: ignore
+                if firebase_admin._apps:
+                    db = firestore.client()
+                    user_doc = db.collection("users").document(auth_ctx["email"]).get()
+                    if user_doc.exists:
+                        data = user_doc.to_dict() or {}
+                        r = data.get("role")
+                        if isinstance(r, str):
+                            role = r
+            except Exception:
+                # Firestore not available or lookup failed; fall back below
+                pass
+
+        # 3) Dev/test fallback: allow header override if Firebase not available
+        if role is None and request is not None:
+            hdr = request.headers.get("X-User-Role")
+            if hdr and isinstance(hdr, str):
+                role = hdr
+
+        if role is None:
+            raise HTTPException(status_code=403, detail="Role not found for user")
+
+        if role not in allowed_roles:
+            raise HTTPException(status_code=403, detail="Insufficient role")
+
+        return {"role": role}
+
+    return _checker
+
+
 def get_pac_calculation_service() -> PacCalculationService:
     data_ingestion_service = DataIngestionService()
     account_mapping_service = AccountMappingService()
@@ -45,6 +128,13 @@ def get_invoice_submit_service() -> InvoiceSubmitService:
     return InvoiceSubmitService()
 
 
+def get_user_management_service() -> UserManagementService:
+    """
+    Get the user management service instance.
+    """
+    return UserManagementService()
+
+
 # ---- Helpers ----
 def is_valid_year_month(year_month: str) -> bool:
     """Validate yearMonth format (YYYYMM)"""
@@ -57,6 +147,120 @@ def is_valid_year_month(year_month: str) -> bool:
         return 2000 <= year <= 2100 and 1 <= month <= 12
     except ValueError:
         return False
+
+
+# ---- User Management Routes ----
+@router.get("/userManagement/fetch")
+async def fetch_users(
+    user_service: UserManagementService = Depends(get_user_management_service),
+) -> Dict[str, Any]:
+    """
+    Fetch all users from the 'users' collection in Firestore.
+    """
+    if not user_service.is_available():
+        raise HTTPException(
+            status_code=503, 
+            detail="User management service not available - Firebase not initialized"
+        )
+    
+    try:
+        users = await user_service.fetch_users()
+        return {"users": users, "count": len(users)}
+    except Exception as e:
+        logger.error(f"Error fetching users: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch users: {str(e)}")
+
+
+@router.post("/userManagement/add")
+async def add_user(
+    user_data: Dict[str, Any],
+    user_service: UserManagementService = Depends(get_user_management_service),
+) -> Dict[str, Any]:
+    """
+    Add a new user to the 'users' collection in Firestore.
+    """
+    if not user_service.is_available():
+        raise HTTPException(
+            status_code=503, 
+            detail="User management service not available - Firebase not initialized"
+        )
+    
+    try:
+        # Validate required fields
+        required_fields = ["firstName", "lastName", "email", "role"]
+        for field in required_fields:
+            if not user_data.get(field):
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Missing required field: {field}"
+                )
+        
+        # Add timestamp and accept state
+        user_data["createdAt"] = datetime.now().isoformat()
+        user_data["acceptState"] = False
+        
+        result = await user_service.add_user(user_data)
+        return {"success": True, "message": "User added successfully", "user": result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding user: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to add user: {str(e)}")
+
+
+@router.put("/userManagement/edit")
+async def edit_user(
+    user_email: str = Query(..., description="Email of the user to edit"),
+    user_data: Dict[str, Any] = None,
+    user_service: UserManagementService = Depends(get_user_management_service),
+) -> Dict[str, Any]:
+    """
+    Edit a user in the 'users' collection in Firestore.
+    """
+    if not user_service.is_available():
+        raise HTTPException(
+            status_code=503, 
+            detail="User management service not available - Firebase not initialized"
+        )
+    
+    try:
+        if not user_email:
+            raise HTTPException(status_code=400, detail="User email is required")
+        
+        result = await user_service.edit_user(user_email, user_data)
+        return {"success": True, "message": "User updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error editing user: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to edit user: {str(e)}")
+
+
+@router.delete("/userManagement/delete")
+async def delete_user(
+    user_email: str = Query(..., description="Email of the user to delete"),
+    user_service: UserManagementService = Depends(get_user_management_service),
+) -> Dict[str, Any]:
+    """
+    Delete a user from the 'users' collection in Firestore.
+    """
+    if not user_service.is_available():
+        raise HTTPException(
+            status_code=503, 
+            detail="User management service not available - Firebase not initialized"
+        )
+    
+    try:
+        if not user_email:
+            raise HTTPException(status_code=400, detail="User email is required")
+        
+        result = await user_service.delete_user(user_email)
+        return {"success": True, "message": "User deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting user: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
 
 
 # ---- PAC Routes ----
@@ -113,6 +317,7 @@ async def health_check() -> Dict[str, str]:
 async def read_invoice(
     image: UploadFile = File(...),
     reader: InvoiceReader = Depends(get_invoice_reader),
+    _auth: Dict[str, Any] = Depends(require_roles(["ADMIN", "ACCOUNTANT"])),
 ) -> Dict[str, Any]:
     """
     Read invoice image using OpenAI Vision API via the InvoiceReader service.
@@ -152,10 +357,13 @@ async def submit_invoice(
     invoice_day: int = Form(...),
     invoice_month: int = Form(...),
     invoice_year: int = Form(...),
+    target_month: int = Form(...),
+    target_year: int = Form(...),
     store_id: str = Form(...),
     user_email: str = Form(...),
     categories: str = Form(...),  # JSON string of categories
     submit_service: InvoiceSubmitService = Depends(get_invoice_submit_service),
+    _auth: Dict[str, Any] = Depends(require_roles(["ADMIN"])),
 ) -> Dict[str, Any]:
     """
     Submit invoice data and image to Firebase.
@@ -187,6 +395,8 @@ async def submit_invoice(
             validation_errors.append("Company name is required")
         if not invoice_day or not invoice_month or not invoice_year:
             validation_errors.append("Invoice date (day, month, year) is required")
+        if not target_month or not target_year:
+            validation_errors.append("Target month/year is required")
         if not store_id:
             validation_errors.append("Store ID is required")
         if not user_email:
@@ -219,6 +429,8 @@ async def submit_invoice(
             'invoiceNumber': invoice_number,
             'companyName': company_name,
             'invoiceDate': invoice_date,
+            'targetMonth': target_month,
+            'targetYear': target_year,
             'storeID': store_id,
             'user_email': user_email,
             'categories': categories_dict,
@@ -362,6 +574,206 @@ async def get_pac_projections(
         raise HTTPException(status_code=500, detail=f"Error getting projections: {str(e)}")
 
 
+# ---- Dashboard Routes -----
+@router.get("/info/sales/{entity_id}/{year_month}")
+async def get_chart_years_sales(entity_id: str, year_month: str):
+    if not entity_id or not year_month:
+        raise HTTPException(
+            status_code=400, detail="Entity ID and year_month are required"
+        )
+    if not is_valid_year_month(year_month):
+        raise HTTPException(
+            status_code=400, detail="Invalid year_month format. Use YYYYMM (e.g., 202501)"
+        )
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    endDate = year_month
+
+    # Calculate Start Date
+    startYear = int(year_month[:4]) - 1
+    startMonth = int(year_month[4:]) + 1
+    
+    if startMonth < 0:
+        r = -(startMonth)
+        startMonth = 12 - r
+        startYear -= 1
+
+    startDate = f"{startYear}{startMonth:02d}"
+
+    try:
+        db = firestore.client()
+        doc_ref = db.collection("pac_projections")
+        docs = doc_ref.stream()
+
+        totalSales = []
+
+        for doc in docs:
+            doc_id = doc.id
+            storeID = doc_id[:9]
+            yyyymm = doc_id[-6:]
+            if storeID == entity_id and startDate <= yyyymm <= endDate:
+                result = doc.to_dict()
+                totalSales.append({"key": yyyymm, "netsales": result.get("product_net_sales")})
+        return {"totalsales": totalSales}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting sales info: {str(e)}")
+    
+
+@router.get("/info/budget/{entity_id}/{year_month}")
+async def get_chart_budget_and_spending(entity_id: str, year_month: str):
+    if not entity_id or not year_month:
+        raise HTTPException(
+            status_code=400, detail="Entity ID and year_month are required"
+        )
+    if not is_valid_year_month(year_month):
+        raise HTTPException(
+            status_code=400, detail="Invalid year_month format. Use YYYYMM (e.g., 202501)"
+        )
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    try:
+        db = firestore.client()
+        doc_id = f"{entity_id}_{year_month}"
+        doc_ref = db.collection("pac_projections").document(doc_id)
+        doc = doc_ref.get()
+
+        budgetSpending = []
+
+        if not doc.exists:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No projections data found for {entity_id} in {year_month}",
+            )
+
+        foodpaper = ["condiment", "food", "paper"]
+        labor = ["crew_labor_percent"]
+        purchase = ["advertising_other", "crew_relations", "linen", "maintenance_repair", "non_product", "office", "op_supplies", "outside_services", "promotion", "small_equipment", "training", "travel", "utilities"]
+
+        foodpaperbudget = 0
+        foodpaperspending = 0
+        laborbudget = 0
+        laborspending = 0
+        purchasebudget = 0
+        purchasespending = 0
+
+        result = doc.to_dict()
+
+        ## Spending cacluation.
+        ## Will need to be redone to reflect actual calculation
+        for i in foodpaper:
+            data = (result.get("purchases", {})).get(i)
+            if data is not None:
+                foodpaperspending = foodpaperspending + data
+            #else:
+                # print("ERROR: Unknown database field", doc_id + ".purchases." + i) # Uncomment for debug
+
+        for i in purchase:
+            data = (result.get("purchases", {})).get(i)
+            if data is not None:
+                purchasespending = purchasespending + (result.get("purchases", {})).get(i)
+            #else:
+                # print("ERROR: Unknown database field", doc_id + ".purchases." + i) # Uncomment for debug
+
+        laborspending = 10000 
+
+        ## Budget cacluation 
+        ## To be added. Temp using spending values.
+
+        foodpaperbudget = foodpaperspending
+        purchasebudget = purchasespending
+        laborbudget = laborspending
+        
+
+        budgetSpending.append(
+            {"key": year_month, 
+             "foodpaperbudget": foodpaperbudget, "foodpaperspending": foodpaperspending, 
+             "laborbudget": laborbudget, "laborspending": laborspending,
+             "purchasebudget": purchasebudget, "purchasespending": purchasespending})
+
+        return {"budgetspending": budgetSpending}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting sales info: {str(e)}")
+    
+
+@router.get("/info/pac/{entity_id}/{year_month}")
+async def get_chart_PAC_and_projection(entity_id: str, year_month: str):
+    if not entity_id or not year_month:
+        raise HTTPException(
+            status_code=400, detail="Entity ID and year_month are required"
+        )
+    if not is_valid_year_month(year_month):
+        raise HTTPException(
+            status_code=400, detail="Invalid year_month format. Use YYYYMM (e.g., 202501)"
+        )
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    endDate = year_month
+
+    # Calculate Start Date
+    startYear = int(year_month[:4])
+    startMonth = int(year_month[4:]) - 2
+
+    if startMonth < 0:
+        r = -(startMonth)
+        startMonth = 12 - r
+        startYear -= 1
+
+    startDate = f"{startYear}{startMonth:02d}"
+
+    try:
+        db = firestore.client()
+        doc_ref = db.collection("pac_projections")
+        docs = doc_ref.stream()
+
+        pacAndProjections = []
+
+        ## PAC Calulations.
+        ## To be added. Temp using set values.
+
+        for doc in docs:
+            pac = 0
+            projections = 0
+
+            doc_id = doc.id
+            storeID = doc_id[:9]
+            yyyymm = doc_id[-6:]
+            if storeID == entity_id and startDate <= yyyymm <= endDate:
+                result = doc.to_dict()
+                
+                if "product_net_sales" in result:
+                    pac = result.get("product_net_sales")
+
+                if "product_net_sales" in result:
+                    projections = result.get("product_net_sales")
+                    projections = projections * 1.1
+
+                pacAndProjections.append({"key": yyyymm, "pac": pac, "projections": projections })
+        return {"pacprojections": pacAndProjections}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting sales info: {str(e)}")
+
+
 # ----------------------------------
 # Compatibility router (legacy paths)
 # ----------------------------------
@@ -386,3 +798,290 @@ async def read_invoice_compat(
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+# ---------------------------
+# Month Lock Models
+# ---------------------------
+
+class MonthLockRequest(BaseModel):
+    store_id: str
+    month: str
+    year: int
+    user_email: str
+    user_role: str
+
+class MonthLockResponse(BaseModel):
+    success: bool
+    message: str
+    is_locked: bool
+    locked_by: str = None
+    locked_at: str = None
+
+class MonthLockStatus(BaseModel):
+    is_locked: bool
+    locked_by: str = None
+    locked_at: str = None
+    unlocked_by: str = None
+    unlocked_at: str = None
+    store_id: str
+    year_month: str
+
+
+# ---------------------------
+# Month Lock Endpoints
+# ---------------------------
+
+@router.get("/month-locks/{store_id}/{year_month}")
+async def get_month_lock_status(
+    store_id: str,
+    year_month: str,
+) -> MonthLockStatus:
+    """
+    Get the lock status for a specific store and month (YYYYMM format).
+    """
+    try:
+        # Guard Firebase presence/initialization
+        try:
+            import firebase_admin
+            from firebase_admin import firestore
+            if not firebase_admin._apps:
+                raise HTTPException(status_code=503, detail="Firebase not initialized")
+        except ModuleNotFoundError:
+            raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+        db = firestore.client()
+        doc_id = f"{store_id}_{year_month}"
+        
+        lock_ref = db.collection("month_locks").document(doc_id)
+        lock_doc = lock_ref.get()
+        
+        if lock_doc.exists:
+            data = lock_doc.to_dict()
+            return MonthLockStatus(
+                is_locked=data.get("is_locked", False),
+                locked_by=data.get("locked_by"),
+                locked_at=data.get("locked_at").isoformat() if data.get("locked_at") else None,
+                unlocked_by=data.get("unlocked_by"),
+                unlocked_at=data.get("unlocked_at").isoformat() if data.get("unlocked_at") else None,
+                store_id=data.get("store_id", store_id),
+                year_month=data.get("year_month", year_month)
+            )
+        else:
+            return MonthLockStatus(
+                is_locked=False,
+                store_id=store_id,
+                year_month=year_month
+            )
+            
+    except Exception as e:
+        logger.error(f"Error getting month lock status: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting month lock status: {str(e)}")
+
+
+@router.post("/month-locks/lock")
+async def lock_month(request: MonthLockRequest) -> MonthLockResponse:
+    """
+    Lock a specific month for a store.
+    Only General Managers, Supervisors, and Admins can lock months.
+    """
+    try:
+        # Check permissions
+        user_role_lower = request.user_role.lower()
+        if user_role_lower not in ["admin", "general manager", "supervisor"]:
+            raise HTTPException(
+                status_code=403, 
+                detail="Only General Managers, Supervisors, and Admins can lock months."
+            )
+
+        # Guard Firebase presence/initialization
+        try:
+            import firebase_admin
+            from firebase_admin import firestore
+            if not firebase_admin._apps:
+                raise HTTPException(status_code=503, detail="Firebase not initialized")
+        except ModuleNotFoundError:
+            raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+        db = firestore.client()
+        
+        # Convert month name to number
+        month_names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+        
+        if request.month not in month_names:
+            raise HTTPException(status_code=400, detail="Invalid month name")
+            
+        month_index = month_names.index(request.month)
+        year_month = f"{request.year}{month_index + 1:02d}"
+        doc_id = f"{request.store_id}_{year_month}"
+        
+        lock_ref = db.collection("month_locks").document(doc_id)
+        
+        # Get existing lock data to preserve audit trail
+        existing_doc = lock_ref.get()
+        existing_data = existing_doc.to_dict() if existing_doc.exists else {}
+        
+        lock_data = {
+            "store_id": request.store_id,
+            "year_month": year_month,
+            "is_locked": True,
+            "locked_by": request.user_email,
+            "locked_at": firestore.SERVER_TIMESTAMP,
+            "locked_by_role": request.user_role,
+            # Preserve existing audit trail
+            "lock_history": [
+                *existing_data.get("lock_history", []),
+                {
+                    "action": "locked",
+                    "user": request.user_email,
+                    "role": request.user_role,
+                    "timestamp": firestore.SERVER_TIMESTAMP
+                }
+            ]
+        }
+        
+        lock_ref.set(lock_data)
+        
+        return MonthLockResponse(
+            success=True,
+            message="Month locked successfully.",
+            is_locked=True,
+            locked_by=request.user_email,
+            locked_at=datetime.now().isoformat()
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error locking month: {e}")
+        raise HTTPException(status_code=500, detail=f"Error locking month: {str(e)}")
+
+
+@router.post("/month-locks/unlock")
+async def unlock_month(request: MonthLockRequest) -> MonthLockResponse:
+    """
+    Unlock a specific month for a store.
+    Only Admins can unlock months.
+    """
+    try:
+        # Check permissions - only admins can unlock
+        if request.user_role.lower() != "admin":
+            raise HTTPException(
+                status_code=403, 
+                detail="Only Administrators can unlock months."
+            )
+
+        # Guard Firebase presence/initialization
+        try:
+            import firebase_admin
+            from firebase_admin import firestore
+            if not firebase_admin._apps:
+                raise HTTPException(status_code=503, detail="Firebase not initialized")
+        except ModuleNotFoundError:
+            raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+        db = firestore.client()
+        
+        # Convert month name to number
+        month_names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+        
+        if request.month not in month_names:
+            raise HTTPException(status_code=400, detail="Invalid month name")
+            
+        month_index = month_names.index(request.month)
+        year_month = f"{request.year}{month_index + 1:02d}"
+        doc_id = f"{request.store_id}_{year_month}"
+        
+        lock_ref = db.collection("month_locks").document(doc_id)
+        
+        # Get existing lock data to preserve audit trail
+        existing_doc = lock_ref.get()
+        existing_data = existing_doc.to_dict() if existing_doc.exists else {}
+        
+        unlock_data = {
+            "store_id": request.store_id,
+            "year_month": year_month,
+            "is_locked": False,
+            "unlocked_by": request.user_email,
+            "unlocked_at": firestore.SERVER_TIMESTAMP,
+            "unlocked_by_role": request.user_role,
+            # Preserve existing lock data
+            "locked_by": existing_data.get("locked_by"),
+            "locked_at": existing_data.get("locked_at"),
+            "locked_by_role": existing_data.get("locked_by_role"),
+            # Add to audit trail
+            "lock_history": [
+                *existing_data.get("lock_history", []),
+                {
+                    "action": "unlocked",
+                    "user": request.user_email,
+                    "role": request.user_role,
+                    "timestamp": firestore.SERVER_TIMESTAMP
+                }
+            ]
+        }
+        
+        lock_ref.set(unlock_data)
+        
+        return MonthLockResponse(
+            success=True,
+            message="Month unlocked successfully.",
+            is_locked=False,
+            locked_by=existing_data.get("locked_by"),
+            locked_at=existing_data.get("locked_at").isoformat() if existing_data.get("locked_at") else None
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error unlocking month: {e}")
+        raise HTTPException(status_code=500, detail=f"Error unlocking month: {str(e)}")
+
+
+@router.get("/month-locks/{store_id}")
+async def get_all_locked_months(store_id: str) -> Dict[str, Any]:
+    """
+    Get all locked months for a specific store.
+    """
+    try:
+        # Guard Firebase presence/initialization
+        try:
+            import firebase_admin
+            from firebase_admin import firestore
+            if not firebase_admin._apps:
+                raise HTTPException(status_code=503, detail="Firebase not initialized")
+        except ModuleNotFoundError:
+            raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+        db = firestore.client()
+        
+        locks_ref = db.collection("month_locks")
+        query = locks_ref.where("store_id", "==", store_id).where("is_locked", "==", True)
+        
+        locked_months = []
+        for doc in query.stream():
+            data = doc.to_dict()
+            locked_months.append({
+                "id": doc.id,
+                "store_id": data.get("store_id"),
+                "year_month": data.get("year_month"),
+                "locked_by": data.get("locked_by"),
+                "locked_at": data.get("locked_at").isoformat() if data.get("locked_at") else None,
+                "locked_by_role": data.get("locked_by_role")
+            })
+        
+        return {
+            "store_id": store_id,
+            "locked_months": locked_months,
+            "count": len(locked_months)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting locked months: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting locked months: {str(e)}")
