@@ -9,6 +9,7 @@ import StoreIcon from '@mui/icons-material/Store';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import EventIcon from '@mui/icons-material/Event';
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -31,6 +32,14 @@ const Settings = () => {
       description: 'Manage store locations and settings',
       icon: <StoreIcon sx={{ fontSize: 40 }} />,
       path: '/navi/settings/store-management',
+      allowedRoles: [ROLES.ADMIN, ROLES.ACCOUNTANT],
+      readOnlyRoles: [ROLES.ACCOUNTANT]
+    },
+    {
+      title: 'Deadline Management',
+      description: 'Manage submission deadlines and due dates',
+      icon: <EventIcon sx={{ fontSize: 40 }} />,
+      path: '/navi/settings/deadline-management',
       allowedRoles: [ROLES.ADMIN, ROLES.ACCOUNTANT],
       readOnlyRoles: [ROLES.ACCOUNTANT]
     },

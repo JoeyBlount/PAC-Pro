@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { db, auth } from "../../config/firebase-config";
 import {
   collection,
@@ -259,6 +260,7 @@ const applyAll = (rows) =>
   );
 
 const PAC = () => {
+  const location = useLocation();
   const [tabIndex, setTabIndex] = useState(0);
   const currentDate = new Date();
   const currentMonth = currentDate.toLocaleString("default", { month: "long" });
@@ -270,6 +272,15 @@ const PAC = () => {
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 11 }, (_, i) => currentYear - i);
   const [year, setYear] = useState(currentYear);
+
+  // Handle navigation from Reports page
+  useEffect(() => {
+    if (location.state?.openActualTab) {
+      setTabIndex(2); // Switch to Actual tab (index 2)
+      if (location.state.month) setMonth(location.state.month);
+      if (location.state.year) setYear(location.state.year);
+    }
+  }, [location]);
 
   // Get selected store from context
   const { selectedStore } = useContext(StoreContext);
