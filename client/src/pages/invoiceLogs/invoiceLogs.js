@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useContext, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Container,
   Dialog,
@@ -61,6 +62,7 @@ const PROJECTION_LOOKUP = {
 };
 
 const InvoiceLogs = () => {
+  const location = useLocation();
   // const { currentUser, userRole } = useAuth();
   // console.log("Logged in user:", currentUser?.email);
   // console.log("User role:", userRole);
@@ -92,6 +94,15 @@ const InvoiceLogs = () => {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+
+  // Handle navigation from Reports page
+  useEffect(() => {
+    if (location.state?.openPrintDialog) {
+      if (location.state.month) setSelectedMonth(location.state.month);
+      if (location.state.year) setSelectedYear(location.state.year);
+      setExportDialogOpen(true);
+    }
+  }, [location]);
   const [imageError, setImageError] = useState(false);
   const [showRecentlyDeleted, setShowRecentlyDeleted] = useState(false);
   const [recentlyDeleted, setRecentlyDeleted] = useState([]);
