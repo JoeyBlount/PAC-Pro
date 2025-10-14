@@ -93,8 +93,8 @@ const getLabel = (key) => {
   return specialLabels[key] || "";
 };
 
-const fmtUsd = (v) => new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(Number(v || 0));
-
+const fmtUsd = (v) => new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(v || 0));
+const fmtPercent = (v) => new Intl.NumberFormat('en-US', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits:2, }).format(v/100);
 
 const PAC = () => {
   const location = useLocation();
@@ -886,7 +886,7 @@ const PAC = () => {
                             backgroundColor: "background.paper",
                           }}
                         >
-                          {fmtUsd(pacGoal)}
+                          {fmtPercent(pacGoal)}
                         </Box>
                       )}
 
@@ -903,7 +903,7 @@ const PAC = () => {
                               backgroundColor: "background.paper",
                             }}
                           >
-                            {fmtUsd(pacGoal)}
+                            {fmtPercent(pacGoal)}
                           </Box>
 
                           {/* Change button only if current/future period */}
