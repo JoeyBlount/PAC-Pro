@@ -317,7 +317,7 @@ async def health_check() -> Dict[str, str]:
 async def read_invoice(
     image: UploadFile = File(...),
     reader: InvoiceReader = Depends(get_invoice_reader),
-    _auth: Dict[str, Any] = Depends(require_roles(["ADMIN", "ACCOUNTANT"])),
+    _auth: Dict[str, Any] = Depends(require_roles(["Admin", "Accountant"])),
 ) -> Dict[str, Any]:
     """
     Read invoice image using OpenAI Vision API via the InvoiceReader service.
@@ -363,7 +363,7 @@ async def submit_invoice(
     user_email: str = Form(...),
     categories: str = Form(...),  # JSON string of categories
     submit_service: InvoiceSubmitService = Depends(get_invoice_submit_service),
-    _auth: Dict[str, Any] = Depends(require_roles(["ADMIN"])),
+    _auth: Dict[str, Any] = Depends(require_roles(["Admin"])),
 ) -> Dict[str, Any]:
     """
     Submit invoice data and image to Firebase.
