@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useContext } from "react";
-import { auth, db } from "../../config/firebase-config";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { auth, db, storage } from "../../config/firebase-config";
+import { collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
 import { StoreContext } from "../../context/storeContext";
 import { useAuth } from "../../context/AuthContext";
 import MonthLockService from "../../services/monthLockService";
 import styles from "./submitInvoice.module.css";
 import { invoiceCatList } from "../settings/InvoiceSettings";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import {
   Alert,
   TextField,
@@ -353,98 +354,51 @@ const SubmitInvoice = () => {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    // Check if month is locked
-    if (isMonthLocked()) {
-      alert(
-        "Cannot submit invoice: The selected month is locked and cannot be modified."
-      );
-      return;
-    }
+  if (!imageUpload) {
+    alert("Please upload an image first.");
+    return;
+  }
 
-    // Check if all extras are confirmed
-    const unconfirmedExtras = extras.filter((extra) => !extra.confirmed);
-    if (unconfirmedExtras.length > 0) {
-      const unconfirmedList = unconfirmedExtras
-        .map(
-          (extra) =>
-            `${extra.category || "No category"}: $${
-              extra.amount || "No amount"
-            }`
-        )
-        .join("\n");
+  try {
+    // Upload image to Firebase Storage
+    const imageRef = ref(storage, `images/${selectedStore}_${Date.now()}_${imageUpload.name}`);
+    await uploadBytes(imageRef, imageUpload);
+    const downloadURL = await getDownloadURL(imageRef);
 
-      alert(
-        `Please confirm or remove the following unconfirmed items before submitting:\n\n${unconfirmedList}`
-      );
-      return;
-    }
+    // Prepare the invoice document
+    const invoiceData = {
+      companyName,
+      invoiceNumber,
+      invoiceDate: `${invoiceMonth}/${invoiceDay}/${invoiceYear}`,
+      storeID: selectedStore,
+      user_email: user.email,
+      dateSubmitted: new Date().toLocaleDateString(),
+      imageURL: downloadURL,
+      categories: confirmedItems.reduce((acc, { category, amount }) => {
+        acc[category] = parseFloat(amount);
+        return acc;
+      }, {}),
+      createdAt: serverTimestamp()
+    };
 
-    if (
-      !window.confirm(
-        "Please double-check all entries before submitting invoice..."
-      )
-    )
-      return;
-    try {
-      await verifyInput();
+    // Store it in Firestore
+    await addDoc(collection(db, "invoices"), invoiceData);
 
-      // Prepare invoice data for backend
-      const invoiceFields = confirmedItems.reduce(
-        (acc, { category, amount }) => {
-          if (!acc[category]) acc[category] = [];
-          acc[category].push(amount);
-          return acc;
-        },
-        {}
-      );
+    alert("Invoice submitted successfully!");
+    setInvoiceNumber("");
+    setCompanyName("");
+    setExtras([]);
+    setConfirmedItems([]);
+    setImageUpload(null);
 
-      // Create FormData for the backend request
-      const formData = new FormData();
-      formData.append("image", imageUpload);
-      formData.append("invoice_number", invoiceNumber);
-      formData.append("company_name", companyName);
-      formData.append("invoice_day", invoiceDay.toString());
-      formData.append("invoice_month", invoiceMonth.toString());
-      formData.append("invoice_year", invoiceYear.toString());
-      formData.append("target_month", targetMonth.toString());
-      formData.append("target_year", targetYear.toString());
-      formData.append("store_id", selectedStore);
-      formData.append("user_email", user.email);
-      formData.append("categories", JSON.stringify(invoiceFields));
-
-      // Submit to backend
-      const response = await fetch(
-        "http://localhost:5140/api/pac/invoices/submit",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.detail || "Failed to submit invoice");
-      }
-
-      alert("Invoice submitted successfully!");
-
-      // Reset form
-      setInvoiceNumber("");
-      setInvoiceMonth(new Date().getMonth() + 1);
-      setInvoiceYear(new Date().getFullYear());
-      setSelectedDate(new Date());
-      setExtras([]);
-      setConfirmedItems([]);
-      setCompanyName("");
-      setImageUpload(null);
-    } catch (error) {
-      alert("Error submitting invoice: " + error.message);
-    }
-  };
+  } catch (err) {
+    console.error(err);
+    alert("Error submitting invoice: " + err.message);
+  }
+};
 
   const verifyInput = async () => {
     if (invoiceNumber === "") throw new Error("Invoice Number Required");
@@ -821,5 +775,6 @@ const SubmitInvoice = () => {
     </div>
   );
 };
+
 
 export default SubmitInvoice;
