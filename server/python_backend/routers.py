@@ -12,10 +12,38 @@ from models import PacCalculationResult, PacInputData
 from services.pac_calculation_service import PacCalculationService
 from services.data_ingestion_service import DataIngestionService
 from services.account_mapping_service import AccountMappingService
+from services.proj_calculation_service import (
+    ProjCalculationService,
+    get_proj_calculation_service,
+)
 from services.invoice_reader import InvoiceReader
 from services.invoice_submit import InvoiceSubmitService
 from services.user_management_service import UserManagementService
 import logging
+
+from pydantic import BaseModel
+from typing import Any, Dict, List
+
+class ProjectionsSeedIn(BaseModel):
+    store_id: str
+    year: int
+    month_index_1: int
+
+class ProjectionsSaveIn(BaseModel):
+    store_id: str
+    year: int
+    month_index_1: int
+    pacGoal: float
+    projections: List[Dict[str, Any]]
+
+class ApplyRowsIn(BaseModel):
+    rows: List[Dict[str, Any]]
+
+class HistoricalIn(BaseModel):
+    store_id: str
+    year: int
+    month_index_1: int
+
 
 
 # ---------------------------
@@ -454,6 +482,39 @@ async def submit_invoice(
         raise HTTPException(
             status_code=500, detail=f"Error submitting invoice: {str(e)}"
         )
+    
+@router.post("/projections/seed")
+async def seed_projections(
+    payload: ProjectionsSeedIn,
+    svc: ProjCalculationService = Depends(get_proj_calculation_service),
+):
+    return await svc.seed_projections(payload.store_id, payload.year, payload.month_index_1)
+
+@router.post("/projections/save")
+async def save_projections(
+    payload: ProjectionsSaveIn,
+    svc: ProjCalculationService = Depends(get_proj_calculation_service),
+):
+    await svc.save_projections(
+        payload.store_id, payload.year, payload.month_index_1, payload.pacGoal, payload.projections
+    )
+    return {"ok": True}
+
+@router.post("/apply")
+async def apply_projections_math(
+    payload: ApplyRowsIn,
+    svc: ProjCalculationService = Depends(get_proj_calculation_service),
+):
+    applied = svc.apply_all(payload.rows)
+    return {"rows": applied}
+
+@router.post("/historical")
+async def get_historical_rows(
+    payload: HistoricalIn,
+    svc: ProjCalculationService = Depends(get_proj_calculation_service),
+):
+    rows = await svc.load_historical_rows(payload.store_id, payload.year, payload.month_index_1)
+    return {"rows": rows}
 
 
 @router.get("/projections/{entity_id}/{year_month}")
@@ -487,7 +548,7 @@ async def get_pac_projections(
     try:
         db = firestore.client()
         doc_id = f"{entity_id}_{year_month}"
-        doc_ref = db.collection("pac_projections").document(doc_id)
+        doc_ref = db.collection("pac-projections").document(doc_id)
         doc = doc_ref.get()
 
         if not doc.exists:
@@ -608,7 +669,7 @@ async def get_chart_years_sales(entity_id: str, year_month: str):
 
     try:
         db = firestore.client()
-        doc_ref = db.collection("pac_projections")
+        doc_ref = db.collection("pac-projections")
         docs = doc_ref.stream()
 
         totalSales = []
@@ -647,7 +708,7 @@ async def get_chart_budget_and_spending(entity_id: str, year_month: str):
     try:
         db = firestore.client()
         doc_id = f"{entity_id}_{year_month}"
-        doc_ref = db.collection("pac_projections").document(doc_id)
+        doc_ref = db.collection("pac-projections").document(doc_id)
         doc = doc_ref.get()
 
         budgetSpending = []
@@ -742,7 +803,7 @@ async def get_chart_PAC_and_projection(entity_id: str, year_month: str):
 
     try:
         db = firestore.client()
-        doc_ref = db.collection("pac_projections")
+        doc_ref = db.collection("pac-projections")
         docs = doc_ref.stream()
 
         pacAndProjections = []
