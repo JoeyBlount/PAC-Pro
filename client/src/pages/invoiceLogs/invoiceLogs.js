@@ -17,6 +17,8 @@ import { db } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext";
 import { getAuth } from "firebase/auth";
 import { useAuth } from "../../context/AuthContext";
+import { getStorage, ref, getDownloadURL } from "firebase/storage";
+
 
 const InvoiceLogs = () => {
   // const { currentUser, userRole } = useAuth();
@@ -395,11 +397,40 @@ const InvoiceLogs = () => {
     setExportDialogOpen(false);
   };
 
-  const handleRowClick = (invoice) => {
-    setSelectedInvoice(invoice);
-    setInvoiceImage(invoice.imageURL);
+const handleRowClick = async (invoice) => {
+  setSelectedInvoice(invoice);
+
+  try {
+    const storage = getStorage();
+
+    // ✅ Case 1: Firestore already has a public download URL
+    if (invoice.imageURL && invoice.imageURL.startsWith("http")) {
+      setInvoiceImage(invoice.imageURL);
+      setInvoiceDialogOpen(true);
+      return;
+    }
+
+    // ✅ Case 2: It’s a storage path like "images/file.png"
+    if (invoice.imageURL) {
+      const imageRef = ref(storage, invoice.imageURL);
+      const url = await getDownloadURL(imageRef);
+      setInvoiceImage(url);
+      setInvoiceDialogOpen(true);
+      return;
+    }
+
+    // ❌ No image field at all
+    console.warn("Invoice missing imageURL field:", invoice);
+    setInvoiceImage(null);
     setInvoiceDialogOpen(true);
-  };
+  } catch (error) {
+    console.error("Error loading invoice image:", error);
+    alert("Failed to load invoice image. Please check Firebase Storage permissions.");
+    setInvoiceImage(null);
+    setInvoiceDialogOpen(true);
+  }
+};
+
 
   const handleExportInvoicePDF = async () => {
     if (!invoiceImage) return;

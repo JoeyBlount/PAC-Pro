@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useContext } from "react";
-import { auth, db } from "../../config/firebase-config";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { auth, db, storage } from "../../config/firebase-config";
+import { collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
 import { StoreContext } from "../../context/storeContext";
 import styles from "./submitInvoice.module.css";
 import { invoiceCatList } from "../settings/InvoiceSettings";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const generateUUID = () => {
   return Math.random().toString(36).slice(2);
@@ -209,70 +210,51 @@ const SubmitInvoice = () => {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    // Check if all extras are confirmed
-    const unconfirmedExtras = extras.filter(extra => !extra.confirmed);
-    if (unconfirmedExtras.length > 0) {
-      const unconfirmedList = unconfirmedExtras.map(extra => 
-        `${extra.category || 'No category'}: $${extra.amount || 'No amount'}`
-      ).join('\n');
-      
-      alert(`Please confirm or remove the following unconfirmed items before submitting:\n\n${unconfirmedList}`);
-      return;
-    }
-    
-    if (!window.confirm("Please double-check all entries before submitting invoice...")) return;
-    try {
-      await verifyInput();
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-      // Prepare invoice data for backend
-      const invoiceFields = confirmedItems.reduce((acc, { category, amount }) => {
-        if (!acc[category]) acc[category] = [];
-        acc[category].push(amount);
+  if (!imageUpload) {
+    alert("Please upload an image first.");
+    return;
+  }
+
+  try {
+    // Upload image to Firebase Storage
+    const imageRef = ref(storage, `images/${selectedStore}_${Date.now()}_${imageUpload.name}`);
+    await uploadBytes(imageRef, imageUpload);
+    const downloadURL = await getDownloadURL(imageRef);
+
+    // Prepare the invoice document
+    const invoiceData = {
+      companyName,
+      invoiceNumber,
+      invoiceDate: `${invoiceMonth}/${invoiceDay}/${invoiceYear}`,
+      storeID: selectedStore,
+      user_email: user.email,
+      dateSubmitted: new Date().toLocaleDateString(),
+      imageURL: downloadURL,
+      categories: confirmedItems.reduce((acc, { category, amount }) => {
+        acc[category] = parseFloat(amount);
         return acc;
-      }, {});
+      }, {}),
+      createdAt: serverTimestamp()
+    };
 
-      // Create FormData for the backend request
-      const formData = new FormData();
-      formData.append("image", imageUpload);
-      formData.append("invoice_number", invoiceNumber);
-      formData.append("company_name", companyName);
-      formData.append("invoice_day", invoiceDay.toString());
-      formData.append("invoice_month", invoiceMonth.toString());
-      formData.append("invoice_year", invoiceYear.toString());
-      formData.append("store_id", selectedStore);
-      formData.append("user_email", user.email);
-      formData.append("categories", JSON.stringify(invoiceFields));
+    // Store it in Firestore
+    await addDoc(collection(db, "invoices"), invoiceData);
 
-      // Submit to backend
-      const response = await fetch("http://localhost:5140/api/pac/invoices/submit", {
-        method: "POST",
-        body: formData
-      });
+    alert("Invoice submitted successfully!");
+    setInvoiceNumber("");
+    setCompanyName("");
+    setExtras([]);
+    setConfirmedItems([]);
+    setImageUpload(null);
 
-      const result = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(result.detail || "Failed to submit invoice");
-      }
-
-      alert("Invoice submitted successfully!");
-      
-      // Reset form
-      setInvoiceNumber("");
-      setInvoiceMonth(new Date().getMonth() + 1);
-      setInvoiceYear(new Date().getFullYear());
-      setExtras([]);
-      setConfirmedItems([]);
-      setCompanyName("");
-      setImageUpload(null);
-      
-    } catch (error) {
-      alert("Error submitting invoice: " + error.message);
-    }
-  };
+  } catch (err) {
+    console.error(err);
+    alert("Error submitting invoice: " + err.message);
+  }
+};
 
   const verifyInput = async () => {
     if (invoiceNumber === "") throw new Error("Invoice Number Required");
