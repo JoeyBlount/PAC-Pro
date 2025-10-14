@@ -32,6 +32,7 @@ import {
   doc,
   updateDoc,
   setDoc,
+  addDoc,
 } from "firebase/firestore";
 import { db } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext";
@@ -133,6 +134,82 @@ const InvoiceLogs = () => {
 
     return 0;
   };
+  async function sendEditInvoiceNotifications(editorUser, invoiceNumber, companyName) {
+  try {
+    const settingsRef = doc(db, "settings", "notifications");
+    const settingsSnap = await getDoc(settingsRef);
+
+    if (!settingsSnap.exists()) {
+      console.error("No notification settings found.");
+      return;
+    }
+
+    const notifSettings = settingsSnap.data();
+    const editSetting = notifSettings["Invoice Edit"];
+
+    if (!editSetting?.enabled) return;
+
+    const roles = editSetting.roles || [];
+
+    const q = query(collection(db, "users"), where("role", "in", roles));
+    const snapshot = await getDocs(q);
+
+    for (const userDoc of snapshot.docs) {
+      const userData = userDoc.data();
+      await addDoc(collection(db, "notifications"), {
+        title: "Invoice Edited",
+        message: `${editorUser.firstName || "Someone"} edited invoice #${invoiceNumber} for ${companyName}.`,
+        type: "invoice_edit",
+        toEmail: userData.email,
+        createdAt: new Date(),
+        read: false
+      });
+    }
+
+    console.log(`Invoice Edit notifications sent to roles: ${roles.join(", ")}`);
+  } catch (err) {
+    console.error("Error sending edit invoice notifications:", err);
+  }
+}
+
+async function sendDeleteInvoiceNotifications(invoice, deleterUser) {
+  try {
+    const settingsRef = doc(db, "settings", "notifications");
+    const settingsSnap = await getDoc(settingsRef);
+    const notifSettings = settingsSnap.exists() ? settingsSnap.data() : {};
+    const deleteSetting = notifSettings["Invoice Deletion"];
+
+    if (!deleteSetting || !deleteSetting.enabled) {
+      console.log("Invoice Deletion notifications disabled or not found");
+      return;
+    }
+
+    const roles = deleteSetting.roles || [];
+    if (roles.length === 0) {
+      console.log("No roles set for Invoice Deletion notifications");
+      return;
+    }
+
+    const usersQuery = query(collection(db, "users"), where("role", "in", roles));
+    const usersSnapshot = await getDocs(usersQuery);
+
+    for (const userDoc of usersSnapshot.docs) {
+      const userData = userDoc.data();
+      await addDoc(collection(db, "notifications"), {
+        title: "Invoice Deleted",
+        message: `${deleterUser.firstName || "Someone"} deleted invoice #${invoice.invoiceNumber || ""} from ${invoice.companyName || "a company"}.`,
+        type: "invoice_deleted",
+        toEmail: userData.email,
+        createdAt: new Date(),
+        read: false,
+      });
+    }
+
+    console.log("Invoice Deletion notifications sent successfully.");
+  } catch (err) {
+    console.error("Error sending delete invoice notifications:", err);
+  }
+}
 
   //this function makes sure we can only edit/delete the current month in the invoice.
   const isCurrentMonth = (dateStr) => {
@@ -166,7 +243,13 @@ const InvoiceLogs = () => {
       await deleteDoc(doc(db, "invoices", invoice.id));
 
       alert("Invoice moved to Recently Deleted.");
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      const deleterUser = currentUser
+        ? { firstName: currentUser.displayName?.split(" ")[0] || "Someone" }
+        : { firstName: "Someone" };
 
+      await sendDeleteInvoiceNotifications(invoice, deleterUser);
       // 3. Refresh invoices on the page
       setData((prev) => ({
         ...prev,
@@ -266,6 +349,16 @@ const InvoiceLogs = () => {
       const invoiceRef = doc(db, "invoices", updatedInvoice.id);
       const { id, ...invoiceDataToUpdate } = updatedInvoice;
       await updateDoc(invoiceRef, invoiceDataToUpdate);
+
+      const auth = getAuth();
+      const editorUser = auth.currentUser || { firstName: "User" };
+      await sendEditInvoiceNotifications(
+      editorUser,
+      updatedInvoice.invoiceNumber,
+      updatedInvoice.companyName
+    );
+
+      
       alert("Invoice updated successfully!");
       setEditDialogOpen(false);
       fetchInvoices(); // refresh from Firestore
