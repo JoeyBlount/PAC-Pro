@@ -27,6 +27,7 @@ import UserManagement from "./pages/settings/UserManagement";
 import StoreManagement from "./pages/settings/StoreManagement";
 import Notifications from "./pages/settings/Notifications";
 import InvoiceSettings from "./pages/settings/InvoiceSettings";
+import DeadlineManagement from "./pages/settings/DeadlineManagement";
 // import InviteUser from './pages/InviteUser'; // Kept unique import
 // import NavigationLayout from './components/NavigationLayout'; // Kept unique import
 // import NotAllowed from './pages/NotAllowed'; // Kept unique import
@@ -61,6 +62,7 @@ const router = createBrowserRouter([
       // Settings sub-pages with role-based access
       { path: "settings/user-management", element: <UserManagementRoute><UserManagement /></UserManagementRoute> },
       { path: "settings/store-management", element: <StoreManagementRoute><StoreManagement /></StoreManagementRoute> },
+      { path: "settings/deadline-management", element: <SettingsViewRoute><DeadlineManagement /></SettingsViewRoute> },
       { path: "settings/notifications", element: <SettingsViewRoute><Notifications /></SettingsViewRoute> },
       { path: "settings/invoice-settings", element: <AdminRoute><InvoiceSettings /></AdminRoute> },
     ],
