@@ -1146,3 +1146,100 @@ async def get_all_locked_months(store_id: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error getting locked months: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting locked months: {str(e)}")
+
+class Announcement(BaseModel):
+    id: Optional[str] = None
+    title: str
+    message: str
+    visible_to: str
+
+@router.get("/announcements", response_model=List[Announcement])
+async def getAnnouncements(role: Optional[str] = Query("All")):    
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+    try:
+        db = firestore.client()
+        collection = db.collection("announcements")
+        docs = collection.stream()
+
+        results = []
+
+        for doc in docs:
+           data = doc.to_dict()
+           if data.get("visible_to") == "All" or data.get("visible_to") == role:
+               data["id"] = doc.id
+               results.append(data)
+
+        return results
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting sales info: {str(e)}")
+    
+@router.get("/announcements/all/", response_model=List[Announcement])
+async def getAllAnnouncements():    
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+    try:
+        db = firestore.client()
+        collection = db.collection("announcements")
+        docs = collection.stream()
+
+        results = []
+
+        for doc in docs:
+           data = doc.to_dict()
+           data["id"] = doc.id
+           results.append(data)
+
+        return results
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting sales info: {str(e)}")
+    
+@router.post("/announcements", response_model=Announcement)
+async def add_announcement(announcement: Announcement):
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+    db = firestore.client()
+    collection = db.collection("announcements")
+    doc_ref = collection.document()
+    doc_ref.set(announcement.dict(exclude_unset=True))
+    announcement.id = doc_ref.id
+    return announcement
+
+
+@router.delete("/announcements/{announcement_id}")
+async def delete_announcement(announcement_id: str):
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+    db = firestore.client()
+    collection = db.collection("announcements")
+    doc_ref = collection.document(announcement_id)
+    if not doc_ref.get().exists:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    doc_ref.delete()
+    return {"status": "deleted"}
