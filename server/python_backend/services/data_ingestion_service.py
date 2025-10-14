@@ -30,6 +30,35 @@ class DataIngestionService:
                 self.db = firestore.client()
             else:
                 raise Exception("Firebase service account key not found")
+            
+    async def fetch_projections(self, store_id: str, year: int, month_index_1: int):
+        """
+        Return (rows, pacGoal) for a store+period, or ([], 0) if none.
+        """
+        doc_id = f"{store_id}_{year}{month_index_1:02d}"
+        snap = self.db.collection("pac-projections").document(doc_id).get()
+        if not snap.exists:
+            return [], 0.0
+        d = snap.to_dict() or {}
+        return d.get("rows", []) , float(d.get("pacGoal") or 0.0)
+
+    async def save_projections(
+        self,
+        store_id: str,
+        year: int,
+        month_index_1: int,
+        pac_goal: float,
+        projections: list[dict],
+    ):
+        doc_id = f"{store_id}_{year}{month_index_1:02d}"
+        self.db.collection("pac-projections").document(doc_id).set({
+            "store_id": store_id,
+            "year": year,
+            "month_index_1": month_index_1,
+            "pacGoal": float(pac_goal),
+            "rows": projections,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
     
     async def _get_pac_data_from_firebase(self, entity_id: str, year_month: str) -> Dict[str, Any]:
         """Get PAC data from Firebase for a specific store and month"""
