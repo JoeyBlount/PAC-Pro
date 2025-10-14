@@ -45,6 +45,8 @@ def test_submit_invoice_requires_authentication_or_role_enforcement():
         "invoice_day": "15",
         "invoice_month": "8",
         "invoice_year": "2025",
+        "target_month": "8",
+        "target_year": "2025",
         "store_id": "store_001",
         "user_email": "user@example.com",
         "categories": json.dumps({"FOOD": 10, "PAPER": 5}),
@@ -87,7 +89,7 @@ def test_role_enforcement_for_invoice_read_forbidden_when_not_allowed():
     # Provide bearer token (any non-empty to satisfy presence) and a disallowed role via header
     headers = {
         "Authorization": "Bearer fake",
-        "X-User-Role": "SUPERVISOR",  # not allowed once we restrict
+        "X-User-Role": "Supervisor",  # not allowed once we restrict
     }
     response = client.post("/api/pac/invoice/read", files=files, headers=headers)
     # Not yet enforced on endpoint; placeholder to be updated after we apply require_roles
@@ -107,15 +109,17 @@ def test_role_enforcement_for_invoice_submit_allowed_for_admin():
         "invoice_day": "15",
         "invoice_month": "8",
         "invoice_year": "2025",
+        "target_month": "8",
+        "target_year": "2025",
         "store_id": "store_001",
         "user_email": "admin@example.com",
         "categories": json.dumps({"FOOD": 10, "PAPER": 5}),
     }
     headers = {
         "Authorization": "Bearer fake",
-        "X-User-Role": "ADMIN",
+        "X-User-Role": "Admin",
     }
-    # This will be 200 once roles are enforced for ADMIN
+    # This will be 200 once roles are enforced for Admin
     response = client.post("/api/pac/invoices/submit", data=data, files=files, headers=headers)
     assert response.status_code in (200, 403)
 
