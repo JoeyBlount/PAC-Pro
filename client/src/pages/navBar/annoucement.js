@@ -143,16 +143,19 @@ const ManageAnnouncementsDialog = ({ open, onClose, refresh }) => {
   );
 };
 
-const AnnouncementDialog = ({ open, onClose, uRole }) => {
+const AnnouncementDialog = ({ open, onClose }) => {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [manageOpen, setManageOpen] = useState(false);
 
+  const { userRole } = useAuth();
+  const isAdmin = (userRole || "").toLowerCase() === ROLES.ADMIN.toLowerCase();
+  
   const fetchAnnouncements = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:5140/api/pac/announcements?role=${uRole}`);
+      const res = await fetch(`http://localhost:5140/api/pac/announcements?role=${userRole}`);
       const data = await res.json();
       setAnnouncements(data);
       setCurrentIndex(0);
@@ -165,7 +168,7 @@ const AnnouncementDialog = ({ open, onClose, uRole }) => {
 
   useEffect(() => {
    if (open) fetchAnnouncements();
-  }, [open, uRole]);
+  }, [open]);
 
   const handleNext = () => {
     if (currentIndex < announcements.length - 1) {
@@ -178,9 +181,6 @@ const AnnouncementDialog = ({ open, onClose, uRole }) => {
       setCurrentIndex((prev) => prev - 1);
     }
   };
-
-  const { userRole } = useAuth();
-  const isAdmin = (userRole || "").toLowerCase() === "admin";
 
   return (
     <>

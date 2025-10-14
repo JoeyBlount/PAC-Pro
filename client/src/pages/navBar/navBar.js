@@ -319,8 +319,7 @@ export function NavBar() {
 
   // Annoucement things
   const [openAnn, setOpenAnn] = useState(false);
-  const { userRole } = useAuth();
-
+  
   return (
     <>
       {/* TOP NAV BAR */}
@@ -371,7 +370,7 @@ export function NavBar() {
           <IconButton className="announcementBtn" onClick={() => setOpenAnn(true)}>
             <Campaign />
           </IconButton>
-          <AnnoucementDialog open={openAnn} onClose={() => setOpenAnn(false)} userRole={userRole} />
+          <AnnoucementDialog open={openAnn} onClose={() => setOpenAnn(false)} />
 
           {/* Notifications Bell */}
           <IconButton
