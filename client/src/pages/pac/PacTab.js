@@ -395,14 +395,24 @@ const PacTab = ({
       </div>`;
     }
     if (lastUpdatedTimestamp) {
+      const ts = new Date(lastUpdatedTimestamp);
       statusInfo += `<div class="print-timestamp" style="text-align: center; margin-bottom: 10px; padding: 5px; background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; font-weight: bold;">
-        Last Updated: ${lastUpdatedTimestamp.toLocaleString()}
+      Last Updated: ${ts.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}
       </div>`;
     }
+
+      //Timestamp for last updated. 
+    const printGeneratedTime = new Date().toLocaleString("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
 
     return `
       <div class="print-header">
         PAC Report - ${storeId} - ${month} ${year}
+      </div>
+      <div class="print-timestamp" style="text-align: center; margin-bottom: 10px; color: #555;">
+        Last Updated: ${printGeneratedTime}
       </div>
       ${statusInfo}
       <table class="print-table">
@@ -1912,7 +1922,38 @@ const rows = [
     </Button>
   </Box>
 </Box>
-
+<Typography
+  variant="subtitle2"
+  sx={{
+    mb: 3,
+    textAlign: "right",
+    color: "gray",
+    fontStyle: "italic",
+  }}
+>
+  Last updated:{" "}
+  {new Date().toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  })}
+</Typography>
+{lastUpdatedTimestamp && (
+  <Typography
+    variant="subtitle2"
+    sx={{
+      mb: 2,
+      textAlign: "right",
+      color: "gray",
+      fontStyle: "italic",
+    }}
+  >
+    Last Updated:{" "}
+    {new Date(lastUpdatedTimestamp).toLocaleString("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    })}
+  </Typography>
+)}
       <TableContainer component={Paper} sx={{ mb: 3 }}>
         <Table size="small">
           <TableHead>
