@@ -471,6 +471,7 @@ async def submit_invoice(
             image_file=contents,
             image_filename=image.filename or "invoice.jpg"
         )
+            
         
         logger.info("Invoice submitted successfully")
         return result

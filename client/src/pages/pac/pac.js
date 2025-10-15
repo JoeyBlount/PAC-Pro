@@ -41,6 +41,8 @@ import MonthLockService from "../../services/monthLockService";
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 
+
+
 const expenseList = [
   "Product Sales", "All Net Sales",
   "Base Food", "Employee Meal", "Condiment", "Total Waste", "Paper",
@@ -361,6 +363,31 @@ const PAC = () => {
         alert(result.message);
         await fetchMonthLockStatus();
         await fetchLockedMonths();
+
+        const auth = getAuth();
+        const currentUser = auth.currentUser;
+
+        const lockerUser =
+        userData && userData.firstName
+          ? userData
+          : currentUser
+          ? { firstName: currentUser.displayName?.split(" ")[0] || "Someone" }
+          : { firstName: "Someone" };
+        await fetch("http://localhost:5140/api/pac/notifications/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          context: {
+            event: monthLockStatus,
+            firstName: lockerUser.firstName || "Someone",
+            month,
+            year,
+            store: selectedStore,
+          },
+        }),
+      });
       } else {
         alert(result.message);
       }
