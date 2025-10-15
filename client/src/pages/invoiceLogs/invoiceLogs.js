@@ -45,9 +45,10 @@ import MonthLockService from "../../services/monthLockService";
 
 // Map Invoice Log category IDs -> PAC "projections[].name"
 const PROJECTION_LOOKUP = {
-  FOOD: "Base Food",
-  CONDIMENT: "Condiment",
-  PAPER: "Paper",
+  // Excluded from Invoice Log budget (pull 0)
+  FOOD: null,
+  CONDIMENT: null,
+  PAPER: null,
   NONPRODUCT: null, // not present in PAC; default 0
   TRAVEL: "Travel",
   "ADV-OTHER": "Adv Other",
@@ -59,9 +60,19 @@ const PROJECTION_LOOKUP = {
   "SML EQUIP": "Small Equipment",
   UTILITIES: "Utilities",
   OFFICE: "Office",
+  // Match Projections naming precisely
+  "CREW RELATIONS": "Crew Relations",
   TRAINING: "Training",
-  CR: "Crew Relations",
 };
+
+// Categories to hide in the Budget row (show blank)
+const EXCLUDED_BUDGET_CATS = new Set([
+  "FOOD",
+  "CONDIMENT",
+  "PAPER",
+  "NONPRODUCT",
+  "Advertising",
+]);
 
 const InvoiceLogs = () => {
   const location = useLocation();
@@ -264,11 +275,10 @@ const InvoiceLogs = () => {
       const invoiceRef = doc(db, "invoices", invoiceID);
       await updateDoc(invoiceRef, {
         locked: false,
-            });
-    alert("Invoice unlocked.");
-    fetchInvoices(); // refresh from Firestore
-  } catch (error) {
-
+      });
+      alert("Invoice unlocked.");
+      fetchInvoices(); // refresh from Firestore
+    } catch (error) {
       console.error("Error unlocking invoice:", error);
       alert("Failed to unlock invoice.");
     }
@@ -298,12 +308,21 @@ const InvoiceLogs = () => {
           id: doc.id,
           ...doc.data(), // Expect each doc to have fields: name, bankAccountNum, etc.
         }));
-        
+
         // Sort columns according to the order defined in InvoiceSettings
-        const orderedColumns = invoiceCatList.map(categoryId => 
-          allColumns.find(col => col.id === categoryId)
-        ).filter(Boolean); // Remove any undefined entries
-        
+        const orderedColumns = invoiceCatList
+          .map((categoryId) => allColumns.find((col) => col.id === categoryId))
+          .filter(Boolean); // Remove any undefined entries
+
+        // Ensure order matches Projections page: Crew Relations before Training
+        const idxCR = orderedColumns.findIndex((c) => c.id === "CR");
+        const idxTR = orderedColumns.findIndex((c) => c.id === "TRAINING");
+        if (idxCR !== -1 && idxTR !== -1 && idxCR > idxTR) {
+          const tmp = orderedColumns[idxCR];
+          orderedColumns[idxCR] = orderedColumns[idxTR];
+          orderedColumns[idxTR] = tmp;
+        }
+
         setMonetaryColumns(orderedColumns);
       } catch (error) {
         console.error("Error fetching category columns:", error);
@@ -463,12 +482,12 @@ const InvoiceLogs = () => {
         return true;
       });
 
+      // Compute totals strictly from invoices assigned to the selected month/year
       const totals = {};
       monetaryColumns.forEach((col) => {
-        const categoryId = col.id; // This matches the document ID from invoiceCategories
-        const categoryName = col.id; // Use col.id as the category name since that's what's stored in invoices
+        const categoryId = col.id;
         totals[categoryId] = filteredInvoices.reduce((sum, inv) => {
-          const categoryValue = getCategoryValue(inv, categoryName);
+          const categoryValue = getCategoryValue(inv, categoryId);
           return sum + categoryValue;
         }, 0);
       });
@@ -476,13 +495,16 @@ const InvoiceLogs = () => {
       // Use budget data from pac_projections instead of invoiceCategories
       const budgets = {};
       monetaryColumns.forEach((col) => {
-        // Use budgetData if available, otherwise fall back to invoiceCategories budget
-        budgets[col.id] = budgetData[col.id] || Number(col.budget) || 0;
+        // Use budgetData if available, otherwise 0 (no fallback to invoiceCategories)
+        budgets[col.id] = budgetData[col.id] || 0;
       });
 
-      const usePacTotals = pacTotals && Object.keys(pacTotals).length > 0;
-      console.log("Setting totals in fetchInvoices:", { usePacTotals, pacTotals, computedTotals: totals, budgets });
-      setData({ invoices, total: usePacTotals ? pacTotals : totals, budget: budgets });
+      console.log("Setting totals in fetchInvoices:", {
+        computedTotals: totals,
+        budgets,
+      });
+      // TOTAL row must reflect only the sum of invoice entries for the selected month/year
+      setData({ invoices, total: totals, budget: budgets });
     } catch (err) {
       console.error("Error loading invoices:", err);
     }
@@ -534,7 +556,11 @@ const InvoiceLogs = () => {
       }
 
       const pac = snap.data() || {};
-      const rows = Array.isArray(pac.projections) ? pac.projections : [];
+      const rows = Array.isArray(pac.rows)
+        ? pac.rows
+        : Array.isArray(pac.projections)
+        ? pac.projections
+        : [];
 
       // Build budget map aligned to your table's categories
       const nextBudget = {};
@@ -560,7 +586,9 @@ const InvoiceLogs = () => {
   // Fetch PAC input totals from pac_input_data collection
   const fetchPacTotals = async (storeId, yearMonth) => {
     try {
-      const formattedStoreId = storeId.startsWith('store_') ? storeId : `store_${storeId.padStart(3, '0')}`;
+      const formattedStoreId = storeId.startsWith("store_")
+        ? storeId
+        : `store_${storeId.padStart(3, "0")}`;
       const docId = `${formattedStoreId}_${yearMonth}`;
 
       const docRef = doc(db, "pac_input_data", docId);
@@ -570,22 +598,22 @@ const InvoiceLogs = () => {
         const pacData = docSnap.data();
 
         const totalsMapping = {
-          'FOOD': pacData.purchases?.food || 0,
-          'CONDIMENT': pacData.purchases?.condiment || 0,
-          'PAPER': pacData.purchases?.paper || 0,
-          'NONPRODUCT': pacData.purchases?.non_product || 0,
-          'TRAVEL': pacData.purchases?.travel || 0,
-          'ADV-OTHER': pacData.purchases?.advertising_other || 0,
-          'PROMO': pacData.purchases?.promotion || 0,
-          'OUTSIDE SVC': pacData.purchases?.outside_services || 0,
-          'LINEN': pacData.purchases?.linen || 0,
-          'OP. SUPPLY': pacData.purchases?.operating_supply || 0,
-          'M+R': pacData.purchases?.maintenance_repair || 0,
-          'SML EQUIP': pacData.purchases?.small_equipment || 0,
-          'UTILITIES': pacData.purchases?.utilities || 0,
-          'OFFICE': pacData.purchases?.office || 0,
-          'TRAINING': pacData.purchases?.training || 0,
-          'CR': pacData.purchases?.crew_relations || 0
+          FOOD: pacData.purchases?.food || 0,
+          CONDIMENT: pacData.purchases?.condiment || 0,
+          PAPER: pacData.purchases?.paper || 0,
+          NONPRODUCT: pacData.purchases?.non_product || 0,
+          TRAVEL: pacData.purchases?.travel || 0,
+          "ADV-OTHER": pacData.purchases?.advertising_other || 0,
+          PROMO: pacData.purchases?.promotion || 0,
+          "OUTSIDE SVC": pacData.purchases?.outside_services || 0,
+          LINEN: pacData.purchases?.linen || 0,
+          "OP. SUPPLY": pacData.purchases?.operating_supply || 0,
+          "M+R": pacData.purchases?.maintenance_repair || 0,
+          "SML EQUIP": pacData.purchases?.small_equipment || 0,
+          UTILITIES: pacData.purchases?.utilities || 0,
+          OFFICE: pacData.purchases?.office || 0,
+          TRAINING: pacData.purchases?.training || 0,
+          CR: pacData.purchases?.crew_relations || 0,
         };
 
         setPacTotals(totalsMapping);
@@ -637,40 +665,41 @@ const InvoiceLogs = () => {
     setExportDialogOpen(false);
   };
 
-const handleRowClick = async (invoice) => {
-  setSelectedInvoice(invoice);
+  const handleRowClick = async (invoice) => {
+    setSelectedInvoice(invoice);
 
-  try {
-    const storage = getStorage();
+    try {
+      const storage = getStorage();
 
-    // ✅ Case 1: Firestore already has a public download URL
-    if (invoice.imageURL && invoice.imageURL.startsWith("http")) {
-      setInvoiceImage(invoice.imageURL);
+      // ✅ Case 1: Firestore already has a public download URL
+      if (invoice.imageURL && invoice.imageURL.startsWith("http")) {
+        setInvoiceImage(invoice.imageURL);
+        setInvoiceDialogOpen(true);
+        return;
+      }
+
+      // ✅ Case 2: It’s a storage path like "images/file.png"
+      if (invoice.imageURL) {
+        const imageRef = ref(storage, invoice.imageURL);
+        const url = await getDownloadURL(imageRef);
+        setInvoiceImage(url);
+        setInvoiceDialogOpen(true);
+        return;
+      }
+
+      // ❌ No image field at all
+      console.warn("Invoice missing imageURL field:", invoice);
+      setInvoiceImage(null);
       setInvoiceDialogOpen(true);
-      return;
-    }
-
-    // ✅ Case 2: It’s a storage path like "images/file.png"
-    if (invoice.imageURL) {
-      const imageRef = ref(storage, invoice.imageURL);
-      const url = await getDownloadURL(imageRef);
-      setInvoiceImage(url);
+    } catch (error) {
+      console.error("Error loading invoice image:", error);
+      alert(
+        "Failed to load invoice image. Please check Firebase Storage permissions."
+      );
+      setInvoiceImage(null);
       setInvoiceDialogOpen(true);
-      return;
     }
-
-    // ❌ No image field at all
-    console.warn("Invoice missing imageURL field:", invoice);
-    setInvoiceImage(null);
-    setInvoiceDialogOpen(true);
-  } catch (error) {
-    console.error("Error loading invoice image:", error);
-    alert("Failed to load invoice image. Please check Firebase Storage permissions.");
-    setInvoiceImage(null);
-    setInvoiceDialogOpen(true);
-  }
-};
-
+  };
 
   const handleExportInvoicePDF = async () => {
     if (!invoiceImage) return;
@@ -915,13 +944,15 @@ const handleRowClick = async (invoice) => {
       return (
         <tr
           key={i}
-          className={`invoice-row ${isLocked ? 'locked-row' : 'unlocked-row'}`}
+          className={`invoice-row ${isLocked ? "locked-row" : "unlocked-row"}`}
           onClick={() => handleRowClick(inv)}
         >
           <td className="tableCell">
             {inv.targetMonth && inv.targetYear
               ? `${inv.targetMonth}/${inv.targetYear}`
-              : `${new Date(inv.dateSubmitted).getMonth() + 1}/${new Date(inv.dateSubmitted).getFullYear()} (legacy)`}
+              : `${new Date(inv.dateSubmitted).getMonth() + 1}/${new Date(
+                  inv.dateSubmitted
+                ).getFullYear()} (legacy)`}
           </td>
           <td className="tableCell">{inv.storeID}</td>
           <td className="tableCell dateCell">
@@ -952,50 +983,56 @@ const handleRowClick = async (invoice) => {
           })}
 
           <td className="tableCell">
-          {(canEdit || userRole === "Supervisor" || userRole === "Admin") &&
-            !isInvoiceMonthLocked(
-              inv.targetMonth || new Date(inv.dateSubmitted).getMonth() + 1,
-              inv.targetYear || new Date(inv.dateSubmitted).getFullYear()
-            ) && (
-              <>
-                <button
-                  className="edit-button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleEdit(inv);
-                  }}
-                >
-                  ✏️ Edit
-                </button>
-                <button
-                  className="delete-button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(inv);
-                  }}
-                >
-                  🗑️ Delete
-                </button>
-                <button
-                  className={`lock-toggle-button ${isLocked ? 'locked' : 'unlocked'}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    console.log('Invoice lock status:', inv.locked, 'isLocked:', isLocked);
-                    if (isLocked) {
-                      console.log('Unlocking invoice:', inv.id);
-                      unlockInvoice(inv.id);
-                    } else {
-                      console.log('Locking invoice:', inv.id);
-                      lockInvoice(inv.id);
-                    }
-                  }}
-                >
-                  {isLocked ? '🔓 Unlock' : '🔒 Lock'}
-                </button>
-              </>
-            )}
-        </td>
-
+            {(canEdit || userRole === "Supervisor" || userRole === "Admin") &&
+              !isInvoiceMonthLocked(
+                inv.targetMonth || new Date(inv.dateSubmitted).getMonth() + 1,
+                inv.targetYear || new Date(inv.dateSubmitted).getFullYear()
+              ) && (
+                <>
+                  <button
+                    className="edit-button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEdit(inv);
+                    }}
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button
+                    className="delete-button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(inv);
+                    }}
+                  >
+                    🗑️ Delete
+                  </button>
+                  <button
+                    className={`lock-toggle-button ${
+                      isLocked ? "locked" : "unlocked"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log(
+                        "Invoice lock status:",
+                        inv.locked,
+                        "isLocked:",
+                        isLocked
+                      );
+                      if (isLocked) {
+                        console.log("Unlocking invoice:", inv.id);
+                        unlockInvoice(inv.id);
+                      } else {
+                        console.log("Locking invoice:", inv.id);
+                        lockInvoice(inv.id);
+                      }
+                    }}
+                  >
+                    {isLocked ? "🔓 Unlock" : "🔒 Lock"}
+                  </button>
+                </>
+              )}
+          </td>
         </tr>
       );
     });
@@ -1049,6 +1086,15 @@ const handleRowClick = async (invoice) => {
         </td>
         {monetaryColumns.map((col, i) => {
           const val = Math.round(values[col.id] || 0);
+          // For Budget and Difference rows, hide excluded categories (show blank)
+          if (
+            (label === "BUDGET" || label === "Difference") &&
+            EXCLUDED_BUDGET_CATS.has(col.id)
+          ) {
+            return (
+              <td key={i} className="tableCell summaryCell" style={{}}></td>
+            );
+          }
           return (
             <td key={i} className="tableCell summaryCell" style={styleFn(val)}>
               {val.toLocaleString("en-US", {
