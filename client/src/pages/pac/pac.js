@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
-import { db, auth, } from "../../config/firebase-config";
-import { getAuth } from "firebase/auth";
+import { useLocation } from "react-router-dom";
+import { db, auth } from "../../config/firebase-config";
 import {
   collection,
   addDoc,
@@ -10,10 +10,6 @@ import {
   limit,
   getDocs,
   serverTimestamp,
-  doc,
-  getDoc,
-  setDoc,
-  
 } from "firebase/firestore";
 import {
   Box,
@@ -41,12 +37,6 @@ import {
 import { StoreContext } from "../../context/storeContext";
 import PacTab from "./PacTab";
 import { useAuth } from "../../context/AuthContext";
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-} from "@mui/material";
 import MonthLockService from "../../services/monthLockService";
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
@@ -69,6 +59,7 @@ const hasUserInputAmountField = [
   "Linen", "OP. Supply", "Maint. & Repair", "Small Equipment", "Utilities", "Office", "Cash +/-", "Crew Relations", "Training",
   "Promotion"
 ];
+
 
 // Backend (Generate tab)
 const BASE_URL = "http://127.0.0.1:5140";
@@ -104,176 +95,30 @@ const getLabel = (key) => {
   return specialLabels[key] || "";
 };
 
-const recalcFromPercents = (rows) => {
-  const next = rows.map(r => ({ ...r }));
-
-  const psProj = Number(next.find(r => r.name === "Product Sales")?.projectedDollar) || 0;
-  const ansProj = Number(next.find(r => r.name === "All Net Sales")?.projectedDollar) || 0;
-
-  // These rows' $ are (% of Product Sales $)
-  const PCT_OF_PS = new Set([
-    "Base Food", "Employee Meal", "Condiment", "Total Waste", "Paper",
-    "Crew Labor", "Management Labor"
-  ]);
-
-  next.forEach(r => {
-    if (PCT_OF_PS.has(r.name)) {
-      const pct = Number(r.projectedPercent) || 0;
-      r.projectedDollar = (psProj * pct / 100).toFixed(2);
-    }
-  });
-
-  // Advertising $ = (% of All Net Sales $)
-  const ad = next.find(r => r.name === "Advertising");
-  if (ad) {
-    const pct = Number(ad.projectedPercent) || 0;
-    ad.projectedDollar = ((ansProj * pct) / 100).toFixed(2);
-  }
-
-  // Payroll Tax: % of (Crew + Management) dollars
-  const ptIdx = next.findIndex(r => r.name === "Payroll Tax");
-  if (ptIdx !== -1) {
-    const crew$ = Number(next.find(r => r.name === "Crew Labor")?.projectedDollar) || 0;
-    const mgmt$ = Number(next.find(r => r.name === "Management Labor")?.projectedDollar) || 0;
-    const ptPct = Number(next[ptIdx].projectedPercent) || 0;
-    next[ptIdx].projectedDollar = ((crew$ + mgmt$) * ptPct / 100).toFixed(2);
-  }
-
-  return next;
-};
-
-
-const applySalesPercents = (rows) => {
-  const next = rows.map(r => ({ ...r }));
-
-  const psIdx = next.findIndex(r => r.name === "Product Sales");
-  const ansIdx = next.findIndex(r => r.name === "All Net Sales");
-
-  const psProj = Number(next[psIdx]?.projectedDollar) || 0;
-  const psHist = Number(next[psIdx]?.historicalDollar) || 0;
-  const ansProj = Number(next[ansIdx]?.projectedDollar) || 0;
-  const ansHist = Number(next[ansIdx]?.historicalDollar) || 0;
-
-  if (psIdx !== -1) {
-    next[psIdx].projectedPercent = ansProj > 0 ? ((psProj / ansProj) * 100).toFixed(2) : "0.00";
-    next[psIdx].historicalPercent = ansHist > 0 ? ((psHist / ansHist) * 100).toFixed(2) : "0.00";
-  }
-  if (ansIdx !== -1) {
-    next[ansIdx].projectedPercent = ansProj > 0 ? "100.00" : "0.00";
-    next[ansIdx].historicalPercent = ansHist > 0 ? "100.00" : "0.00";
-  }
-
-  return next;
-};
-
-
-const CONTROLLABLE_START = "Base Food";
-const CONTROLLABLE_END = "Training";
 const fmtUsd = (v) => new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(v || 0));
-
-const computeControllables = (rows, fieldPrefix) => {
-  const s = rows.findIndex(r => r.name === "Base Food");
-  const e = rows.findIndex(r => r.name === "Training");
-  if (s === -1 || e === -1 || e < s) return 0;
-
-  let sum = 0;
-  for (let i = s; i <= e; i++) {
-    sum += Number(rows[i]?.[`${fieldPrefix}Dollar`]);
-  }
-  return sum;
-};
-
-const applyControllables = (rows) => {
-  const idx = rows.findIndex(r => r.name === "Total Controllable");
-  if (idx === -1) return rows;
-
-  // sums (Base Food .. Training)
-  const projTotal = computeControllables(rows, "projected");
-  const histTotal = computeControllables(rows, "historical");
-
-  // denominators = All Net Sales
-  const ansProj = parseFloat(rows.find(r => r.name === "All Net Sales")?.projectedDollar) || 0;
-  const ansHist = parseFloat(rows.find(r => r.name === "All Net Sales")?.historicalDollar) || 0;
-
-  const next = [...rows];
-  next[idx] = {
-    ...next[idx],
-    projectedDollar: Number(projTotal || 0).toFixed(2),
-    projectedPercent: ansProj > 0 ? ((projTotal / ansProj) * 100).toFixed(2) : "0.00",
-    historicalDollar: Number(histTotal || 0).toFixed(2),
-    historicalPercent: ansHist > 0 ? ((histTotal / ansHist) * 100).toFixed(2) : "0.00",
-  };
-  return next;
-};
-
-const applyPac = (rows) => {
-  const pacIdx = rows.findIndex(r => r.name === "P.A.C.");
-  if (pacIdx === -1) return rows;
-
-  // Denominator & base = All Net Sales
-  const ansProj = parseFloat(rows.find(r => r.name === "All Net Sales")?.projectedDollar) || 0;
-
-  // Sum controllables (Base Food .. Training)
-  const ctrlProj = computeControllables(rows, "projected");
-
-  // PAC = All Net Sales - Total Controllables
-  const projDollar = ansProj - ctrlProj;
-
-  const next = [...rows];
-  next[pacIdx] = {
-    ...next[pacIdx],
-    projectedDollar: Number(projDollar || 0).toFixed(2),
-    projectedPercent: ansProj > 0 ? ((projDollar / ansProj) * 100).toFixed(2) : "0.00",
-  };
-  return next;
-};
-
- const applyTravelThruTrainingPercents = (rows) => {
-    const next = rows.map(r => ({ ...r }));
-
-    const psProj = Number(next.find(r => r.name === "Product Sales")?.projectedDollar) || 0;
-    const psHist = Number(next.find(r => r.name === "Product Sales")?.historicalDollar) || 0;
-
-    const startIdx = next.findIndex(r => r.name === "Travel");
-    const endIdx = next.findIndex(r => r.name === "Training");
-
-    if (startIdx !== -1 && endIdx !== -1 && endIdx >= startIdx) {
-      for (let i = startIdx; i <= endIdx; i++) {
-        const proj$ = Number(next[i].projectedDollar) || 0;
-        const hist$ = Number(next[i].historicalDollar) || 0;
-
-        next[i].projectedPercent = psProj > 0 ? ((proj$ / psProj) * 100).toFixed(2) : "0.00";
-        next[i].historicalPercent = psHist > 0 ? ((hist$ / psHist) * 100).toFixed(2) : "0.00";
-      }
-    }
-
-    return next;
-  };
-
-// Call this after any change/seed so totals & PAC are coherent
-const applyAll = (rows) =>
-  applySalesPercents(
-    applyPac(
-      applyControllables(
-        applyTravelThruTrainingPercents(   
-          recalcFromPercents(rows)
-        )
-      )
-    )
-  );
+const fmtPercent = (v) => new Intl.NumberFormat('en-US', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits:2, }).format(v/100);
 
 const PAC = () => {
+  const location = useLocation();
   const [tabIndex, setTabIndex] = useState(0);
   const currentDate = new Date();
   const currentMonth = currentDate.toLocaleString("default", { month: "long" });
   const [month, setMonth] = useState(currentMonth);
-  const [savedData, setSavedData] = useState({});
 
   const pad2 = (n) => String(n).padStart(2, "0");
   const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 11 }, (_, i) => currentYear - i);
   const [year, setYear] = useState(currentYear);
+
+  // Handle navigation from Reports page
+  useEffect(() => {
+    if (location.state?.openActualTab) {
+      setTabIndex(2); // Switch to Actual tab (index 2)
+      if (location.state.month) setMonth(location.state.month);
+      if (location.state.year) setYear(location.state.year);
+    }
+  }, [location]);
 
   // Get selected store from context
   const { selectedStore } = useContext(StoreContext);
@@ -292,28 +137,49 @@ const PAC = () => {
     return sel < cur;
   };
 
-  // Return a color for the P.A.C. row based on projected % vs goal.
-  // green = equal (within tiny tolerance), red = below goal, orange = above goal.
-  const getPacRowColor = (rows, goal) => {
-    const productSalesProj = parseFloat(rows.find(r => r.name === "Product Sales")?.projectedDollar) || 0;
-    const pacProjDollar = parseFloat(rows.find(r => r.name === "P.A.C.")?.projectedDollar) || 0;
-
-    const projectedPacPct = productSalesProj > 0 ? (pacProjDollar / productSalesProj) * 100 : 0;
-    const goalPct = productSalesProj > 0 ? (Number(goal || 0) / productSalesProj) * 100 : 0;
-
-    const epsilon = 0.01; // 0.01% tolerance for "equal"
-    if (Math.abs(projectedPacPct - goalPct) <= epsilon) return "green";
-    if (projectedPacPct < goalPct) return "red";
-    return "orange";
-  };
+  // Return a color for the P.A.C. row based on projected $ vs goal.
+  const getPacRowColor = () => (pacEqual ? "green" : "red");
 
   // Map getPacRowColor() -> MUI cell styles
   const PAC_COLOR_STYLES = {
     green: { backgroundColor: "rgba(46,125,50,0.12)", color: "#2e7d32", fontWeight: 700 },
     red: { backgroundColor: "rgba(211,47,47,0.12)", color: "#d32f2f", fontWeight: 700 },
-    orange: { backgroundColor: "rgba(245,124,0,0.12)", color: "#f57c00", fontWeight: 700 },
   };
 
+  // projections API wrappers
+  async function seedProjections(store_id, year, month) {
+    const month_index_1 = months.indexOf(month) + 1;
+    return api("/api/pac/projections/seed", {
+      method: "POST",
+      body: { store_id, year, month_index_1 },
+    });
+  }
+
+  async function saveProjections(store_id, year, month, pacGoal, projections) {
+    const month_index_1 = months.indexOf(month) + 1;
+    return api("/api/pac/projections/save", {
+      method: "POST",
+      body: {
+        store_id,
+        year,
+        month_index_1,
+        pacGoal: Number(pacGoal) || 0,
+        projections,
+      },
+    });
+  }
+
+  async function applyRows(rows) {
+    return api("/api/pac/apply", { method: "POST", body: { rows } });
+  }
+
+  async function fetchHistoricalRows(store_id, year, month) {
+    const month_index_1 = months.indexOf(month) + 1;
+    return api("/api/pac/historical", {
+      method: "POST",
+      body: { store_id, year, month_index_1 },
+    });
+  }
 
 
   // UI state for admin edit mode
@@ -323,16 +189,24 @@ const PAC = () => {
   const handleResetToLastSubmitted = async () => {
     if (!selectedStore) return;
     const prevDate = new Date(year, months.indexOf(month) - 1, 1);
-    const prevId = `${selectedStore}_${prevDate.getFullYear()}${pad2(prevDate.getMonth() + 1)}`;
-    const snap = await getDoc(doc(db, "pac-projections", prevId));
-    if (!snap.exists()) {
-      alert("No previous submission found.");
-      return;
+    const prevYear = prevDate.getFullYear();
+    const prevMonthName = months[prevDate.getMonth()];
+    try {
+      const data = await seedProjections(selectedStore, prevYear, prevMonthName);
+      if (!data || !Array.isArray(data.rows) || data.rows.length === 0) {
+        alert("No previous submission found.");
+        return;
+      }
+      setProjections(data.rows);
+      if (typeof data.pacGoal !== "undefined") setPacGoal(String(data.pacGoal));
+    } catch (e) {
+      console.error("reset to previous month error", e);
+      alert("Failed to load previous month.");
     }
-  }
+  };
+
   // State variables for Generate tab; may need to change these
   const pacGenRef = collection(db, "pacGen");
-  const pacProjectionsRef = collection(db, "pac-projections"); // for Projections tab
   const [productNetSales, setProductNetSales] = useState(0);
   const [cash, setCash] = useState(0);
   const [promo, setPromo] = useState(0);
@@ -363,14 +237,6 @@ const PAC = () => {
   const [endingNonProduct, setEndingNonProduct] = useState(0);
   const [endingOpsSupplies, setEndingOpsSupplies] = useState(0);
 
-
-  const [userData, setUserData] = useState(null);
-
-
-  const [openHistModal, setOpenHistModal] = useState(false);
-  const [shouldLoadHist, setShouldLoadHist] = useState(false);
-  const [loadedHistPeriod, setLoadedHistPeriod] = useState(null);
-
   const { userRole } = useAuth();
 
   const isAdmin = (userRole || "").toLowerCase() === "admin";
@@ -393,31 +259,6 @@ const PAC = () => {
   };
 
 
-  const computeControllables = (rows, fieldPrefix) => {
-    const s = rows.findIndex(r => r.name === CONTROLLABLE_START);
-    const e = rows.findIndex(r => r.name === CONTROLLABLE_END);
-    if (s === -1 || e === -1 || e < s) return 0;
-    let sum = 0;
-    for (let i = s; i <= e; i++) {
-      sum += parseFloat(rows[i][`${fieldPrefix}Dollar`]) || 0;
-    }
-    return sum;
-  };
-
-  const applyControllables = (rows) => {
-    const idx = rows.findIndex(r => r.name === "Total Controllable");
-    if (idx === -1) return rows;
-    const next = [...rows];
-    next[idx] = {
-      ...next[idx],
-      projectedDollar: computeControllables(rows, "projected").toFixed(2),
-      projectedPercent: "", // keep blank
-      historicalDollar: computeControllables(rows, "historical").toFixed(2),
-      historicalPercent: "",
-    };
-    return next;
-  };
-
   // returns { monthIndex, year }
   function getPrevMonthYear(d = new Date()) {
     const m = d.getMonth(); // 0..11
@@ -432,6 +273,14 @@ const PAC = () => {
   const { monthIndex: prevIdx, year: prevYear } = getPrevMonthYear();
   const [histMonth, setHistMonth] = useState(months[prevIdx]);
   const [histYear, setHistYear] = useState(prevYear);
+
+  useEffect(() => {
+    if (!month || !year) return;
+    const idx = months.indexOf(month); // 0..11
+    const d = new Date(year, idx - 1, 1); // previous month of the *selected* period
+    setHistMonth(months[d.getMonth()]);
+    setHistYear(d.getFullYear());
+  }, [month, year]);
 
   useEffect(() => {
     document.title = "PAC Pro - PAC";
@@ -556,186 +405,43 @@ const PAC = () => {
     return isMonthLocked();
   };
 
-
   useEffect(() => {
-    setProjections(prev =>
-      prev.map(expense => ({
-        ...expense,
-        historicalDollar: "-",
-        historicalPercent: "-"
-      }))
-    );
+    if (!selectedStore || tabIndex !== 0) return;
 
-    setShouldLoadHist(false);
-  }, [month, year]);
-
-  // PAC goal fetch
-  useEffect(() => {
-    const fetchGoal = async () => {
-      if (!selectedStore) return;
+    (async () => {
       try {
-        const monthIdx = months.indexOf(month);
-        const periodId = `${selectedStore}_${year}${String(monthIdx + 1).padStart(2, "0")}`;
-        const periodRef = doc(db, "pac-projections", periodId);
-        const periodSnap = await getDoc(periodRef);
-
-        if (periodSnap.exists() && typeof periodSnap.data()?.pacGoal !== "undefined") {
-          setPacGoal(String(periodSnap.data().pacGoal));
-        } else {
-          setPacGoal(""); // nothing saved yet for this period
-        }
+        const data = await seedProjections(selectedStore, year, month);
+        // { source, pacGoal, rows }
+        setPacGoal(String(data.pacGoal ?? ""));
+        setProjections(Array.isArray(data.rows) ? data.rows : makeEmptyProjectionRows());
       } catch (e) {
-        console.error("PAC goal fetch error", e);
+        console.error("seedProjections error", e);
+        // fallback: keep current projections
       }
-    };
-    if (tabIndex === 0) fetchGoal();
+    })();
   }, [selectedStore, tabIndex, month, year]);
 
 
   useEffect(() => {
-    if (!selectedStore || tabIndex !== 0) return;
-
-    const seedProjected = async () => {
-      const { y: prevY, m: prevM } = getPrevPeriod(year, month);
-      const prevId = `${selectedStore}_${String(prevY)}${pad2(prevM)}`;
-      const snap = await getDoc(doc(db, "pac-projections", prevId));
-      if (!snap.exists()) return;
-
-      const prevRows = Array.isArray(snap.data()?.projections) ? snap.data().projections : [];
-      const SKIP = new Set(["Total Controllable", "P.A.C."]);
-
-      setProjections(prev =>
-        applyAll(
-          prev.map(row => {
-            if (SKIP.has(row.name)) return row;
-            const match = prevRows.find(p => p.name === row.name) || {};
-            return {
-              ...row,
-              projectedDollar: match.projectedDollar ?? "",
-              projectedPercent: match.projectedPercent ?? ""
-            };
-          })
-        )
-      );
-
-      // carry forward last month's pacGoal into current period UI (optional)
-      if (typeof snap.data()?.pacGoal !== "undefined") {
-        setPacGoal(String(snap.data().pacGoal));
-      }
-    };
-
-    seedProjected();
-  }, [selectedStore, tabIndex, month, year]);
-
-  useEffect(() => {
-    if (!selectedStore || tabIndex !== 0) return;
-
-    const seedProjected = async () => {
-      const { y: prevY, m: prevM } = getPrevPeriod(year, month);
-      const prevId = `${selectedStore}_${String(prevY)}${pad2(prevM)}`;
-      const snap = await getDoc(doc(db, "pac-projections", prevId));
-      if (!snap.exists()) return;
-
-      const prevRows = Array.isArray(snap.data()?.projections) ? snap.data().projections : [];
-      const SKIP = new Set(["Total Controllable", "P.A.C."]);
-
-      setProjections(prev =>
-        applyAll(
-          prev.map(row => {
-            if (SKIP.has(row.name)) return row;
-            const match = prevRows.find(p => p.name === row.name) || {};
-            return {
-              ...row,
-              projectedDollar: match.projectedDollar ?? "",
-              projectedPercent: match.projectedPercent ?? ""
-            };
-          })
-        )
-      );
-
-      // carry forward last month's pacGoal into current period UI (optional)
-      if (typeof snap.data()?.pacGoal !== "undefined") {
-        setPacGoal(String(snap.data().pacGoal));
-      }
-    };
-
-    seedProjected();
-  }, [selectedStore, tabIndex, month, year]);
-
-
-  useEffect(() => {
-    // don't run until we know which store/period we're on
     if (!selectedStore) return;
-
     try {
       const raw = localStorage.getItem(draftKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        // Keep your derived totals coherent after hydrating
-        setProjections(applyAll(Array.isArray(parsed) ? parsed : projections));
-        return; // if draft exists, skip any other seeding for this render
-      }
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const toApply = Array.isArray(parsed) ? parsed : projections;
+      (async () => {
+        try {
+          const res = await applyRows(toApply);
+          setProjections(Array.isArray(res.rows) ? res.rows : toApply);
+        } catch {
+          setProjections(toApply);
+        }
+      })();
     } catch (e) {
       console.warn("Failed to read draft from localStorage", e);
     }
-    // If no draft, let your existing server-seeding effect run as-is
   }, [selectedStore, draftKey]);
 
-  // Fetch user data from Firestore
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Get the current user from Firebase Auth
-        const user = auth.currentUser;
-        if (user) {
-          // Query the "users" collection for the current user's data
-          const userQuery = query(
-            collection(db, "users"),
-            where("uid", "==", user.uid)
-          );
-          const userSnapshot = await getDocs(userQuery);
-          if (!userSnapshot.empty) {
-            setUserData(userSnapshot.docs[0].data());
-          }
-        }
-      } catch (error) {
-        console.error("Error loading data from Firestore:", error);
-      }
-    };
-
-    fetchData();
-  }, []);
-
-  // lock previous months/years for non-admins
-  const isMonthDisabled = (monthNumber, selectedYear) => {
-    if (isAdmin) return false;
-
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonthIdx = now.getMonth();
-    const targetIdx = months.indexOf(monthNumber);
-
-    if (targetIdx === -1) return false;
-
-    if (selectedYear < currentYear) return true;
-    if (selectedYear > currentYear) return false;
-    return targetIdx < currentMonthIdx;
-  };
-
-  useEffect(() => {
-    setProjections((prev) =>
-      prev.map((expense) => ({
-        ...expense,
-        historicalDollar: "-",
-        historicalPercent: "-",
-      }))
-    );
-
-    // also reset histMonth/year selection if you want
-    setHistMonth(null);
-    setHistYear(null);
-    setShouldLoadHist(false);
-  }, [month, year]);
 
   // Fetch month lock status when month, year, or store changes
   useEffect(() => {
@@ -745,53 +451,27 @@ const PAC = () => {
 
   useEffect(() => {
     const loadHistoricalData = async () => {
-      if (!selectedStore || !histYear || !histMonth) return;
-
-      const histMonthIdx = months.indexOf(histMonth);
-      const docId = `${selectedStore}_${histYear}${String(histMonthIdx + 1).padStart(2, "0")}`;
-
-      console.log("Fetching historical doc:", docId);
-
-      const ref = doc(db, "pac-projections", docId);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) {
-        console.log("No data for", docId);
-        setShouldLoadHist(false);
-        return;
+      if (!selectedStore || !histYear || !histMonth || tabIndex !== 0) return;
+      try {
+        const res = await fetchHistoricalRows(selectedStore, histYear, histMonth);
+        const histRows = Array.isArray(res.rows) ? res.rows : [];
+        setProjections(prev =>
+          prev.map(expense => {
+            const h = histRows.find(r => r.name === expense.name) || {};
+            return {
+              ...expense,
+              historicalDollar: h.historicalDollar ?? "-",
+              historicalPercent: h.historicalPercent ?? "-",
+            };
+          })
+        );
+      } catch (e) {
+        console.error("historical fetch error", e);
       }
-      const latest = snap.data();
-      console.log("latest data: ", latest);
-
-
-      const hist = expenseList.map(name => {
-        const entry = latest.projections?.find(p => p.name === name) || {};
-        return {
-          name,
-          historicalDollar: entry.projectedDollar || "-",
-          historicalPercent: entry.projectedPercent || "-"
-        };
-      });
-
-      setProjections(prev =>
-        prev.map(expense => {
-          const h = hist.find(e => e.name === expense.name) || {};
-          return {
-            ...expense,
-            historicalDollar: h.historicalDollar || "-",
-            historicalPercent: h.historicalPercent || "-"
-          };
-        })
-      );
-      // lock the banner to what was just loaded
-      setLoadedHistPeriod({ month: histMonth, year: histYear });
-      setShouldLoadHist(false);
     };
+    loadHistoricalData();
+  }, [selectedStore, tabIndex, histMonth, histYear]);
 
-    if (tabIndex === 0 && shouldLoadHist && histMonth && histYear) {
-      loadHistoricalData();
-
-    }
-  }, [tabIndex, selectedStore, month, year]);
 
   const debouncedSave = (next) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -804,131 +484,39 @@ const PAC = () => {
     }, 500);
   };
 
-  useEffect(() => {
-    const loadLatestForPeriod = async () => {
-      if (!selectedStore) return;
 
-      // helpers
-      const pad2 = (n) => String(n).padStart(2, "0");
-      const idFormats = (store, y, m) => ([
-        { col: "pac-projections", id: `${store}_${y}${pad2(m)}` },   // e.g. 82012_202501
-      ]);
-      const get = async (col, id) => getDoc(doc(db, col, id));
+  const handleInputChange = async (index, field, value) => {
+    // Start from current state snapshot
+    const np = projections.map(r => ({ ...r }));
+    np[index][field] = value;
 
-      const mIdx = months.indexOf(histMonth)
-      const currY = histYear;
-      const currM = mIdx + 1;
-
-      // prev month calc
-      const prevDate = new Date(currY, mIdx - 1, 1);
-      const prevY = prevDate.getFullYear();
-      const prevM = prevDate.getMonth() + 1;
-
-      const normalizeName = (name) => {
-        if (!name) return name;
-        const map = {
-          "Sales": "Product Sales",
-          "Misc: CR/TR/D&S": "Misc: CR/TR/D&S",
-        };
-        return map[name] || name;
-      };
-
-
-      const SKIP = new Set(["Total Controllable", "P.A.C."]);
-
-      const applyFromDoc = (data, tag) => {
-        const rows = Array.isArray(data?.projections) ? data.projections : [];
-        console.log(`[PAC] applying ${rows.length} projections from ${tag}`);
-        setProjections(prev =>
-          prev.map(row => {
-            if (SKIP.has(row.name)) return row;
-            const match = rows.find(p => normalizeName(p.name) === row.name);
-            if (!match) return row;
-            return {
-              ...row,
-              historicalDollar: Number(match.projectedDollar) || 0,
-              historicalPercent: Number(match.projectedPercent) || 0,
-            };
-          })
-        );
-      };
-
-      // 1) Try current month in both places
-      for (const f of idFormats(selectedStore, currY, currM)) {
-        const snap = await get(f.col, f.id);
-        if (snap.exists()) {
-          const data = snap.data();
-          const has = Array.isArray(data?.projections) && data.projections.length > 0;
-          console.log("[PAC] found current:", f.col, f.id, "has projections:", has);
-          if (has) {
-            applyFromDoc(data, `current ${f.col}/${f.id}`);
-            return;
-          }
-        } else {
-          console.log("[PAC] no current:", f.col, f.id);
-        }
-      }
-
-      // 2) Seed from previous month in both places
-      for (const f of idFormats(selectedStore, prevY, prevM)) {
-        const snap = await get(f.col, f.id);
-        if (snap.exists()) {
-          const data = snap.data();
-          const has = Array.isArray(data?.projections) && data.projections.length > 0;
-          console.log("[PAC] found previous:", f.col, f.id, "has projections:", has);
-          if (has) {
-            applyFromDoc(data, `previous ${f.col}/${f.id}`);
-            return;
-          }
-        } else {
-          console.log("[PAC] no previous:", f.col, f.id);
-        }
-      }
-
-      console.log("[PAC] nothing to load/seed");
-    };
-
-    if (tabIndex === 0) loadLatestForPeriod();
-  }, [histMonth, histYear, tabIndex, selectedStore, months]);
-
-  const handleInputChange = (index, field, value) => {
-    setProjections((prev) => {
-      const np = [...prev];
-      np[index][field] = value;
-
-
-      // dependent calcs
-      const crewLabor = parseFloat(np.find((e) => e.name === "Crew Labor")?.projectedDollar) || 0;
-      const managementLabor = parseFloat(np.find((e) => e.name === "Management Labor")?.projectedDollar) || 0;
-      const payrollTaxPercent = parseFloat(np.find((e) => e.name === "Payroll Tax")?.projectedPercent) || 0;
-      const allNetSales = parseFloat(np.find((e) => e.name === "All Net Sales")?.projectedDollar) || 0;
-      const advertisingPercent = parseFloat(np.find((e) => e.name === "Advertising")?.projectedPercent) || 0;
-
-
-      np.forEach((expense, idx) => {
-        const historicalDollar = parseFloat(expense.historicalDollar) || 0;
-        const historicalPercent = parseFloat(expense.historicalPercent) || 0;
-        const projectedDollar = parseFloat(expense.projectedDollar) || 0;
-        const projectedPercent = parseFloat(expense.projectedPercent) || 0;
-
-
-        if (expense.name === "Payroll Tax") {
-          np[idx].projectedDollar = ((crewLabor + managementLabor) * (payrollTaxPercent / 100)).toFixed(2);
-        }
-        if (expense.name === "Advertising") {
-          np[idx].projectedDollar = (allNetSales * (advertisingPercent / 100)).toFixed(2);
-        }
-
-
-        np[idx].estimatedDollar = ((projectedDollar + historicalDollar) / 2).toFixed(2);
-        np[idx].estimatedPercent = ((projectedPercent + historicalPercent) / 2).toFixed(2);
-      });
-
-
-      const applied = applyAll(np);
-      debouncedSave(applied);
-      return applied;
+    // Recompute simple local estimates you still want to show immediately (optional)
+    const crewLabor$ = parseFloat(np.find(e => e.name === "Crew Labor")?.projectedDollar) || 0;
+    const mgmtLabor$ = parseFloat(np.find(e => e.name === "Management Labor")?.projectedDollar) || 0;
+    const payrollTaxPct = parseFloat(np.find(e => e.name === "Payroll Tax")?.projectedPercent) || 0;
+    const ans$ = parseFloat(np.find(e => e.name === "All Net Sales")?.projectedDollar) || 0;
+    const advPct = parseFloat(np.find(e => e.name === "Advertising")?.projectedPercent) || 0;
+    np.forEach((row, idx) => {
+      const hist$ = parseFloat(row.historicalDollar) || 0;
+      const histPct = parseFloat(row.historicalPercent) || 0;
+      const proj$ = parseFloat(row.projectedDollar) || 0;
+      const projPct = parseFloat(row.projectedPercent) || 0;
+      if (row.name === "Payroll Tax") np[idx].projectedDollar = ((crewLabor$ + mgmtLabor$) * (payrollTaxPct / 100)).toFixed(2);
+      if (row.name === "Advertising") np[idx].projectedDollar = (ans$ * (advPct / 100)).toFixed(2);
+      np[idx].estimatedDollar = ((proj$ + hist$) / 2).toFixed(2);
+      np[idx].estimatedPercent = ((projPct + histPct) / 2).toFixed(2);
     });
+
+    try {
+      const res = await applyRows(np);            // backend does the authoritative math
+      const applied = Array.isArray(res.rows) ? res.rows : np;
+      setProjections(applied);
+      debouncedSave(applied);
+    } catch (e) {
+      console.error("applyRows error (fallback to local rows)", e);
+      setProjections(np);
+      debouncedSave(np);
+    }
   };
 
   const handleApply = async () => {
@@ -954,17 +542,18 @@ const PAC = () => {
     )}`;
 
     try {
-      await setDoc(doc(db, "pac-projections", docId), {
-        store_id: selectedStore,
-        year_month: `${year}${String(monthIndex + 1).padStart(2, "0")}`,
-        pacGoal: Number(pacGoal) || 0,
-        projections: projections.map(p => ({
+      await saveProjections(
+        selectedStore,
+        year,
+        month,
+        pacGoal,
+        projections.map(p => ({
           name: p.name,
-          projectedDollar: Number (p.projectedDollar),
-          projectedPercent: Number (p.projectedPercent),
-        })),
-        updatedAt: serverTimestamp(),
-      });
+          projectedDollar: Number(p.projectedDollar) || 0,
+          projectedPercent: Number(p.projectedPercent) || 0,
+        }))
+      );
+
 
       // clear the refresh-proof draft now that the source of truth is saved
       localStorage.removeItem(draftKey);
@@ -1018,26 +607,6 @@ const PAC = () => {
       'Utilities', 'Office', 'Cash +/-', 'Crew Relations', 'Training']
   };
 
-  // Calculate category sums
-  const calculateCategorySums = (data, type) => {
-    const sums = {};
-    for (const [category, items] of Object.entries(categories)) {
-      sums[category] = items.reduce((acc, item) => {
-        const expense = data.find(e => e.name === item);
-        if (expense) {
-          const dollar = parseFloat(expense[`${type}Dollar`]) || 0;
-          const percent = parseFloat(expense[`${type}Percent`]) || 0;
-          return {
-            dollar: acc.dollar + dollar,
-            percent: acc.percent + percent
-          };
-        }
-        return acc;
-      }, { dollar: 0, percent: 0 });
-    }
-    return sums;
-  };
-
   // Helper functions
   const getCategory = (expense) => {
     const input = expense.toLowerCase();
@@ -1059,189 +628,140 @@ const PAC = () => {
     return colors[category] || "#ffffff";
   };
 
-  const getProductSales = () => {
-    const productSales = projections.find(e => e.name === 'Product Sales');
-    return parseFloat(productSales?.historicalDollar) || 0;
-  };
+  // this function saves all the user input data from the generate page via backend
+  const handleGenerate = async (e) => {
+    // Check if current month is locked 
+    if (isCurrentPeriodLocked()) {
+      alert("This month is locked and cannot be modified.");
+      return;
+    }
 
-  const calculateTotalControllable = (type) => {
-    let total = 0;
-    ["Food & Paper", "Labor", "Purchases"].forEach((category) => {
-      categories[category].forEach((item) => {
-        const expense = projections.find((e) => e.name === item);
-        if (expense) {
-          total += parseFloat(expense[`${type}Dollar`]) || 0;
-        }
-      });
-    });
-    return total;
-  };
-// this function saves all the user input data from the generate page via backend
-const handleGenerate = async (e) => {
-  // Check if current month is locked 
-  if (isCurrentPeriodLocked()) {
-    alert("This month is locked and cannot be modified.");
-    return;
-  }
+    if (
+      !productNetSales ||
+      !cash ||
+      !promo ||
+      !allNetSales ||
+      !advertising ||
+      !crewLabor ||
+      !totalLabor ||
+      !payrollTax ||
+      !completeWaste ||
+      !rawWaste ||
+      !condiment ||
+      !variance ||
+      !unexplained ||
+      !discounts ||
+      !baseFood ||
+      !startingFood ||
+      !startingCondiment ||
+      !startingPaper ||
+      !startingNonProduct ||
+      !startingOpsSupplies ||
+      !endingFood ||
+      !endingCondiment ||
+      !endingPaper ||
+      !endingNonProduct ||
+      !endingOpsSupplies
+    ) {
+      alert("You must fill out all fields before submitting.");
+      return;
+    }
 
-  if (
-    !productNetSales ||
-    !cash ||
-    !promo ||
-    !allNetSales ||
-    !advertising ||
-    !crewLabor ||
-    !totalLabor ||
-    !payrollTax ||
-    !completeWaste ||
-    !rawWaste ||
-    !condiment ||
-    !variance ||
-    !unexplained ||
-    !discounts ||
-    !baseFood ||
-    !startingFood ||
-    !startingCondiment ||
-    !startingPaper ||
-    !startingNonProduct ||
-    !startingOpsSupplies ||
-    !endingFood ||
-    !endingCondiment ||
-    !endingPaper ||
-    !endingNonProduct ||
-    !endingOpsSupplies
-  ) {
-    alert("You must fill out all fields before submitting.");
-    return;
-  }
-
-  try {
-    const monthIndex = [
-      "January","February","March","April","May","June",
-      "July","August","September","October","November","December"
-    ].indexOf(month);
-    const period = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-    const payload = {
-      storeId: selectedStore,
-      month,
-      year,
-      period,
-
-      // Sales
-      productNetSales: parseFloat(productNetSales),
-      cash: parseFloat(cash),
-      promo: parseFloat(promo),
-      allNetSales: parseFloat(allNetSales),
-      advertising: parseFloat(advertising),
-
-      // Labor
-      crewLabor: parseFloat(crewLabor),
-      totalLabor: parseFloat(totalLabor),
-      payrollTax: parseFloat(payrollTax),
-
-      // Food
-      completeWaste: parseFloat(completeWaste),
-      rawWaste: parseFloat(rawWaste),
-      condiment: parseFloat(condiment),
-      variance: parseFloat(variance),
-      unexplained: parseFloat(unexplained),
-      discounts: parseFloat(discounts),
-      baseFood: parseFloat(baseFood),
-
-      // Starting inventory
-      startingFood: parseFloat(startingFood),
-      startingCondiment: parseFloat(startingCondiment),
-      startingPaper: parseFloat(startingPaper),
-      startingNonProduct: parseFloat(startingNonProduct),
-      startingOpsSupplies: parseFloat(startingOpsSupplies),
-
-      // Ending inventory
-      endingFood: parseFloat(endingFood),
-      endingCondiment: parseFloat(endingCondiment),
-      endingPaper: parseFloat(endingPaper),
-      endingNonProduct: parseFloat(endingNonProduct),
-      endingOpsSupplies: parseFloat(endingOpsSupplies),
-    };
-
-    await api("/api/pac/generate", { method: "POST", body: payload });
-
-    await addDoc(pacGenRef, {
-      Month: month,
-      Year: year,
-      Period: period,
-      createdAt: serverTimestamp(),
-
-      ProductNetSales: parseFloat(productNetSales),
-      Cash: parseFloat(cash),
-      Promo: parseFloat(promo),
-      AllNetSales: parseFloat(allNetSales),
-      Advertising: parseFloat(advertising),
-
-      CrewLabor: parseFloat(crewLabor),
-      TotalLabor: parseFloat(totalLabor),
-      PayrollTax: parseFloat(payrollTax),
-
-      CompleteWaste: parseFloat(completeWaste),
-      RawWaste: parseFloat(rawWaste),
-      Condiment: parseFloat(condiment),
-      Variance: parseFloat(variance),
-      Unexplained: parseFloat(unexplained),
-      Discounts: parseFloat(discounts),
-      BaseFood: parseFloat(baseFood),
-
-      StartingFood: parseFloat(startingFood),
-      StartingCondiment: parseFloat(startingCondiment),
-      StartingPaper: parseFloat(startingPaper),
-      StartingNonProduct: parseFloat(startingNonProduct),
-      StartingOpsSupplies: parseFloat(startingOpsSupplies),
-
-      EndingFood: parseFloat(endingFood),
-      EndingCondiment: parseFloat(endingCondiment),
-      EndingPaper: parseFloat(endingPaper),
-      EndingNonProduct: parseFloat(endingNonProduct),
-      EndingOpsSupplies: parseFloat(endingOpsSupplies),
-    });
-
-    alert("Report generated successfully.");
-
-    const auth = getAuth();
-    const currentUser = auth.currentUser;
-
-    const generatorUser =
-      userData && userData.firstName
-        ? userData
-        : currentUser
-        ? {
-            firstName: currentUser.displayName?.split(" ")[0] || "Someone",
-            lastName: currentUser.displayName?.split(" ")[1] || "",
-            email: currentUser.email,
-          }
-        : { firstName: "Someone", lastName: "", email: "" };
-
-    await fetch("http://localhost:5140/api/pac/notifications/send", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      event: "PAC Generate",
-      context: {
-        firstName: generatorUser.firstName || "Someone",
-        store: selectedStore,
+    try {
+      const monthIndex = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      ].indexOf(month);
+      const period = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+      const payload = {
+        storeId: selectedStore,
         month,
         year,
-      },
-    }),
-  });
+        period,
 
+        // Sales
+        productNetSales: parseFloat(productNetSales),
+        cash: parseFloat(cash),
+        promo: parseFloat(promo),
+        allNetSales: parseFloat(allNetSales),
+        advertising: parseFloat(advertising),
 
-    await fetchMonthLockStatus();
-    await fetchLockedMonths();
-  } catch (error) {
-    console.error("Error saving report:", error);
-    alert("Failed to generate.");
-  }
-};
+        // Labor
+        crewLabor: parseFloat(crewLabor),
+        totalLabor: parseFloat(totalLabor),
+        payrollTax: parseFloat(payrollTax),
+
+        // Food
+        completeWaste: parseFloat(completeWaste),
+        rawWaste: parseFloat(rawWaste),
+        condiment: parseFloat(condiment),
+        variance: parseFloat(variance),
+        unexplained: parseFloat(unexplained),
+        discounts: parseFloat(discounts),
+        baseFood: parseFloat(baseFood),
+
+        // Starting inventory
+        startingFood: parseFloat(startingFood),
+        startingCondiment: parseFloat(startingCondiment),
+        startingPaper: parseFloat(startingPaper),
+        startingNonProduct: parseFloat(startingNonProduct),
+        startingOpsSupplies: parseFloat(startingOpsSupplies),
+
+        // Ending inventory
+        endingFood: parseFloat(endingFood),
+        endingCondiment: parseFloat(endingCondiment),
+        endingPaper: parseFloat(endingPaper),
+        endingNonProduct: parseFloat(endingNonProduct),
+        endingOpsSupplies: parseFloat(endingOpsSupplies),
+      };
+
+      await api("/api/pac/generate", { method: "POST", body: payload });
+
+      await addDoc(pacGenRef, {
+        Month: month,
+        Year: year,
+        Period: period,
+        createdAt: serverTimestamp(),
+
+        ProductNetSales: parseFloat(productNetSales),
+        Cash: parseFloat(cash),
+        Promo: parseFloat(promo),
+        AllNetSales: parseFloat(allNetSales),
+        Advertising: parseFloat(advertising),
+
+        CrewLabor: parseFloat(crewLabor),
+        TotalLabor: parseFloat(totalLabor),
+        PayrollTax: parseFloat(payrollTax),
+
+        CompleteWaste: parseFloat(completeWaste),
+        RawWaste: parseFloat(rawWaste),
+        Condiment: parseFloat(condiment),
+        Variance: parseFloat(variance),
+        Unexplained: parseFloat(unexplained),
+        Discounts: parseFloat(discounts),
+        BaseFood: parseFloat(baseFood),
+
+        StartingFood: parseFloat(startingFood),
+        StartingCondiment: parseFloat(startingCondiment),
+        StartingPaper: parseFloat(startingPaper),
+        StartingNonProduct: parseFloat(startingNonProduct),
+        StartingOpsSupplies: parseFloat(startingOpsSupplies),
+
+        EndingFood: parseFloat(endingFood),
+        EndingCondiment: parseFloat(endingCondiment),
+        EndingPaper: parseFloat(endingPaper),
+        EndingNonProduct: parseFloat(endingNonProduct),
+        EndingOpsSupplies: parseFloat(endingOpsSupplies),
+      });
+
+      alert("Report generated successfully.");
+      await fetchMonthLockStatus();
+      await fetchLockedMonths();
+    } catch (error) {
+      console.error("Error saving report:", error);
+      alert("Failed to generate.");
+    }
+  };
 
   // ----- PAC submit gating -----
   const goalNumeric = Number(pacGoal);
@@ -1251,10 +771,7 @@ const handleGenerate = async (e) => {
     projections.find(r => r.name === "P.A.C.")?.projectedDollar
   ) || 0;
 
-  // compare to 2 decimals to avoid tiny float noise
-  const pacEqual = hasGoal
-    ? projectedPacDollar.toFixed(2) === goalNumeric.toFixed(2)
-    : true; // if no goal set, don't block
+  const pacEqual = Math.abs(pacGoal - projectedPacDollar) <= 1;
 
   const pacBelow = hasGoal && projectedPacDollar < goalNumeric - 1e-9;
   const pacMismatch = hasGoal && !pacEqual;  // includes below OR above
@@ -1396,7 +913,7 @@ const handleGenerate = async (e) => {
                             backgroundColor: "background.paper",
                           }}
                         >
-                          {fmtUsd(pacGoal)}
+                          {fmtPercent(pacGoal)}
                         </Box>
                       )}
 
@@ -1413,7 +930,7 @@ const handleGenerate = async (e) => {
                               backgroundColor: "background.paper",
                             }}
                           >
-                            {fmtUsd(pacGoal)}
+                            {fmtPercent(pacGoal)}
                           </Box>
 
                           {/* Change button only if current/future period */}
@@ -1452,11 +969,11 @@ const handleGenerate = async (e) => {
                               const monthIdx = months.indexOf(month);
                               const periodId = `${selectedStore}_${year}${String(monthIdx + 1).padStart(2, "0")}`;
 
-                              await setDoc(
-                                doc(db, "pac-projections", periodId),
-                                { pacGoal: numericGoal, updatedAt: serverTimestamp() },
-                                { merge: true }
-                              );
+                              await saveProjections(selectedStore, year, month, numericGoal, projections.map(p => ({
+                                name: p.name,
+                                projectedDollar: Number(p.projectedDollar) || 0,
+                                projectedPercent: Number(p.projectedPercent) || 0,
+                              })));
 
                               setEditingGoal(false);
                             }}
@@ -1488,7 +1005,7 @@ const handleGenerate = async (e) => {
                       {/* Month */}
                       <Select
                         value={histMonth}
-                        onChange={(e) => setHistMonth(e.target.value)}
+                        onChange={(e) => { setHistMonth(e.target.value); }}
                         size="small"
                         sx={{ width: 150, backgroundColor: "background.paper" }}
                       >

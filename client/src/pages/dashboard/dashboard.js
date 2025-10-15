@@ -1,10 +1,15 @@
 import React, { useContext, useEffect, useState } from "react";
-import { Box, Container, Grid2 as Grid, Paper, Skeleton } from "@mui/material";
+import { Box, Grid2 as Grid, Paper, Skeleton, Typography, IconButton, Stack, List, ListItem, ListItemText, Chip, Button } from "@mui/material";
+import { ArrowBackIosNew, ArrowForwardIos } from '@mui/icons-material'; 
 import { Bar, Line } from "react-chartjs-2";
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, BarElement, LineElement, Title, Tooltip, Legend } from "chart.js";
+import EventIcon from '@mui/icons-material/Event';
+import { useNavigate } from 'react-router-dom';
 import './dashboard.css';
-import { auth } from "../../config/firebase-config";
+import { auth, db } from "../../config/firebase-config";
+import { collection, query, orderBy, getDocs, where } from "firebase/firestore";
 import { StoreContext } from "../../context/storeContext"; // Save for future
+import { useAuth } from "../../context/AuthContext";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, BarElement, LineElement, Title, Tooltip, Legend); 
 
@@ -35,6 +40,10 @@ const Dashboard = () => {
   const [totalSalesData, setTotalSalesData] = useState(null);
   const [budgetData, setBudgetData] = useState(null);
   const [pacData, setPACData] = useState(null);
+  const [deadlines, setDeadlines] = useState([]);
+  const [loadingDeadlines, setLoadingDeadlines] = useState(true);
+
+  const navigate = useNavigate();
 
   // Fetch .json file data.
   useEffect(() => {
@@ -52,6 +61,44 @@ const Dashboard = () => {
     }
 
     fetchData();
+  }, []);
+
+  // Fetch deadlines
+  useEffect(() => {
+    const fetchDeadlines = async () => {
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayStr = today.toISOString().split('T')[0];
+
+        const deadlinesQuery = query(
+          collection(db, 'deadlines'),
+          where('dueDate', '>=', todayStr),
+          orderBy('dueDate', 'asc')
+        );
+        const snapshot = await getDocs(deadlinesQuery);
+        const deadlinesList = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        // Only show upcoming deadlines (next 30 days)
+        const thirtyDaysFromNow = new Date();
+        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+        const filtered = deadlinesList.filter(d => {
+          const dueDate = new Date(d.dueDate);
+          return dueDate <= thirtyDaysFromNow;
+        });
+        
+        setDeadlines(filtered.slice(0, 5)); // Show max 5 deadlines
+      } catch (error) {
+        console.error('Error fetching deadlines:', error);
+      } finally {
+        setLoadingDeadlines(false);
+      }
+    };
+
+    fetchDeadlines();
   }, []);
 
   // Fetch from database
@@ -144,8 +191,8 @@ const Dashboard = () => {
       monthlySalesData[i] = 1;
     }
 
-    const includeYear = (startMonth == 12 || startMonth == 1) ? "yes" : "no";
-    monthlySalesLabels[i] =  months[startMonth - 1] + ((includeYear == "yes") ? " '" + (startYear).toString().substring(2) : "");
+    const includeYear = (startMonth === 12 || startMonth === 1) ? "yes" : "no";
+    monthlySalesLabels[i] =  months[startMonth - 1] + ((includeYear === "yes") ? " '" + (startYear).toString().substring(2) : "");
     startMonth += 1;
     if (startMonth > 12)
     {
@@ -368,16 +415,282 @@ const Dashboard = () => {
   
     return <Bar data = {data} options = {option} />;
   };
+
+  const getDaysUntil = (dateString) => {
+    if (!dateString) return null;
+    const deadline = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    deadline.setHours(0, 0, 0, 0);
+    const diffTime = deadline - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const getDeadlineStatus = (dateString) => {
+    const days = getDaysUntil(dateString);
+    if (days === null) return { label: 'Unknown', color: 'default' };
+    if (days < 0) return { label: 'Overdue', color: 'error' };
+    if (days === 0) return { label: 'Today', color: 'error' };
+    if (days <= 3) return { label: `${days} days`, color: 'warning' };
+    if (days <= 7) return { label: `${days} days`, color: 'info' };
+    return { label: `${days} days`, color: 'success' };
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric'
+    });
+  };
+
+  const DeadlinesWidget = () => {
+    if (loadingDeadlines) {
+      return <Skeleton variant="rectangular" animation="wave" height={'100%'} />;
+    }
+
+    if (deadlines.length === 0) {
+      return (
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          height: '100%',
+          textAlign: 'center',
+          py: 4
+        }}>
+          <EventIcon sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
+          <Typography variant="h6" color="text.secondary" gutterBottom>
+            No Upcoming Deadlines
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            All deadlines are complete or none are set
+          </Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <Box>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          mb: 2
+        }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Upcoming Deadlines
+          </Typography>
+          <Button 
+            size="small" 
+            onClick={() => navigate('/navi/settings/deadline-management')}
+          >
+            View All
+          </Button>
+        </Box>
+        <List sx={{ pt: 0 }}>
+          {deadlines.map((deadline) => {
+            const status = getDeadlineStatus(deadline.dueDate);
+            return (
+              <ListItem 
+                key={deadline.id}
+                sx={{ 
+                  px: 0,
+                  borderBottom: '1px solid',
+                  borderColor: 'divider',
+                  '&:last-child': { borderBottom: 'none' }
+                }}
+              >
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="body1" fontWeight={500}>
+                        {deadline.title}
+                      </Typography>
+                      <Chip
+                        label={deadline.type?.toUpperCase()}
+                        size="small"
+                        color={
+                          deadline.type === 'pac' ? 'primary' :
+                          deadline.type === 'invoice' ? 'success' :
+                          'warning'
+                        }
+                        sx={{ height: 20, fontSize: '0.7rem' }}
+                      />
+                    </Box>
+                  }
+                  secondary={
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {formatDate(deadline.dueDate)}
+                      </Typography>
+                      <Chip
+                        label={status.label}
+                        size="small"
+                        color={status.color}
+                        sx={{ height: 20, fontSize: '0.7rem' }}
+                      />
+                    </Box>
+                  }
+                />
+              </ListItem>
+            );
+          })}
+        </List>
+      </Box>
+    );
+  };
   
+  const AnnouncementAutoScroll = () => {
+    const [scrollIndex, setScrollIndex] = useState(0);
+    const [announcements, setAnnouncements] = useState([]);
+    const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
+    const [fetching, setFetching] = useState(false);
+    const [loadedAnnouncements, setLoadedAnnouncements] = useState(false);
+
+    const { userRole } = useAuth();
+
+    const fetchAnnouncements = async () => {
+      setLoadingAnnouncements(true);
+      try {
+        const res = await fetch(`http://localhost:5140/api/pac/announcements?role=${userRole}`);
+        const data = await res.json();
+        setAnnouncements(data);
+        setScrollIndex(0);
+      } catch (err) {
+        console.error("Error fetching announcements:", err);
+      } finally {
+        setLoadingAnnouncements(false);
+        setLoadedAnnouncements(true);
+      }
+    };
+
+    useEffect(() => {
+      if (fetching || loadedAnnouncements) return;
+
+      fetchAnnouncements();
+      setFetching(true);
+
+      const timer = setTimeout(() => {
+        setFetching(false);
+      }, 1000);
+
+      const timer2 = setTimeout(() => {
+        setLoadedAnnouncements(false);
+      }, 1000000);
+
+      return () => clearTimeout(timer);  
+    }, []);
+
+    const nextA = () => {
+      setScrollIndex(prev => (prev + 1) % announcements.length);
+    };
+
+    const prevA = () => {
+      setScrollIndex(prev => (prev - 1 + announcements.length) % announcements.length);
+    };
+
+    return (
+      <Paper
+      elevation={3}
+      sx={{
+        minHeight: 100,
+        height: 'auto',
+        overflow: 'hidden',
+        position: 'relative',
+        backgroundColor: '#ffffffff',
+        padding: 1,
+      }}
+    >
+      <Typography
+        variant="subtitle1"
+        sx={{
+          position: 'absolute',
+          top: 4,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          fontWeight: 'bold',
+          color: 'text.primary',
+        }}
+      >
+        Announcements
+      </Typography>
+      
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1 }}>
+        <IconButton onClick={prevA}>
+          <ArrowBackIosNew fontSize="small" />
+        </IconButton>
+
+        <Box
+          sx={{
+            flexGrow: 1,
+            height: 60,
+            overflow: 'hidden',
+            position: 'relative',
+          }}
+        >
+          <Box>
+            {loadingAnnouncements
+              ? "Loading announcements..."
+              : announcements.length > 0 ? (
+              <Box>
+                <Typography>
+
+                </Typography>
+                <Typography variant="h6" gutterBottom>
+                  {announcements[scrollIndex].title}
+                </Typography>
+                <Typography variant="body1" color="text.secondary">
+                  {announcements[scrollIndex].message}
+                </Typography>
+              </Box>
+            ) : (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ textAlign: "center", py: 4 }}
+              >
+                No announcements.
+              </Typography>
+            )
+            }
+          </Box>
+        </Box>
+
+        <IconButton onClick={nextA}>
+          <ArrowForwardIos fontSize="small" />
+        </IconButton>
+      </Stack>
+
+      {announcements.length > 0 && (
+        <Typography
+          variant="caption"
+          sx={{
+            position: 'absolute',
+            bottom: 4,
+            left: '50%',
+            color: 'text.secondary',
+          }}
+        >
+          {scrollIndex + 1} / {announcements.length}
+        </Typography>
+      )}
+    </Paper>
+    );
+  };
+
   return (
     <Box sx={{flexGrow: 1}}>
-      <Container sx={{ gridArea: 'header', textAlign: "center" }}>
-        <h1 className="Header">Welcome back</h1>
-      </Container>
       <Grid container spacing={3} columns={{ xs: 6, sm: 12, md: 12}} sx={{ padding: 2, height: '75vh'}}>
+        <Grid size = {12}>
+          <AnnouncementAutoScroll />
+        </Grid>
         <Grid size = {6}>
           <Paper sx={{ padding: 2, minHeight: '35vh' }}>
-            { /* Placeholder */ }
+            <DeadlinesWidget />
           </Paper>
         </Grid>
         <Grid size = {6}>

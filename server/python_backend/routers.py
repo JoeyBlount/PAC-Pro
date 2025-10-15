@@ -12,10 +12,38 @@ from models import PacCalculationResult, PacInputData
 from services.pac_calculation_service import PacCalculationService
 from services.data_ingestion_service import DataIngestionService
 from services.account_mapping_service import AccountMappingService
+from services.proj_calculation_service import (
+    ProjCalculationService,
+    get_proj_calculation_service,
+)
 from services.invoice_reader import InvoiceReader
 from services.invoice_submit import InvoiceSubmitService
 from services.user_management_service import UserManagementService
 import logging
+
+from pydantic import BaseModel
+from typing import Any, Dict, List
+
+class ProjectionsSeedIn(BaseModel):
+    store_id: str
+    year: int
+    month_index_1: int
+
+class ProjectionsSaveIn(BaseModel):
+    store_id: str
+    year: int
+    month_index_1: int
+    pacGoal: float
+    projections: List[Dict[str, Any]]
+
+class ApplyRowsIn(BaseModel):
+    rows: List[Dict[str, Any]]
+
+class HistoricalIn(BaseModel):
+    store_id: str
+    year: int
+    month_index_1: int
+
 
 
 # ---------------------------
@@ -317,7 +345,7 @@ async def health_check() -> Dict[str, str]:
 async def read_invoice(
     image: UploadFile = File(...),
     reader: InvoiceReader = Depends(get_invoice_reader),
-    _auth: Dict[str, Any] = Depends(require_roles(["ADMIN", "ACCOUNTANT"])),
+    _auth: Dict[str, Any] = Depends(require_roles(["Admin", "Accountant"])),
 ) -> Dict[str, Any]:
     """
     Read invoice image using OpenAI Vision API via the InvoiceReader service.
@@ -455,6 +483,39 @@ async def submit_invoice(
         raise HTTPException(
             status_code=500, detail=f"Error submitting invoice: {str(e)}"
         )
+    
+@router.post("/projections/seed")
+async def seed_projections(
+    payload: ProjectionsSeedIn,
+    svc: ProjCalculationService = Depends(get_proj_calculation_service),
+):
+    return await svc.seed_projections(payload.store_id, payload.year, payload.month_index_1)
+
+@router.post("/projections/save")
+async def save_projections(
+    payload: ProjectionsSaveIn,
+    svc: ProjCalculationService = Depends(get_proj_calculation_service),
+):
+    await svc.save_projections(
+        payload.store_id, payload.year, payload.month_index_1, payload.pacGoal, payload.projections
+    )
+    return {"ok": True}
+
+@router.post("/apply")
+async def apply_projections_math(
+    payload: ApplyRowsIn,
+    svc: ProjCalculationService = Depends(get_proj_calculation_service),
+):
+    applied = svc.apply_all(payload.rows)
+    return {"rows": applied}
+
+@router.post("/historical")
+async def get_historical_rows(
+    payload: HistoricalIn,
+    svc: ProjCalculationService = Depends(get_proj_calculation_service),
+):
+    rows = await svc.load_historical_rows(payload.store_id, payload.year, payload.month_index_1)
+    return {"rows": rows}
 
 
 @router.get("/projections/{entity_id}/{year_month}")
@@ -488,7 +549,7 @@ async def get_pac_projections(
     try:
         db = firestore.client()
         doc_id = f"{entity_id}_{year_month}"
-        doc_ref = db.collection("pac_projections").document(doc_id)
+        doc_ref = db.collection("pac-projections").document(doc_id)
         doc = doc_ref.get()
 
         if not doc.exists:
@@ -609,7 +670,7 @@ async def get_chart_years_sales(entity_id: str, year_month: str):
 
     try:
         db = firestore.client()
-        doc_ref = db.collection("pac_projections")
+        doc_ref = db.collection("pac-projections")
         docs = doc_ref.stream()
 
         totalSales = []
@@ -648,7 +709,7 @@ async def get_chart_budget_and_spending(entity_id: str, year_month: str):
     try:
         db = firestore.client()
         doc_id = f"{entity_id}_{year_month}"
-        doc_ref = db.collection("pac_projections").document(doc_id)
+        doc_ref = db.collection("pac-projections").document(doc_id)
         doc = doc_ref.get()
 
         budgetSpending = []
@@ -743,7 +804,7 @@ async def get_chart_PAC_and_projection(entity_id: str, year_month: str):
 
     try:
         db = firestore.client()
-        doc_ref = db.collection("pac_projections")
+        doc_ref = db.collection("pac-projections")
         docs = doc_ref.stream()
 
         pacAndProjections = []
@@ -1087,88 +1148,99 @@ async def get_all_locked_months(store_id: str) -> Dict[str, Any]:
         logger.error(f"Error getting locked months: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting locked months: {str(e)}")
 
+class Announcement(BaseModel):
+    id: Optional[str] = None
+    title: str
+    message: str
+    visible_to: str
 
-
-
-# ---------------------------
-# Notification Routes
-# ---------------------------
-from datetime import datetime
-
-@router.post("/notifications/send")
-async def send_notification(
-    request: Request,
-):
-    """
-    Send role-based notifications for specific events (Invoice Edit/Delete/Lock Month/Unlock Month/etc.)
-    Expects:
-        {
-            "event": "Invoice Edit",
-            "context": {
-                "firstName": "John",
-                "invoiceNumber": "12345",
-                "companyName": "Example Inc"
-            }
-        }
-    """
+@router.get("/announcements", response_model=List[Announcement])
+async def getAnnouncements(role: Optional[str] = Query("All")):    
     try:
         import firebase_admin
         from firebase_admin import firestore
         if not firebase_admin._apps:
             raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
 
+    try:
         db = firestore.client()
-        body = await request.json()
-        event = body.get("event")
-        context = body.get("context", {})
+        collection = db.collection("announcements")
+        docs = collection.stream()
 
-        # Get settings from Firestore
-        settings_ref = db.collection("settings").document("notifications")
-        settings_doc = settings_ref.get()
-        if not settings_doc.exists:
-            raise HTTPException(status_code=404, detail="Notification settings not found")
+        results = []
 
-        settings = settings_doc.to_dict()
-        event_data = settings.get(event)
-        if not event_data or not event_data.get("enabled"):
-            return {"success": False, "message": f"Notification '{event}' is disabled."}
+        for doc in docs:
+           data = doc.to_dict()
+           if data.get("visible_to") == "All" or data.get("visible_to") == role:
+               data["id"] = doc.id
+               results.append(data)
 
-        roles = event_data.get("roles", [])
-        if not roles:
-            raise HTTPException(status_code=400, detail=f"No roles configured for '{event}'")
-
-        # Get users by role
-        users_ref = db.collection("users").where("role", "in", roles)
-        users = users_ref.stream()
-
-        message_template = {
-            "Invoice Edit": "{firstName} edited invoice #{invoiceNumber} for {companyName}.",
-            "Invoice Deletion": "{firstName} deleted invoice #{invoiceNumber} for {companyName}.",
-            "Generate Submission": "{firstName} generated PAC data for {storeName}.",
-            "Projections Submission": "{firstName} submitted projections for {storeName}.",
-            "Locking Month": "{firstName} locked {month} {year} for {storeName}.",
-            "Unlocking Month": "{firstName} unlocked {month} {year} for {storeName}.",
-        }.get(event, "{firstName} triggered {event}")
-
-        # Send notifications
-        count = 0
-        for user in users:
-            data = user.to_dict()
-            msg = message_template.format(**context, event=event)
-            db.collection("notifications").add({
-                "title": event,
-                "message": msg,
-                "toEmail": data.get("email"),
-                "type": event.lower().replace(" ", "_"),
-                "createdAt": datetime.utcnow(),
-                "read": False,
-            })
-            count += 1
-
-        return {"success": True, "message": f"Sent {count} notifications for event '{event}'."}
-
-    except HTTPException:
-        raise
+        return results
+        
     except Exception as e:
-        logger.error(f"Error sending notification: {e}")
-        raise HTTPException(status_code=500, detail=f"Error sending notification: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting sales info: {str(e)}")
+    
+@router.get("/announcements/all/", response_model=List[Announcement])
+async def getAllAnnouncements():    
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+    try:
+        db = firestore.client()
+        collection = db.collection("announcements")
+        docs = collection.stream()
+
+        results = []
+
+        for doc in docs:
+           data = doc.to_dict()
+           data["id"] = doc.id
+           results.append(data)
+
+        return results
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting sales info: {str(e)}")
+    
+@router.post("/announcements", response_model=Announcement)
+async def add_announcement(announcement: Announcement):
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+    db = firestore.client()
+    collection = db.collection("announcements")
+    doc_ref = collection.document()
+    doc_ref.set(announcement.dict(exclude_unset=True))
+    announcement.id = doc_ref.id
+    return announcement
+
+
+@router.delete("/announcements/{announcement_id}")
+async def delete_announcement(announcement_id: str):
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+    db = firestore.client()
+    collection = db.collection("announcements")
+    doc_ref = collection.document(announcement_id)
+    if not doc_ref.get().exists:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    doc_ref.delete()
+    return {"status": "deleted"}

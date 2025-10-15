@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useContext, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Container,
   Dialog,
@@ -38,6 +39,8 @@ import { db } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext";
 import { getAuth } from "firebase/auth";
 import { useAuth } from "../../context/AuthContext";
+import { getStorage, ref, getDownloadURL } from "firebase/storage";
+
 import { invoiceCatList } from "../settings/InvoiceSettings";
 import MonthLockService from "../../services/monthLockService";
 
@@ -62,6 +65,7 @@ const PROJECTION_LOOKUP = {
 };
 
 const InvoiceLogs = () => {
+  const location = useLocation();
   // const { currentUser, userRole } = useAuth();
   // console.log("Logged in user:", currentUser?.email);
   // console.log("User role:", userRole);
@@ -93,6 +97,15 @@ const InvoiceLogs = () => {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+
+  // Handle navigation from Reports page
+  useEffect(() => {
+    if (location.state?.openPrintDialog) {
+      if (location.state.month) setSelectedMonth(location.state.month);
+      if (location.state.year) setSelectedYear(location.state.year);
+      setExportDialogOpen(true);
+    }
+  }, [location]);
   const [imageError, setImageError] = useState(false);
   const [showRecentlyDeleted, setShowRecentlyDeleted] = useState(false);
   const [recentlyDeleted, setRecentlyDeleted] = useState([]);
@@ -757,11 +770,40 @@ const InvoiceLogs = () => {
     setExportDialogOpen(false);
   };
 
-  const handleRowClick = (invoice) => {
-    setSelectedInvoice(invoice);
-    setInvoiceImage(invoice.imageURL);
+const handleRowClick = async (invoice) => {
+  setSelectedInvoice(invoice);
+
+  try {
+    const storage = getStorage();
+
+    // ✅ Case 1: Firestore already has a public download URL
+    if (invoice.imageURL && invoice.imageURL.startsWith("http")) {
+      setInvoiceImage(invoice.imageURL);
+      setInvoiceDialogOpen(true);
+      return;
+    }
+
+    // ✅ Case 2: It’s a storage path like "images/file.png"
+    if (invoice.imageURL) {
+      const imageRef = ref(storage, invoice.imageURL);
+      const url = await getDownloadURL(imageRef);
+      setInvoiceImage(url);
+      setInvoiceDialogOpen(true);
+      return;
+    }
+
+    // ❌ No image field at all
+    console.warn("Invoice missing imageURL field:", invoice);
+    setInvoiceImage(null);
     setInvoiceDialogOpen(true);
-  };
+  } catch (error) {
+    console.error("Error loading invoice image:", error);
+    alert("Failed to load invoice image. Please check Firebase Storage permissions.");
+    setInvoiceImage(null);
+    setInvoiceDialogOpen(true);
+  }
+};
+
 
   const handleExportInvoicePDF = async () => {
     if (!invoiceImage) return;

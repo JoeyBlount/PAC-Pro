@@ -2,7 +2,7 @@ import React, { useState, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./navBar.css";
 import { auth } from "../../config/firebase-config";
-import { signOut } from "firebase/auth";
+import { getAuth, signOut } from "firebase/auth";
 import {
   FormControl,
   InputLabel,
@@ -39,6 +39,8 @@ import {
   PersonAdd,
   DoneAll,
 
+  Campaign,
+
 } from "@mui/icons-material";
 import { StoreContext } from "../../context/storeContext";
 import {
@@ -53,6 +55,8 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../../config/firebase-config";
+import AnnoucementDialog from "./annoucement";
+import { useAuth } from "../../context/AuthContext";
 
 // Helper to format timestamps into "x minutes ago"
 function formatRelativeTime(timestamp) {
@@ -313,6 +317,9 @@ export function NavBar() {
     welcome: <PersonAdd fontSize="small" color="secondary" />,
   };
 
+  // Annoucement things
+  const [openAnn, setOpenAnn] = useState(false);
+  
   return (
     <>
       {/* TOP NAV BAR */}
@@ -359,6 +366,12 @@ export function NavBar() {
           className="accountSection"
           style={{ display: "flex", alignItems: "center", gap: "8px" }}
         >
+          {/* Annoucements */}
+          <IconButton className="announcementBtn" onClick={() => setOpenAnn(true)}>
+            <Campaign />
+          </IconButton>
+          <AnnoucementDialog open={openAnn} onClose={() => setOpenAnn(false)} />
+
           {/* Notifications Bell */}
           <IconButton
             className="notificationBtn"
