@@ -134,82 +134,106 @@ const InvoiceLogs = () => {
 
     return 0;
   };
-  async function sendEditInvoiceNotifications(editorUser, invoiceNumber, companyName) {
-  try {
-    const settingsRef = doc(db, "settings", "notifications");
-    const settingsSnap = await getDoc(settingsRef);
 
-    if (!settingsSnap.exists()) {
-      console.error("No notification settings found.");
-      return;
-    }
+  const API_URL = "http://localhost:5140/api/pac"; // or your deployed backend URL
 
-    const notifSettings = settingsSnap.data();
-    const editSetting = notifSettings["Invoice Edit"];
+  async function sendNotification(event, context) {
+    try {
+      const token = await getAuth().currentUser?.getIdToken();
 
-    if (!editSetting?.enabled) return;
-
-    const roles = editSetting.roles || [];
-
-    const q = query(collection(db, "users"), where("role", "in", roles));
-    const snapshot = await getDocs(q);
-
-    for (const userDoc of snapshot.docs) {
-      const userData = userDoc.data();
-      await addDoc(collection(db, "notifications"), {
-        title: "Invoice Edited",
-        message: `${editorUser.firstName || "Someone"} edited invoice #${invoiceNumber} for ${companyName}.`,
-        type: "invoice_edit",
-        toEmail: userData.email,
-        createdAt: new Date(),
-        read: false
+      const res = await fetch(`${API_URL}/notifications/send`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ event, context }),
       });
-    }
 
-    console.log(`Invoice Edit notifications sent to roles: ${roles.join(", ")}`);
-  } catch (err) {
-    console.error("Error sending edit invoice notifications:", err);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to send notification");
+
+      console.log("✅ Notification sent:", data.message);
+    } catch (err) {
+      console.error("Error sending notification:", err);
+    }
   }
-}
+//   async function sendEditInvoiceNotifications(editorUser, invoiceNumber, companyName) {
+//   try {
+//     const settingsRef = doc(db, "settings", "notifications");
+//     const settingsSnap = await getDoc(settingsRef);
 
-async function sendDeleteInvoiceNotifications(invoice, deleterUser) {
-  try {
-    const settingsRef = doc(db, "settings", "notifications");
-    const settingsSnap = await getDoc(settingsRef);
-    const notifSettings = settingsSnap.exists() ? settingsSnap.data() : {};
-    const deleteSetting = notifSettings["Invoice Deletion"];
+//     if (!settingsSnap.exists()) {
+//       console.error("No notification settings found.");
+//       return;
+//     }
 
-    if (!deleteSetting || !deleteSetting.enabled) {
-      console.log("Invoice Deletion notifications disabled or not found");
-      return;
-    }
+//     const notifSettings = settingsSnap.data();
+//     const editSetting = notifSettings["Invoice Edit"];
 
-    const roles = deleteSetting.roles || [];
-    if (roles.length === 0) {
-      console.log("No roles set for Invoice Deletion notifications");
-      return;
-    }
+//     if (!editSetting?.enabled) return;
 
-    const usersQuery = query(collection(db, "users"), where("role", "in", roles));
-    const usersSnapshot = await getDocs(usersQuery);
+//     const roles = editSetting.roles || [];
 
-    for (const userDoc of usersSnapshot.docs) {
-      const userData = userDoc.data();
-      await addDoc(collection(db, "notifications"), {
-        title: "Invoice Deleted",
-        message: `${deleterUser.firstName || "Someone"} deleted invoice #${invoice.invoiceNumber || ""} from ${invoice.companyName || "a company"}.`,
-        type: "invoice_deleted",
-        toEmail: userData.email,
-        createdAt: new Date(),
-        read: false,
-      });
-    }
+//     const q = query(collection(db, "users"), where("role", "in", roles));
+//     const snapshot = await getDocs(q);
 
-    console.log("Invoice Deletion notifications sent successfully.");
-  } catch (err) {
-    console.error("Error sending delete invoice notifications:", err);
-  }
-}
+//     for (const userDoc of snapshot.docs) {
+//       const userData = userDoc.data();
+//       await addDoc(collection(db, "notifications"), {
+//         title: "Invoice Edited",
+//         message: `${editorUser.firstName || "Someone"} edited invoice #${invoiceNumber} for ${companyName}.`,
+//         type: "invoice_edit",
+//         toEmail: userData.email,
+//         createdAt: new Date(),
+//         read: false
+//       });
+//     }
+
+//     console.log(`Invoice Edit notifications sent to roles: ${roles.join(", ")}`);
+//   } catch (err) {
+//     console.error("Error sending edit invoice notifications:", err);
+//   }
+// }
+
+// async function sendDeleteInvoiceNotifications(invoice, deleterUser) {
+//   try {
+//     const settingsRef = doc(db, "settings", "notifications");
+//     const settingsSnap = await getDoc(settingsRef);
+//     const notifSettings = settingsSnap.exists() ? settingsSnap.data() : {};
+//     const deleteSetting = notifSettings["Invoice Deletion"];
+
+//     if (!deleteSetting || !deleteSetting.enabled) {
+//       console.log("Invoice Deletion notifications disabled or not found");
+//       return;
+//     }
+
+//     const roles = deleteSetting.roles || [];
+//     if (roles.length === 0) {
+//       console.log("No roles set for Invoice Deletion notifications");
+//       return;
+//     }
+
+//     const usersQuery = query(collection(db, "users"), where("role", "in", roles));
+//     const usersSnapshot = await getDocs(usersQuery);
+
+//     for (const userDoc of usersSnapshot.docs) {
+//       const userData = userDoc.data();
+//       await addDoc(collection(db, "notifications"), {
+//         title: "Invoice Deleted",
+//         message: `${deleterUser.firstName || "Someone"} deleted invoice #${invoice.invoiceNumber || ""} from ${invoice.companyName || "a company"}.`,
+//         type: "invoice_deleted",
+//         toEmail: userData.email,
+//         createdAt: new Date(),
+//         read: false,
+//       });
+//     }
+
+//     console.log("Invoice Deletion notifications sent successfully.");
+//   } catch (err) {
+//     console.error("Error sending delete invoice notifications:", err);
+//   }
+// }
 
   //this function makes sure we can only edit/delete the current month in the invoice.
   const isCurrentMonth = (dateStr) => {
@@ -249,7 +273,11 @@ async function sendDeleteInvoiceNotifications(invoice, deleterUser) {
         ? { firstName: currentUser.displayName?.split(" ")[0] || "Someone" }
         : { firstName: "Someone" };
 
-      await sendDeleteInvoiceNotifications(invoice, deleterUser);
+      await sendNotification("Invoice Deletion", {
+      firstName: deleterUser.firstName,
+      invoiceNumber: invoice.invoiceNumber,
+      companyName: invoice.companyName,
+    });
       // 3. Refresh invoices on the page
       setData((prev) => ({
         ...prev,
@@ -352,11 +380,23 @@ async function sendDeleteInvoiceNotifications(invoice, deleterUser) {
 
       const auth = getAuth();
       const editorUser = auth.currentUser || { firstName: "User" };
-      await sendEditInvoiceNotifications(
-      editorUser,
-      updatedInvoice.invoiceNumber,
-      updatedInvoice.companyName
-    );
+      const token = await editorUser?.getIdToken();
+      await fetch("http://localhost:5140/api/pac/notifications/send", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        event: "Invoice Edit",
+        context: {
+          firstName: editorUser?.displayName?.split(" ")[0] || "Someone",
+          invoiceNumber: updatedInvoice.invoiceNumber,
+          companyName: updatedInvoice.companyName,
+        },
+      }),
+    });
+
 
       
       alert("Invoice updated successfully!");
