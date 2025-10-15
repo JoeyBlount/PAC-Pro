@@ -14,5 +14,12 @@ from .data_ingestion_service import DataIngestionService
 from .account_mapping_service import AccountMappingService
 from .pac_calculation_service import PacCalculationService
 
+
+# Projections tab math 
+from .proj_calculation_service import (  # noqa: F401
+    ProjCalculationService,
+    get_proj_calculation_service,
+)
+
 # Re-export services for backward compatibility
-__all__ = ['DataIngestionService', 'AccountMappingService', 'PacCalculationService']
+__all__ = ['DataIngestionService', 'AccountMappingService', 'PacCalculationService',"ProjCalculationService","get_proj_calculation_service"]
