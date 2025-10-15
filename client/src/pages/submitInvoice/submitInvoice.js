@@ -605,6 +605,7 @@ const handleSubmit = async (e) => {
               <FormControl sx={{ minWidth: 150 }}>
                 <InputLabel>Month</InputLabel>
                 <Select
+                  data-testid="month-select"
                   value={targetMonth}
                   onChange={(e) => setTargetMonth(e.target.value)}
                   label="Month"
@@ -754,6 +755,7 @@ const handleSubmit = async (e) => {
             />
             <button
               type="submit"
+              data-testid="submit-invoice-btn"
               className={styles.submitBtn}
               disabled={isMonthLocked()}
             >
