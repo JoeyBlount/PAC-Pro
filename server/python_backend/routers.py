@@ -363,7 +363,7 @@ async def submit_invoice(
     user_email: str = Form(...),
     categories: str = Form(...),  # JSON string of categories
     submit_service: InvoiceSubmitService = Depends(get_invoice_submit_service),
-    _auth: Dict[str, Any] = Depends(require_roles(["ADMIN"])),
+    _auth: Dict[str, Any] = Depends(require_roles(["Admin"])),
 ) -> Dict[str, Any]:
     """
     Submit invoice data and image to Firebase.
@@ -443,6 +443,7 @@ async def submit_invoice(
             image_file=contents,
             image_filename=image.filename or "invoice.jpg"
         )
+            
         
         logger.info("Invoice submitted successfully")
         return result
@@ -1085,3 +1086,89 @@ async def get_all_locked_months(store_id: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error getting locked months: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting locked months: {str(e)}")
+
+
+
+
+# ---------------------------
+# Notification Routes
+# ---------------------------
+from datetime import datetime
+
+@router.post("/notifications/send")
+async def send_notification(
+    request: Request,
+):
+    """
+    Send role-based notifications for specific events (Invoice Edit/Delete/Lock Month/Unlock Month/etc.)
+    Expects:
+        {
+            "event": "Invoice Edit",
+            "context": {
+                "firstName": "John",
+                "invoiceNumber": "12345",
+                "companyName": "Example Inc"
+            }
+        }
+    """
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+
+        db = firestore.client()
+        body = await request.json()
+        event = body.get("event")
+        context = body.get("context", {})
+
+        # Get settings from Firestore
+        settings_ref = db.collection("settings").document("notifications")
+        settings_doc = settings_ref.get()
+        if not settings_doc.exists:
+            raise HTTPException(status_code=404, detail="Notification settings not found")
+
+        settings = settings_doc.to_dict()
+        event_data = settings.get(event)
+        if not event_data or not event_data.get("enabled"):
+            return {"success": False, "message": f"Notification '{event}' is disabled."}
+
+        roles = event_data.get("roles", [])
+        if not roles:
+            raise HTTPException(status_code=400, detail=f"No roles configured for '{event}'")
+
+        # Get users by role
+        users_ref = db.collection("users").where("role", "in", roles)
+        users = users_ref.stream()
+
+        message_template = {
+            "Invoice Edit": "{firstName} edited invoice #{invoiceNumber} for {companyName}.",
+            "Invoice Deletion": "{firstName} deleted invoice #{invoiceNumber} for {companyName}.",
+            "Generate Submission": "{firstName} generated PAC data for {storeName}.",
+            "Projections Submission": "{firstName} submitted projections for {storeName}.",
+            "Locking Month": "{firstName} locked {month} {year} for {storeName}.",
+            "Unlocking Month": "{firstName} unlocked {month} {year} for {storeName}.",
+        }.get(event, "{firstName} triggered {event}")
+
+        # Send notifications
+        count = 0
+        for user in users:
+            data = user.to_dict()
+            msg = message_template.format(**context, event=event)
+            db.collection("notifications").add({
+                "title": event,
+                "message": msg,
+                "toEmail": data.get("email"),
+                "type": event.lower().replace(" ", "_"),
+                "createdAt": datetime.utcnow(),
+                "read": False,
+            })
+            count += 1
+
+        return {"success": True, "message": f"Sent {count} notifications for event '{event}'."}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending notification: {e}")
+        raise HTTPException(status_code=500, detail=f"Error sending notification: {str(e)}")

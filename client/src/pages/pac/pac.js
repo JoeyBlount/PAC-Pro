@@ -51,47 +51,7 @@ import MonthLockService from "../../services/monthLockService";
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 
-async function sendMonthLockNotifications(action, store, month, year, lockerUser) {
-  try {
-    // Fetch the "Month Lock" settings from Firestore
-    const settingsRef = doc(db, "settings", "notifications");
-    const settingsSnap = await getDoc(settingsRef);
-    const notifSettings = settingsSnap.exists() ? settingsSnap.data() : {};
-    const lockSetting = notifSettings["Locking Month"];
 
-    if (!lockSetting || !lockSetting.enabled) {
-      console.log("Month Lock notifications disabled or not found");
-      return;
-    }
-
-    const roles = lockSetting.roles || [];
-    if (roles.length === 0) {
-      console.log("No roles set for Month Lock notifications");
-      return;
-    }
-
-    // Query all users with allowed roles
-    const usersQuery = query(collection(db, "users"), where("role", "in", roles));
-    const usersSnapshot = await getDocs(usersQuery);
-
-    // Create one notification per recipient
-    for (const userDoc of usersSnapshot.docs) {
-      const userData = userDoc.data();
-      await addDoc(collection(db, "notifications"), {
-        title: action === "lock" ? "Month Locked" : "Month Unlocked",
-        message: `${lockerUser.firstName || "Someone"} ${action === "lock" ? "locked" : "unlocked"} ${month} ${year} for ${store}.`,
-        type: action === "lock" ? "month_locked" : "month_unlocked",
-        toEmail: userData.email,
-        createdAt: new Date(),
-        read: false,
-      });
-    }
-
-    console.log("Month lock/unlock notifications sent successfully.");
-  } catch (err) {
-    console.error("Error sending month lock notifications:", err);
-  }
-}
 
 const expenseList = [
   "Product Sales", "All Net Sales",
@@ -564,13 +524,21 @@ const PAC = () => {
           : currentUser
           ? { firstName: currentUser.displayName?.split(" ")[0] || "Someone" }
           : { firstName: "Someone" };
-        await sendMonthLockNotifications(
-          isCurrentlyLocked ? "unlock" : "lock",
-          selectedStore,
-          month,
-          year,
-          lockerUser
-        );
+        await fetch("http://localhost:5140/api/pac/notifications/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          context: {
+            event: monthLockStatus,
+            firstName: lockerUser.firstName || "Someone",
+            month,
+            year,
+            store: selectedStore,
+          },
+        }),
+      });
       } else {
         alert(result.message);
       }
@@ -1108,47 +1076,6 @@ const PAC = () => {
     });
     return total;
   };
-async function sendPacGenerateNotifications(store, month, year, generatorUser) {
-  try {
-    // Fetch the "Generate Submission" settings from Firestore
-    const settingsRef = doc(db, "settings", "notifications");
-    const settingsSnap = await getDoc(settingsRef);
-    const notifSettings = settingsSnap.exists() ? settingsSnap.data() : {};
-    const generateSetting = notifSettings["Generate Submission"];
-
-    if (!generateSetting || !generateSetting.enabled) {
-      console.log("Generate Submission notifications disabled or not found");
-      return;
-    }
-
-    const roles = generateSetting.roles || [];
-    if (roles.length === 0) {
-      console.log("No roles set for Generate Submission notifications");
-      return;
-    }
-
-    // Query all users with allowed roles
-    const usersQuery = query(collection(db, "users"), where("role", "in", roles));
-    const usersSnapshot = await getDocs(usersQuery);
-
-    // Create one notification per recipient
-    for (const userDoc of usersSnapshot.docs) {
-      const userData = userDoc.data();
-      await addDoc(collection(db, "notifications"), {
-        title: "PAC Report Generated",
-        message: `${generatorUser.firstName || "Someone"} generated the PAC report for ${store} (${month} ${year}).`,
-        type: "pac_generated",
-        toEmail: userData.email,
-        createdAt: new Date(),
-        read: false,
-      });
-    }
-
-    console.log("PAC generate notifications sent successfully.");
-  } catch (err) {
-    console.error("Error sending PAC generate notifications:", err);
-  }
-}
 // this function saves all the user input data from the generate page via backend
 const handleGenerate = async (e) => {
   // Check if current month is locked 
@@ -1291,9 +1218,23 @@ const handleGenerate = async (e) => {
           }
         : { firstName: "Someone", lastName: "", email: "" };
 
-    await sendPacGenerateNotifications(selectedStore, month, year, generatorUser);
+    await fetch("http://localhost:5140/api/pac/notifications/send", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      event: "PAC Generate",
+      context: {
+        firstName: generatorUser.firstName || "Someone",
+        store: selectedStore,
+        month,
+        year,
+      },
+    }),
+  });
 
-    
+
     await fetchMonthLockStatus();
     await fetchLockedMonths();
   } catch (error) {
