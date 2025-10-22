@@ -42,6 +42,7 @@ import { getStorage, ref, getDownloadURL } from "firebase/storage";
 
 import { invoiceCatList } from "../settings/InvoiceSettings";
 import MonthLockService from "../../services/monthLockService";
+import { recomputeMonthlyTotals } from "../../services/invoiceTotalsService";
 
 // Map Invoice Log category IDs -> PAC "projections[].name"
 const PROJECTION_LOOKUP = {
@@ -120,7 +121,6 @@ const InvoiceLogs = () => {
   const [showRecentlyDeleted, setShowRecentlyDeleted] = useState(false);
   const [recentlyDeleted, setRecentlyDeleted] = useState([]);
   const [budgetData, setBudgetData] = useState({});
-  const [pacTotals, setPacTotals] = useState({});
 
   // Invoice dialog state
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -189,9 +189,25 @@ const InvoiceLogs = () => {
       // 2. Now delete it from the 'invoices' collection
       await deleteDoc(doc(db, "invoices", invoice.id));
 
+      // 3. Update invoice totals for this store/month/year
+      try {
+        await recomputeMonthlyTotals(
+          invoice.storeID,
+          invoice.targetMonth,
+          invoice.targetYear
+        );
+        console.log("Invoice totals updated after deletion");
+      } catch (totalsError) {
+        console.error(
+          "Error updating invoice totals after deletion:",
+          totalsError
+        );
+        // Don't fail the deletion if totals update fails
+      }
+
       alert("Invoice moved to Recently Deleted.");
 
-      // 3. Refresh invoices on the page
+      // 4. Refresh invoices on the page
       setData((prev) => ({
         ...prev,
         invoices: prev.invoices.filter((inv) => inv.id !== invoice.id),
@@ -336,7 +352,7 @@ const InvoiceLogs = () => {
     if (selectedStore && monetaryColumns.length > 0) {
       fetchInvoices();
     }
-  }, [selectedStore, monetaryColumns, budgetData, pacTotals]);
+  }, [selectedStore, monetaryColumns, budgetData]);
 
   // Fetch budget data when store or month/year changes
   useEffect(() => {
@@ -347,7 +363,6 @@ const InvoiceLogs = () => {
       const yearMonth = `${year}${String(month).padStart(2, "0")}`;
 
       fetchBudgetData(selectedStore, yearMonth);
-      fetchPacTotals(selectedStore, yearMonth);
     }
   }, [selectedStore, selectedMonth, selectedYear, monetaryColumns]);
 
@@ -492,7 +507,7 @@ const InvoiceLogs = () => {
         }, 0);
       });
 
-      // Use budget data from pac_projections instead of invoiceCategories
+      // Use budget data from pac-projections instead of invoiceCategories
       const budgets = {};
       monetaryColumns.forEach((col) => {
         // Use budgetData if available, otherwise 0 (no fallback to invoiceCategories)
@@ -583,48 +598,7 @@ const InvoiceLogs = () => {
     }
   };
 
-  // Fetch PAC input totals from pac_input_data collection
-  const fetchPacTotals = async (storeId, yearMonth) => {
-    try {
-      const formattedStoreId = storeId.startsWith("store_")
-        ? storeId
-        : `store_${storeId.padStart(3, "0")}`;
-      const docId = `${formattedStoreId}_${yearMonth}`;
-
-      const docRef = doc(db, "pac_input_data", docId);
-      const docSnap = await getDoc(docRef);
-
-      if (docSnap.exists()) {
-        const pacData = docSnap.data();
-
-        const totalsMapping = {
-          FOOD: pacData.purchases?.food || 0,
-          CONDIMENT: pacData.purchases?.condiment || 0,
-          PAPER: pacData.purchases?.paper || 0,
-          NONPRODUCT: pacData.purchases?.non_product || 0,
-          TRAVEL: pacData.purchases?.travel || 0,
-          "ADV-OTHER": pacData.purchases?.advertising_other || 0,
-          PROMO: pacData.purchases?.promotion || 0,
-          "OUTSIDE SVC": pacData.purchases?.outside_services || 0,
-          LINEN: pacData.purchases?.linen || 0,
-          "OP. SUPPLY": pacData.purchases?.operating_supply || 0,
-          "M+R": pacData.purchases?.maintenance_repair || 0,
-          "SML EQUIP": pacData.purchases?.small_equipment || 0,
-          UTILITIES: pacData.purchases?.utilities || 0,
-          OFFICE: pacData.purchases?.office || 0,
-          TRAINING: pacData.purchases?.training || 0,
-          CR: pacData.purchases?.crew_relations || 0,
-        };
-
-        setPacTotals(totalsMapping);
-      } else {
-        setPacTotals({});
-      }
-    } catch (error) {
-      console.error("Error loading PAC input totals:", error);
-      setPacTotals({});
-    }
-  };
+  // Removed legacy pac_input_data totals; budgets come from pac-projections and totals from invoices
 
   // Export functions remain unchanged
   const handleExportPDF = async () => {

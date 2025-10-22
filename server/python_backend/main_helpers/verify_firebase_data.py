@@ -43,8 +43,8 @@ def verify_firebase_data():
         store_data = store.to_dict()
         print(f"  - {store.id}: {store_data.get('name', 'Unknown')} ({store_data.get('city', 'Unknown')}, {store_data.get('state', 'Unknown')})")
     
-    # Verify pac_input_data collection
-    pac_ref = db.collection('pac_input_data')
+    # Verify pac-projections collection
+    pac_ref = db.collection('pac-projections')
     pac_docs = list(pac_ref.stream())
     print(f"\nPAC Input Data collection: {len(pac_docs)} documents")
     
