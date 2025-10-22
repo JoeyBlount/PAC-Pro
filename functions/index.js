@@ -123,7 +123,7 @@ exports.notifyNewUser = functions.firestore
 
 /**
  * Aggregate invoice totals per store and month into a dedicated collection
- * Collection: invoice_totals
+ * Collection: invoice_log_totals
  * DocId: `${storeID}_${YYYYMM}`
  * Fields: { totals: { [categoryId]: number }, updatedAt }
  */
@@ -178,7 +178,7 @@ async function recomputeMonthlyTotals(storeID, targetMonth, targetYear) {
 
   const docId = `${storeID}_${targetYear}${pad2(targetMonth)}`;
   await db
-    .collection("invoice_totals")
+    .collection("invoice_log_totals")
     .doc(docId)
     .set(
       { totals, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
@@ -209,3 +209,47 @@ exports.onInvoiceWrite = functions.firestore
       );
     }
   });
+
+/**
+ * Manual backfill endpoint to recompute invoice_log_totals for existing invoices.
+ * Usage: POST with optional JSON body { storeID?: string }
+ * If storeID omitted, recomputes for all stores/months present in invoices.
+ */
+exports.recomputeInvoiceTotals = functions.https.onRequest(async (req, res) => {
+  try {
+    if (req.method !== "POST") {
+      return res.status(405).send("Method Not Allowed");
+    }
+
+    const { storeID } = req.body || {};
+
+    // Fetch invoices (optionally scoped to store)
+    let q = db.collection("invoices");
+    if (storeID) {
+      q = q.where("storeID", "==", storeID);
+    }
+    const snap = await q.get();
+
+    // Collect unique (storeID, targetMonth, targetYear)
+    const keySet = new Set();
+    snap.forEach((doc) => {
+      const d = doc.data() || {};
+      if (!d.storeID || !d.targetMonth || !d.targetYear) return;
+      keySet.add(`${d.storeID}|${d.targetMonth}|${d.targetYear}`);
+    });
+
+    let updated = 0;
+    for (const key of keySet) {
+      const [s, m, y] = key.split("|");
+      await recomputeMonthlyTotals(s, Number(m), Number(y));
+      updated += 1;
+    }
+
+    return res.json({ success: true, updated });
+  } catch (err) {
+    console.error("Backfill error", err);
+    return res
+      .status(500)
+      .json({ success: false, error: String((err && err.message) || err) });
+  }
+});

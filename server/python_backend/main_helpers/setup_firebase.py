@@ -70,9 +70,9 @@ python firebase_data_generator.py
 - Document ID: store_id (e.g., "store_001")
 - Fields: id, name, city, state
 
-### pac_input_data
+### pac-projections
 - Document ID: {store_id}_{year_month} (e.g., "store_001_202501")
-- Fields: All PAC input data for calculations
+- Fields: rows, pacGoal, product_net_sales, cash_adjustments, purchases, updatedAt
 
 ### pac_calculations (optional)
 - Document ID: {store_id}_{year_month}
@@ -89,9 +89,9 @@ The script will generate:
 
 ## Verification
 
-After running the generator:
+After saving projections:
 1. Check Firebase Console → Firestore Database
-2. Verify collections: `stores` and `pac_input_data`
+2. Verify collections: `stores` and `pac-projections`
 3. Check document counts and sample data
 """
     

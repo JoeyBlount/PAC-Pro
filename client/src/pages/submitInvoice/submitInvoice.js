@@ -14,6 +14,7 @@ import MonthLockService from "../../services/monthLockService";
 import styles from "./submitInvoice.module.css";
 import { invoiceCatList } from "../settings/InvoiceSettings";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { recomputeMonthlyTotals } from "../../services/invoiceTotalsService";
 import {
   Alert,
   TextField,
@@ -410,6 +411,15 @@ const SubmitInvoice = () => {
 
       // Store it in Firestore
       await addDoc(collection(db, "invoices"), invoiceData);
+
+      // Update invoice totals for this store/month/year
+      try {
+        await recomputeMonthlyTotals(selectedStore, targetMonth, targetYear);
+        console.log("Invoice totals updated successfully");
+      } catch (totalsError) {
+        console.error("Error updating invoice totals:", totalsError);
+        // Don't fail the invoice submission if totals update fails
+      }
 
       alert("Invoice submitted successfully!");
       setInvoiceNumber("");

@@ -1,4 +1,3 @@
-
 # Firebase Setup Instructions for PAC System
 
 ## 1. Create Firebase Project
@@ -58,20 +57,24 @@ python firebase_data_generator.py
 ## Firebase Collections Structure
 
 ### stores
+
 - Document ID: store_id (e.g., "store_001")
 - Fields: id, name, city, state
 
-### pac_input_data
-- Document ID: {store_id}_{year_month} (e.g., "store_001_202501")
-- Fields: All PAC input data for calculations
+### pac-projections
+
+- Document ID: {store*id}*{year_month} (e.g., "store_001_202501")
+- Fields: rows (raw projections), pacGoal, product_net_sales, cash_adjustments, purchases, updatedAt
 
 ### pac_calculations (optional)
-- Document ID: {store_id}_{year_month}
+
+- Document ID: {store*id}*{year_month}
 - Fields: Calculated PAC results
 
 ## Data Generated
 
 The script will generate:
+
 - 8 stores across different cities
 - 12 months of data for 2025 (January - December)
 - Realistic seasonal variations
@@ -80,7 +83,8 @@ The script will generate:
 
 ## Verification
 
-After running the generator:
+After saving projections:
+
 1. Check Firebase Console → Firestore Database
-2. Verify collections: `stores` and `pac_input_data`
+2. Verify collections: `stores` and `pac-projections`
 3. Check document counts and sample data
