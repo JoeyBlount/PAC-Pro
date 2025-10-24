@@ -23,9 +23,8 @@ python_backend/
 │
 ├── data_generators/          # Test data generation scripts
 │   ├── __init__.py
-│   ├── firebase_data_generator.py    # Generate test stores and PAC data
-│   ├── generate_projections_data.py  # Generate projections data
-│   ├── generate_sample_data.py       # Generate sample data
+│   ├── firebase_data_generator.py    # [deprecated] was used to seed test data
+│   ├── generate_sample_data.py       # [deprecated] sample data generator
 │   └── add_difference_columns.py     # Helper for data processing
 │
 ├── tests/                    # Test files
@@ -57,30 +56,36 @@ python_backend/
 ## Key Changes Made
 
 ### 1. **Services Directory**
+
 - Moved all business logic services to `services/`
 - Each service handles a specific domain (PAC calculations, data ingestion, account mapping)
 - Added proper `__init__.py` with exports for clean imports
 
 ### 2. **Data Generators Directory**
+
 - Moved all data generation scripts to `data_generators/`
 - Includes test data generators and sample data creators
 - Updated Firebase service account paths to use `../config/`
 
 ### 3. **Tests Directory**
+
 - Moved all test files to `tests/`
 - Maintains test organization and structure
 
 ### 4. **Main Helpers Directory**
+
 - Moved utility scripts to `main_helpers/`
 - Includes setup scripts and alternative runners
 - Updated Firebase service account paths
 
 ### 5. **Config Directory**
+
 - Moved configuration files to `config/`
 - Includes Firebase service account and structure files
 - Centralizes all configuration in one place
 
 ### 6. **Docs Directory**
+
 - Moved all documentation to `docs/`
 - Keeps documentation organized and separate from code
 
@@ -100,6 +105,7 @@ from services.data_ingestion_service import DataIngestionService
 ## Firebase Service Account
 
 The Firebase service account file is now located at:
+
 ```
 config/firebase-service-account.json
 ```
@@ -134,7 +140,7 @@ start_backend.bat
 When adding new features:
 
 1. **New Services**: Add to `services/` directory
-2. **New Tests**: Add to `tests/` directory  
+2. **New Tests**: Add to `tests/` directory
 3. **New Data Generators**: Add to `data_generators/` directory
 4. **New Utilities**: Add to `main_helpers/` directory
 5. **New Configuration**: Add to `config/` directory

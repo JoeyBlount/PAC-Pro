@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useContext } from "react";
 import { auth, db, storage } from "../../config/firebase-config";
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 import { StoreContext } from "../../context/storeContext";
 import { useAuth } from "../../context/AuthContext";
 import MonthLockService from "../../services/monthLockService";
 import styles from "./submitInvoice.module.css";
 import { invoiceCatList } from "../settings/InvoiceSettings";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { recomputeMonthlyTotals } from "../../services/invoiceTotalsService";
 import {
   Alert,
   TextField,
@@ -42,7 +50,10 @@ const SubmitInvoice = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [calendarViewDate, setCalendarViewDate] = useState(new Date());
-  const [calendarPosition, setCalendarPosition] = useState({ top: 200, left: '50%' });
+  const [calendarPosition, setCalendarPosition] = useState({
+    top: 200,
+    left: "50%",
+  });
 
   // Month locking state
   const [monthLockStatus, setMonthLockStatus] = useState(null);
@@ -67,9 +78,9 @@ const SubmitInvoice = () => {
     const handleClickOutside = (event) => {
       if (showCalendar) {
         // Check if the click is inside the calendar popup or date picker container
-        const calendarPopup = event.target.closest('[data-calendar-popup]');
-        const datePickerContainer = event.target.closest('[data-date-picker]');
-        
+        const calendarPopup = event.target.closest("[data-calendar-popup]");
+        const datePickerContainer = event.target.closest("[data-date-picker]");
+
         if (!calendarPopup && !datePickerContainer) {
           setShowCalendar(false);
         }
@@ -77,11 +88,11 @@ const SubmitInvoice = () => {
     };
 
     if (showCalendar) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
     }
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showCalendar]);
 
@@ -140,10 +151,10 @@ const SubmitInvoice = () => {
 
   // Calendar functions
   const formatDate = (date) => {
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
     });
   };
 
@@ -168,15 +179,15 @@ const SubmitInvoice = () => {
     const lastDay = new Date(year, month + 1, 0);
     const startDate = new Date(firstDay);
     startDate.setDate(startDate.getDate() - firstDay.getDay());
-    
+
     const days = [];
     const currentDate = new Date(startDate);
-    
+
     for (let i = 0; i < 42; i++) {
       days.push(new Date(currentDate));
       currentDate.setDate(currentDate.getDate() + 1);
     }
-    
+
     return days;
   };
 
@@ -248,7 +259,11 @@ const SubmitInvoice = () => {
 
       if (data.invoiceDate) {
         const [mm, dd, yyyy] = data.invoiceDate.split("/");
-        const newDate = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+        const newDate = new Date(
+          parseInt(yyyy),
+          parseInt(mm) - 1,
+          parseInt(dd)
+        );
         setSelectedDate(newDate);
         setInvoiceMonth(parseInt(mm));
         setInvoiceDay(parseInt(dd));
@@ -354,51 +369,69 @@ const SubmitInvoice = () => {
     }
   };
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
+  const handleSubmit = async (e) => {
+    e.preventDefault();
 
-  if (!imageUpload) {
-    alert("Please upload an image first.");
-    return;
-  }
+    if (!imageUpload) {
+      alert("Please upload an image first.");
+      return;
+    }
 
-  try {
-    // Upload image to Firebase Storage
-    const imageRef = ref(storage, `images/${selectedStore}_${Date.now()}_${imageUpload.name}`);
-    await uploadBytes(imageRef, imageUpload);
-    const downloadURL = await getDownloadURL(imageRef);
+    try {
+      // Upload image to Firebase Storage
+      const imageRef = ref(
+        storage,
+        `images/${selectedStore}_${Date.now()}_${imageUpload.name}`
+      );
+      await uploadBytes(imageRef, imageUpload);
+      const downloadURL = await getDownloadURL(imageRef);
 
-    // Prepare the invoice document
-    const invoiceData = {
-      companyName,
-      invoiceNumber,
-      invoiceDate: `${invoiceMonth}/${invoiceDay}/${invoiceYear}`,
-      storeID: selectedStore,
-      user_email: user.email,
-      dateSubmitted: new Date().toLocaleDateString(),
-      imageURL: downloadURL,
-      categories: confirmedItems.reduce((acc, { category, amount }) => {
-        acc[category] = parseFloat(amount);
-        return acc;
-      }, {}),
-      createdAt: serverTimestamp()
-    };
+      // Prepare the invoice document
+      const invoiceData = {
+        companyName,
+        invoiceNumber,
+        invoiceDate: `${invoiceMonth}/${invoiceDay}/${invoiceYear}`,
+        storeID: selectedStore,
+        user_email: user.email,
+        dateSubmitted: new Date().toLocaleDateString(),
+        imageURL: downloadURL,
+        // Persist month/year assignment to control which month the invoice belongs to
+        targetMonth: Number(targetMonth),
+        targetYear: Number(targetYear),
+        // Store category amounts as arrays so multiple entries per category can be aggregated
+        categories: confirmedItems.reduce((acc, { category, amount }) => {
+          const key = String(category || "").trim();
+          if (!key) return acc;
+          if (!Array.isArray(acc[key])) acc[key] = [];
+          acc[key].push(parseFloat(amount));
+          return acc;
+        }, {}),
+        createdAt: serverTimestamp(),
+      };
 
-    // Store it in Firestore
-    await addDoc(collection(db, "invoices"), invoiceData);
+      // Store it in Firestore
+      await addDoc(collection(db, "invoices"), invoiceData);
 
-    alert("Invoice submitted successfully!");
-    setInvoiceNumber("");
-    setCompanyName("");
-    setExtras([]);
-    setConfirmedItems([]);
-    setImageUpload(null);
+      // Update invoice totals for this store/month/year
+      try {
+        await recomputeMonthlyTotals(selectedStore, targetMonth, targetYear);
+        console.log("Invoice totals updated successfully");
+      } catch (totalsError) {
+        console.error("Error updating invoice totals:", totalsError);
+        // Don't fail the invoice submission if totals update fails
+      }
 
-  } catch (err) {
-    console.error(err);
-    alert("Error submitting invoice: " + err.message);
-  }
-};
+      alert("Invoice submitted successfully!");
+      setInvoiceNumber("");
+      setCompanyName("");
+      setExtras([]);
+      setConfirmedItems([]);
+      setImageUpload(null);
+    } catch (err) {
+      console.error(err);
+      alert("Error submitting invoice: " + err.message);
+    }
+  };
 
   const verifyInput = async () => {
     if (invoiceNumber === "") throw new Error("Invoice Number Required");
@@ -447,7 +480,11 @@ const handleSubmit = async (e) => {
             <label>Invoice #</label>
             <input
               type="text"
-              placeholder={isMonthLocked() ? "Please select valid month" : "Enter Invoice Number"}
+              placeholder={
+                isMonthLocked()
+                  ? "Please select valid month"
+                  : "Enter Invoice Number"
+              }
               value={invoiceNumber}
               onChange={(e) => setInvoiceNumber(e.target.value)}
               disabled={isMonthLocked()}
@@ -458,7 +495,11 @@ const handleSubmit = async (e) => {
             <label>Company Name</label>
             <input
               type="text"
-              placeholder={isMonthLocked() ? "Please select valid month" : "Enter Company Name"}
+              placeholder={
+                isMonthLocked()
+                  ? "Please select valid month"
+                  : "Enter Company Name"
+              }
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
               disabled={isMonthLocked()}
@@ -468,111 +509,133 @@ const handleSubmit = async (e) => {
           {/* Invoice Date Picker */}
           <div className={styles.formGroup}>
             <label>Invoice Date</label>
-            <div className={styles.datePickerContainer} style={{position: 'relative'}} data-date-picker>
-                <input
-                  type="text"
-                  value={formatDate(selectedDate)}
-                  readOnly
-                  className={styles.dateInput}
-                  onClick={(e) => {
-                    const rect = e.target.getBoundingClientRect();
-                    setCalendarPosition({
-                      top: rect.bottom + window.scrollY + 5,
-                      left: rect.left + window.scrollX
-                    });
-                    // Set calendar view to show the selected date's month
-                    setCalendarViewDate(selectedDate);
-                    setShowCalendar(!showCalendar);
-                  }}
-                  placeholder="Select Date"
-                  disabled={isMonthLocked()}
-                />
-                <button
-                  type="button"
-                  className={styles.calendarButton}
-                  onClick={(e) => {
-                    const rect = e.target.getBoundingClientRect();
-                    setCalendarPosition({
-                      top: rect.bottom + window.scrollY + 5,
-                      left: rect.left + window.scrollX
-                    });
-                    // Set calendar view to show the selected date's month
-                    setCalendarViewDate(selectedDate);
-                    setShowCalendar(!showCalendar);
-                  }}
-                  disabled={isMonthLocked()}
-                >
-                  📅
-                </button>
+            <div
+              className={styles.datePickerContainer}
+              style={{ position: "relative" }}
+              data-date-picker
+            >
+              <input
+                type="text"
+                value={formatDate(selectedDate)}
+                readOnly
+                className={styles.dateInput}
+                onClick={(e) => {
+                  const rect = e.target.getBoundingClientRect();
+                  setCalendarPosition({
+                    top: rect.bottom + window.scrollY + 5,
+                    left: rect.left + window.scrollX,
+                  });
+                  // Set calendar view to show the selected date's month
+                  setCalendarViewDate(selectedDate);
+                  setShowCalendar(!showCalendar);
+                }}
+                placeholder="Select Date"
+                disabled={isMonthLocked()}
+              />
+              <button
+                type="button"
+                className={styles.calendarButton}
+                onClick={(e) => {
+                  const rect = e.target.getBoundingClientRect();
+                  setCalendarPosition({
+                    top: rect.bottom + window.scrollY + 5,
+                    left: rect.left + window.scrollX,
+                  });
+                  // Set calendar view to show the selected date's month
+                  setCalendarViewDate(selectedDate);
+                  setShowCalendar(!showCalendar);
+                }}
+                disabled={isMonthLocked()}
+              >
+                📅
+              </button>
             </div>
-            
+
             {showCalendar && (
-              <div 
+              <div
                 data-calendar-popup
                 style={{
-                  position: 'fixed',
+                  position: "fixed",
                   top: `${calendarPosition.top}px`,
                   left: `${calendarPosition.left}px`,
-                  background: 'white',
-                  border: '1px solid #ccc',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                  padding: '15px',
+                  background: "white",
+                  border: "1px solid #ccc",
+                  borderRadius: "8px",
+                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+                  padding: "15px",
                   zIndex: 999999,
-                  width: '280px',
-                  maxHeight: '400px',
-                  overflow: 'auto'
+                  width: "280px",
+                  maxHeight: "400px",
+                  overflow: "auto",
                 }}
               >
-              <div className={styles.calendarHeader}>
+                <div className={styles.calendarHeader}>
                   <button
                     type="button"
                     className={styles.calendarNav}
                     onClick={() => {
-                      const newDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1);
+                      const newDate = new Date(
+                        calendarViewDate.getFullYear(),
+                        calendarViewDate.getMonth() - 1,
+                        1
+                      );
                       setCalendarViewDate(newDate);
                     }}
                   >
                     ‹
                   </button>
                   <span className={styles.calendarMonthYear}>
-                    {calendarViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    {calendarViewDate.toLocaleDateString("en-US", {
+                      month: "long",
+                      year: "numeric",
+                    })}
                   </span>
                   <button
                     type="button"
                     className={styles.calendarNav}
                     onClick={() => {
-                      const newDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 1);
+                      const newDate = new Date(
+                        calendarViewDate.getFullYear(),
+                        calendarViewDate.getMonth() + 1,
+                        1
+                      );
                       setCalendarViewDate(newDate);
                     }}
                   >
                     ›
                   </button>
                 </div>
-                
+
                 <div className={styles.calendarGrid}>
                   <div className={styles.calendarWeekdays}>
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                      <div key={day} className={styles.weekday}>{day}</div>
-                    ))}
+                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                      (day) => (
+                        <div key={day} className={styles.weekday}>
+                          {day}
+                        </div>
+                      )
+                    )}
                   </div>
-                  
+
                   <div className={styles.calendarDays}>
                     {generateCalendarDays().map((date, index) => {
-                      const isCurrentMonth = date.getMonth() === calendarViewDate.getMonth();
-                      const isToday = date.toDateString() === new Date().toDateString();
-                      const isSelected = date.toDateString() === selectedDate.toDateString();
+                      const isCurrentMonth =
+                        date.getMonth() === calendarViewDate.getMonth();
+                      const isToday =
+                        date.toDateString() === new Date().toDateString();
+                      const isSelected =
+                        date.toDateString() === selectedDate.toDateString();
                       const isDisabled = isDateDisabled(date);
-                      
+
                       return (
                         <button
                           key={index}
                           type="button"
                           className={`${styles.calendarDay} ${
-                            !isCurrentMonth ? styles.otherMonth : ''
-                          } ${isToday ? styles.today : ''} ${
-                            isSelected ? styles.selected : ''
-                          } ${isDisabled ? styles.disabled : ''}`}
+                            !isCurrentMonth ? styles.otherMonth : ""
+                          } ${isToday ? styles.today : ""} ${
+                            isSelected ? styles.selected : ""
+                          } ${isDisabled ? styles.disabled : ""}`}
                           onClick={() => !isDisabled && handleDateSelect(date)}
                           disabled={isDisabled}
                         >
@@ -582,7 +645,7 @@ const handleSubmit = async (e) => {
                     })}
                   </div>
                 </div>
-                
+
                 <div className={styles.calendarFooter}>
                   <button
                     type="button"
@@ -594,7 +657,6 @@ const handleSubmit = async (e) => {
                 </div>
               </div>
             )}
-            
           </div>
 
           {/* Month/Year Selectors for Invoice Assignment */}
@@ -777,6 +839,5 @@ const handleSubmit = async (e) => {
     </div>
   );
 };
-
 
 export default SubmitInvoice;

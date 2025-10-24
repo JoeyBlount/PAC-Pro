@@ -51,25 +51,76 @@ class DataIngestionService:
         projections: list[dict],
     ):
         doc_id = f"{store_id}_{year}{month_index_1:02d}"
-        self.db.collection("pac-projections").document(doc_id).set({
-            "store_id": store_id,
-            "year": year,
-            "month_index_1": month_index_1,
-            "pacGoal": float(pac_goal),
-            "rows": projections,
-            "updatedAt": firestore.SERVER_TIMESTAMP,
-        })
+        # Normalize incoming rows into a well-structured document so other
+        # services (and the Actual tab) can read consistent fields.
+        def by_name(name: str) -> dict:
+            for r in projections or []:
+                if str(r.get("name")).strip().lower() == name.strip().lower():
+                    return r
+            return {}
+
+        def get_dollar(row_name: str) -> float:
+            r = by_name(row_name)
+            try:
+                return float(r.get("projectedDollar") or 0.0)
+            except Exception:
+                return 0.0
+
+        # Top-level fields commonly needed downstream
+        product_net_sales = get_dollar("Product Sales") or get_dollar("Product Net Sales")
+        cash_adjustments = get_dollar("Cash +/-")
+
+        # Purchases mapping
+        purchase_map = {
+            "travel": ["Travel"],
+            "advertising_other": ["Adv Other", "Advertising Other"],
+            "promotion": ["Promotion"],
+            "outside_services": ["Outside Services"],
+            "linen": ["Linen"],
+            "operating_supply": ["OP. Supply", "Operating Supply"],
+            "maintenance_repair": ["Maint. & Repair", "Maintenance & Repair"],
+            "small_equipment": ["Small Equipment"],
+            "utilities": ["Utilities"],
+            "office": ["Office"],
+            "training": ["Training"],
+            "crew_relations": ["Crew Relations"],
+        }
+
+        purchases: Dict[str, float] = {}
+        for key, names in purchase_map.items():
+            amt = 0.0
+            for nm in names:
+                v = get_dollar(nm)
+                if v:  # first match wins (explicit ordering above)
+                    amt = v
+                    break
+            purchases[key] = amt
+
+        self.db.collection("pac-projections").document(doc_id).set(
+            {
+                "store_id": store_id,
+                "year": year,
+                "month_index_1": month_index_1,
+                "pacGoal": float(pac_goal),
+                "rows": projections,  # keep raw rows for UI seeding/reset
+                # Structured fields for backend/Actual tab consumption
+                "product_net_sales": product_net_sales,
+                "cash_adjustments": cash_adjustments,
+                "purchases": purchases,
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            },
+            merge=False,  # overwrite existing doc entirely for this month/store
+        )
     
     async def _get_pac_data_from_firebase(self, entity_id: str, year_month: str) -> Dict[str, Any]:
-        """Get PAC data from Firebase for a specific store and month"""
+        """Get PAC data from Firebase for a specific store and month using pac-projections"""
         doc_id = f"{entity_id}_{year_month}"
-        doc_ref = self.db.collection('pac_input_data').document(doc_id)
+        doc_ref = self.db.collection('pac-projections').document(doc_id)
         doc = doc_ref.get()
-        
         if doc.exists:
-            return doc.to_dict()
+            return doc.to_dict() or {}
         else:
-            raise Exception(f"No PAC data found for {entity_id} in {year_month}")
+            return {}
     
     async def get_input_data_async(self, entity_id: str, year_month: str) -> PacInputData:
         """
@@ -83,6 +134,90 @@ class DataIngestionService:
             PacInputData object with all required data
         """
         data = await self._get_pac_data_from_firebase(entity_id, year_month)
+
+        # --- Backward compatible derivation ---
+        # Older documents may only contain `rows` without a structured `purchases` map.
+        # If so, derive structured fields from rows so Training and Crew Relations show up.
+        try:
+            rows = data.get("rows") if isinstance(data, dict) else None
+            purchases = data.get("purchases") if isinstance(data, dict) else None
+
+            needs_derivation = isinstance(rows, list) and (
+                not isinstance(purchases, dict)
+                or any(
+                    key not in purchases
+                    for key in [
+                        "travel",
+                        "advertising_other",
+                        "promotion",
+                        "outside_services",
+                        "linen",
+                        "operating_supply",
+                        "maintenance_repair",
+                        "small_equipment",
+                        "utilities",
+                        "office",
+                        "training",
+                        "crew_relations",
+                    ]
+                )
+            )
+
+            if needs_derivation:
+                def by_name(name: str) -> Dict[str, Any]:
+                    for r in rows:
+                        nm = str(r.get("name", "")).strip().lower()
+                        if nm == name.strip().lower():
+                            return r or {}
+                    return {}
+
+                def get_dollar(row_name: str) -> float:
+                    r = by_name(row_name)
+                    try:
+                        return float(r.get("projectedDollar") or 0.0)
+                    except Exception:
+                        return 0.0
+
+                # Sales fallbacks
+                pns = get_dollar("Product Sales") or get_dollar("Product Net Sales")
+                ca = get_dollar("Cash +/-")
+
+                # Derive purchases from rows using same mapping as save_projections
+                purchase_map = {
+                    "travel": ["Travel"],
+                    "advertising_other": ["Adv Other", "Advertising Other"],
+                    "promotion": ["Promotion"],
+                    "outside_services": ["Outside Services"],
+                    "linen": ["Linen"],
+                    "operating_supply": ["OP. Supply", "Operating Supply"],
+                    "maintenance_repair": ["Maint. & Repair", "Maintenance & Repair"],
+                    "small_equipment": ["Small Equipment"],
+                    "utilities": ["Utilities"],
+                    "office": ["Office"],
+                    "training": ["Training"],
+                    "crew_relations": ["Crew Relations"],
+                }
+
+                derived_purchases: Dict[str, float] = {}
+                for key, names in purchase_map.items():
+                    amt = 0.0
+                    for nm in names:
+                        v = get_dollar(nm)
+                        if v:
+                            amt = v
+                            break
+                    derived_purchases[key] = amt
+
+                # Merge back, preserving any existing structured values
+                data = {
+                    **data,
+                    "product_net_sales": float(data.get("product_net_sales") or pns or 0.0),
+                    "cash_adjustments": float(data.get("cash_adjustments") or ca or 0.0),
+                    "purchases": {**(purchases or {}), **derived_purchases},
+                }
+        except Exception:
+            # Non-fatal; proceed with whatever we have
+            pass
         
         # Convert Firebase data to PacInputData
         return PacInputData(
@@ -160,279 +295,5 @@ class DataIngestionService:
         data = await self._get_pac_data_from_firebase(entity_id, year_month)
         return Decimal(str(data.get('cash_adjustments', 0)))
     
-    async def get_promotions_async(self, entity_id: str, year_month: str) -> Decimal:
-        """
-        Get promotions data from POS system
-        
-        Args:
-            entity_id: Store/entity identifier
-            year_month: Year and month in YYYYMM format
-            
-        Returns:
-            Promotions amount
-        """
-        # TODO: Integrate with POS promotions data
-        await self._simulate_async_operation()
-        return Decimal('2000')  # Mock data
-    
-    async def get_manager_meals_async(self, entity_id: str, year_month: str) -> Decimal:
-        """
-        Get manager meals from POS system
-        
-        Args:
-            entity_id: Store/entity identifier
-            year_month: Year and month in YYYYMM format
-            
-        Returns:
-            Manager meals amount
-        """
-        # TODO: Integrate with POS manager comps
-        await self._simulate_async_operation()
-        return Decimal('300')  # Mock data
-    
-    async def get_crew_labor_percent_async(self, entity_id: str, year_month: str) -> Decimal:
-        """
-        Get crew labor percentage from payroll system
-        
-        Args:
-            entity_id: Store/entity identifier
-            year_month: Year and month in YYYYMM format
-            
-        Returns:
-            Crew labor percentage
-        """
-        # TODO: Integrate with payroll system
-        await self._simulate_async_operation()
-        return Decimal('25.5')  # Mock data
-    
-    async def get_total_labor_percent_async(self, entity_id: str, year_month: str) -> Decimal:
-        """
-        Get total labor percentage from payroll system
-        
-        Args:
-            entity_id: Store/entity identifier
-            year_month: Year and month in YYYYMM format
-            
-        Returns:
-            Total labor percentage
-        """
-        # TODO: Integrate with payroll system
-        await self._simulate_async_operation()
-        return Decimal('35.0')  # Mock data
-    
-    async def get_payroll_tax_rate_async(self, entity_id: str, year_month: str) -> Decimal:
-        """
-        Get payroll tax rate from payroll system
-        
-        Args:
-            entity_id: Store/entity identifier
-            year_month: Year and month in YYYYMM format
-            
-        Returns:
-            Payroll tax rate percentage
-        """
-        # TODO: Integrate with payroll system
-        await self._simulate_async_operation()
-        return Decimal('8.5')  # Mock data
-    
-    async def get_complete_waste_percent_async(self, entity_id: str, year_month: str) -> Decimal:
-        """
-        Get complete waste percentage from waste tracking system
-        
-        Args:
-            entity_id: Store/entity identifier
-            year_month: Year and month in YYYYMM format
-            
-        Returns:
-            Complete waste percentage
-        """
-        # TODO: Integrate with waste tracking system
-        await self._simulate_async_operation()
-        return Decimal('2.5')  # Mock data
-    
-    async def get_raw_waste_percent_async(self, entity_id: str, year_month: str) -> Decimal:
-        """
-        Get raw waste percentage from waste tracking system
-        
-        Args:
-            entity_id: Store/entity identifier
-            year_month: Year and month in YYYYMM format
-            
-        Returns:
-            Raw waste percentage
-        """
-        # TODO: Integrate with waste tracking system
-        await self._simulate_async_operation()
-        return Decimal('1.8')  # Mock data
-    
-    async def get_condiment_percent_async(self, entity_id: str, year_month: str) -> Decimal:
-        """
-        Get condiment percentage from inventory management system
-        
-        Args:
-            entity_id: Store/entity identifier
-            year_month: Year and month in YYYYMM format
-            
-        Returns:
-            Condiment percentage
-        """
-        # TODO: Integrate with inventory management system
-        await self._simulate_async_operation()
-        return Decimal('3.2')  # Mock data
-    
-    async def get_beginning_inventory_async(self, entity_id: str, year_month: str) -> InventoryData:
-        """
-        Get beginning inventory from inventory management system
-        
-        Args:
-            entity_id: Store/entity identifier
-            year_month: Year and month in YYYYMM format
-            
-        Returns:
-            Beginning inventory data
-        """
-        # TODO: Integrate with inventory management system
-        await self._simulate_async_operation()
-        return InventoryData(
-            food=Decimal('15000'),
-            condiment=Decimal('2000'),
-            paper=Decimal('3000'),
-            non_product=Decimal('1000'),
-            op_supplies=Decimal('500')
-        )
-    
-    async def get_ending_inventory_async(self, entity_id: str, year_month: str) -> InventoryData:
-        """
-        Get ending inventory from inventory management system
-        
-        Args:
-            entity_id: Store/entity identifier
-            year_month: Year and month in YYYYMM format
-            
-        Returns:
-            Ending inventory data
-        """
-        # TODO: Integrate with inventory management system
-        await self._simulate_async_operation()
-        return InventoryData(
-            food=Decimal('12000'),
-            condiment=Decimal('1800'),
-            paper=Decimal('2500'),
-            non_product=Decimal('800'),
-            op_supplies=Decimal('500')
-        )
-    
-    async def get_purchases_async(self, entity_id: str, year_month: str) -> PurchaseData:
-        """
-        Get purchases data from invoice/invoice system
-        
-        Args:
-            entity_id: Store/entity identifier
-            year_month: Year and month in YYYYMM format
-            
-        Returns:
-            Purchase data
-        """
-        # TODO: Integrate with invoice/invoice system
-        await self._simulate_async_operation()
-        return PurchaseData(
-            food=Decimal('45000'),
-            condiment=Decimal('3000'),
-            paper=Decimal('2000'),
-            non_product=Decimal('1500'),
-            travel=Decimal('800'),
-            advertising_other=Decimal('1200'),
-            promotion=Decimal('1000'),
-            outside_services=Decimal('600'),
-            linen=Decimal('400'),
-            operating_supply=Decimal('300'),
-            maintenance_repair=Decimal('500'),
-            small_equipment=Decimal('200'),
-            utilities=Decimal('1200'),
-            office=Decimal('150'),
-            training=Decimal('300'),
-            crew_relations=Decimal('200')
-        )
-    
-    async def get_advertising_percent_async(self, entity_id: str, year_month: str) -> Decimal:
-        """
-        Get advertising percentage from settings/budget system
-        
-        Args:
-            entity_id: Store/entity identifier
-            year_month: Year and month in YYYYMM format
-            
-        Returns:
-            Advertising percentage
-        """
-        # TODO: Integrate with settings/budget system
-        await self._simulate_async_operation()
-        return Decimal('2.0')  # Mock data
-    
-    async def get_input_data(self, entity_id: str, year_month: str) -> PacInputData:
-        """
-        Get complete input data for PAC calculations
-        This method aggregates all individual data retrieval methods
-        
-        Args:
-            entity_id: Store/entity identifier
-            year_month: Year and month in YYYYMM format
-            
-        Returns:
-            Complete input data for PAC calculations
-        """
-        # Get all data concurrently for better performance
-        import asyncio
-        (
-            product_net_sales,
-            cash_adjustments,
-            promotions,
-            manager_meals,
-            crew_labor_percent,
-            total_labor_percent,
-            payroll_tax_rate,
-            complete_waste_percent,
-            raw_waste_percent,
-            condiment_percent,
-            beginning_inventory,
-            ending_inventory,
-            purchases,
-            advertising_percent
-        ) = await asyncio.gather(
-            self.get_product_net_sales_async(entity_id, year_month),
-            self.get_cash_adjustments_async(entity_id, year_month),
-            self.get_promotions_async(entity_id, year_month),
-            self.get_manager_meals_async(entity_id, year_month),
-            self.get_crew_labor_percent_async(entity_id, year_month),
-            self.get_total_labor_percent_async(entity_id, year_month),
-            self.get_payroll_tax_rate_async(entity_id, year_month),
-            self.get_complete_waste_percent_async(entity_id, year_month),
-            self.get_raw_waste_percent_async(entity_id, year_month),
-            self.get_condiment_percent_async(entity_id, year_month),
-            self.get_beginning_inventory_async(entity_id, year_month),
-            self.get_ending_inventory_async(entity_id, year_month),
-            self.get_purchases_async(entity_id, year_month),
-            self.get_advertising_percent_async(entity_id, year_month)
-        )
-        
-        return PacInputData(
-            product_net_sales=product_net_sales,
-            cash_adjustments=cash_adjustments,
-            promotions=promotions,
-            manager_meals=manager_meals,
-            crew_labor_percent=crew_labor_percent,
-            total_labor_percent=total_labor_percent,
-            payroll_tax_rate=payroll_tax_rate,
-            complete_waste_percent=complete_waste_percent,
-            raw_waste_percent=raw_waste_percent,
-            condiment_percent=condiment_percent,
-            beginning_inventory=beginning_inventory,
-            ending_inventory=ending_inventory,
-            purchases=purchases,
-            advertising_percent=advertising_percent
-        )
-    
-    async def _simulate_async_operation(self):
-        """Simulate async operation delay"""
-        import asyncio
-        await asyncio.sleep(0.001)  # Simulate async operation
+    # Removed legacy mock getters and aggregator to reduce confusion. Firebase-backed
+    # methods above are the source of truth.

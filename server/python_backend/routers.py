@@ -560,20 +560,158 @@ async def get_pac_projections(
 
         projections_data = doc.to_dict()
 
-        # Create a custom ingestion service that returns the projections as PacInputData
-        from services.data_ingestion_service import DataIngestionService
+        # --- Fallback: derive structured fields from legacy `rows` documents ---
+        # Some older projection docs only contain raw `rows` and `pacGoal`.
+        # The Actual tab and calculation service expect structured fields like
+        # `product_net_sales`, `cash_adjustments`, and a `purchases` map.
+        # If those are missing, derive them from rows so older data still works.
+        try:
+            if projections_data is not None:
+                needs_structured = (
+                    "product_net_sales" not in projections_data
+                    and isinstance(projections_data.get("rows"), list)
+                )
 
+                if needs_structured:
+                    rows = projections_data.get("rows", [])
+
+                    def by_name(name: str) -> dict:
+                        for r in rows:
+                            nm = str(r.get("name", "")).strip().lower()
+                            if nm == name.strip().lower():
+                                return r
+                        return {}
+
+                    def get_dollar(row_name: str) -> float:
+                        r = by_name(row_name)
+                        try:
+                            return float(r.get("projectedDollar") or 0.0)
+                        except Exception:
+                            return 0.0
+
+                    # Top-level sales fields
+                    product_net_sales = get_dollar("Product Sales") or get_dollar("Product Net Sales")
+                    cash_adjustments = get_dollar("Cash +/-")
+
+                    # Purchases mapping (aligns with DataIngestionService.save_projections)
+                    purchase_map = {
+                        "travel": ["Travel"],
+                        "advertising_other": ["Adv Other", "Advertising Other"],
+                        "promotion": ["Promotion"],
+                        "outside_services": ["Outside Services"],
+                        "linen": ["Linen"],
+                        "operating_supply": ["OP. Supply", "Operating Supply"],
+                        "maintenance_repair": ["Maint. & Repair", "Maintenance & Repair"],
+                        "small_equipment": ["Small Equipment"],
+                        "utilities": ["Utilities"],
+                        "office": ["Office"],
+                        "training": ["Training"],
+                        # Crew Relations only (legacy CR/TR/D&S kept separate)
+                        "crew_relations": ["Crew Relations"],
+                    }
+
+                    purchases: Dict[str, float] = {}
+                    for key, names in purchase_map.items():
+                        amt = 0.0
+                        for nm in names:
+                            v = get_dollar(nm)
+                            if v:
+                                amt = v
+                                break
+                        purchases[key] = amt
+
+                    # Merge derived structured fields back into the payload
+                    projections_data = {
+                        **projections_data,
+                        "product_net_sales": float(product_net_sales or 0.0),
+                        "cash_adjustments": float(cash_adjustments or 0.0),
+                        "purchases": purchases,
+                    }
+        except Exception:
+            # If any derivation fails, continue with whatever we have
+            pass
+
+        # If the document contains rows, transform them directly to the response so
+        # the Actual tab's Projected columns mirror the Projections tab entries exactly.
+        rows = projections_data.get("rows") or []
+        if rows:
+            def find_row(*names: str):
+                name_set = {n.strip().lower() for n in names}
+                for r in rows:
+                    if str(r.get("name", "")).strip().lower() in name_set:
+                        return r or {}
+                return {}
+
+            def as_expense(*names: str):
+                r = find_row(*names)
+                return {
+                    "dollars": float(r.get("projectedDollar") or 0.0),
+                    "percent": float(r.get("projectedPercent") or 0.0),
+                }
+
+            # Some deployments saved structured purchases without explicit Training/Crew Relations rows.
+            # Fallback to structured purchases when a row is missing (dollars/percent = 0).
+            def expense_from_rows_or_purchases(row_names: list[str], purchase_key: str):
+                e = as_expense(*row_names)
+                if (e.get("dollars") or 0.0) > 0.0 or (e.get("percent") or 0.0) > 0.0:
+                    return e
+                try:
+                    purchases = projections_data.get("purchases") or {}
+                    amt = float(purchases.get(purchase_key) or 0.0)
+                    if amt > 0.0:
+                        base = product_sales or all_net_sales or 0.0
+                        pct = (amt / base * 100.0) if base > 0 else 0.0
+                        return {"dollars": amt, "percent": pct}
+                except Exception:
+                    pass
+                return e
+
+            product_sales = float(find_row("Product Net Sales", "Product Sales").get("projectedDollar") or 0.0)
+            all_net_sales = float(find_row("All Net Sales").get("projectedDollar") or 0.0)
+
+            return {
+                "product_net_sales": product_sales,
+                "all_net_sales": all_net_sales,
+                "controllable_expenses": {
+                    "base_food": as_expense("Base Food"),
+                    "employee_meal": as_expense("Employee Meal"),
+                    "condiment": as_expense("Condiment"),
+                    "total_waste": as_expense("Total Waste"),
+                    "paper": as_expense("Paper"),
+                    "crew_labor": as_expense("Crew Labor"),
+                    "management_labor": as_expense("Management Labor"),
+                    "payroll_tax": as_expense("Payroll Tax"),
+                    "travel": as_expense("Travel"),
+                    "advertising": as_expense("Advertising"),
+                    "advertising_other": as_expense("Adv Other", "Advertising Other"),
+                    "promotion": as_expense("Promotion"),
+                    "outside_services": as_expense("Outside Services"),
+                    "linen": as_expense("Linen"),
+                    "op_supply": as_expense("OP. Supply", "Operating Supply"),
+                    "maintenance_repair": as_expense("Maint. & Repair", "Maintenance & Repair"),
+                    "small_equipment": as_expense("Small Equipment"),
+                    "utilities": as_expense("Utilities"),
+                    "office": as_expense("Office"),
+                    "cash_adjustments": as_expense("Cash +/-"),
+                    "crew_relations": expense_from_rows_or_purchases(["Crew Relations"], "crew_relations"),
+                    "training": expense_from_rows_or_purchases(["Training"], "training"),
+                },
+                "total_controllable_dollars": float(find_row("Total Controllable").get("projectedDollar") or 0.0),
+                "total_controllable_percent": float(find_row("Total Controllable").get("projectedPercent") or 0.0),
+                "pac_percent": float(find_row("P.A.C.").get("projectedPercent") or 0.0),
+                "pac_dollars": float(find_row("P.A.C.").get("projectedDollar") or 0.0),
+            }
+
+        # Otherwise fall back to computed service (rare)
+        from services.data_ingestion_service import DataIngestionService
         class ProjectionsDataIngestionService(DataIngestionService):
             def __init__(self, projections):
                 super().__init__()
                 self._projections = projections
-
-            async def get_input_data_async(self, entity_id: str, year_month: str):
+            async def get_input_data(self, entity_id: str, year_month: str):
                 from models import PacInputData, InventoryData, PurchaseData
                 from decimal import Decimal
-
                 d = self._projections
-
                 return PacInputData(
                     product_net_sales=Decimal(str(d.get("product_net_sales", 0))),
                     cash_adjustments=Decimal(str(d.get("cash_adjustments", 0))),
@@ -586,47 +724,15 @@ async def get_pac_projections(
                     raw_waste_percent=Decimal(str(d.get("raw_waste_percent", 0))),
                     condiment_percent=Decimal(str(d.get("condiment_percent", 0))),
                     advertising_percent=Decimal(str(d.get("advertising_percent", 0))),
-                    beginning_inventory=InventoryData(
-                        food=Decimal(str(d.get("beginning_inventory", {}).get("food", 0))),
-                        paper=Decimal(str(d.get("beginning_inventory", {}).get("paper", 0))),
-                        condiment=Decimal(str(d.get("beginning_inventory", {}).get("condiment", 0))),
-                        non_product=Decimal(str(d.get("beginning_inventory", {}).get("non_product", 0))),
-                        op_supplies=Decimal(str(d.get("beginning_inventory", {}).get("op_supplies", 0))),
-                    ),
-                    ending_inventory=InventoryData(
-                        food=Decimal(str(d.get("ending_inventory", {}).get("food", 0))),
-                        paper=Decimal(str(d.get("ending_inventory", {}).get("paper", 0))),
-                        condiment=Decimal(str(d.get("ending_inventory", {}).get("condiment", 0))),
-                        non_product=Decimal(str(d.get("ending_inventory", {}).get("non_product", 0))),
-                        op_supplies=Decimal(str(d.get("ending_inventory", {}).get("op_supplies", 0))),
-                    ),
-                    purchases=PurchaseData(
-                        food=Decimal(str(d.get("purchases", {}).get("food", 0))),
-                        paper=Decimal(str(d.get("purchases", {}).get("paper", 0))),
-                        condiment=Decimal(str(d.get("purchases", {}).get("condiment", 0))),
-                        non_product=Decimal(str(d.get("purchases", {}).get("non_product", 0))),
-                        op_supplies=Decimal(str(d.get("purchases", {}).get("op_supplies", 0))),
-                        travel=Decimal(str(d.get("purchases", {}).get("travel", 0))),
-                        advertising_other=Decimal(str(d.get("purchases", {}).get("advertising_other", 0))),
-                        promotion=Decimal(str(d.get("purchases", {}).get("promotion", 0))),
-                        outside_services=Decimal(str(d.get("purchases", {}).get("outside_services", 0))),
-                        linen=Decimal(str(d.get("purchases", {}).get("linen", 0))),
-                        operating_supply=Decimal(str(d.get("purchases", {}).get("operating_supply", 0))),
-                        maintenance_repair=Decimal(str(d.get("purchases", {}).get("maintenance_repair", 0))),
-                        small_equipment=Decimal(str(d.get("purchases", {}).get("small_equipment", 0))),
-                        utilities=Decimal(str(d.get("purchases", {}).get("utilities", 0))),
-                        office=Decimal(str(d.get("purchases", {}).get("office", 0))),
-                        training=Decimal(str(d.get("purchases", {}).get("training", 0))),
-                        crew_relations=Decimal(str(d.get("purchases", {}).get("crew_relations", 0))),
-                    ),
+                    beginning_inventory=InventoryData(),
+                    ending_inventory=InventoryData(),
+                    purchases=PurchaseData(),
                 )
-
         projections_ingestion_service = ProjectionsDataIngestionService(projections_data)
         account_mapping_service = AccountMappingService()
         projections_pac_service = PacCalculationService(
             projections_ingestion_service, account_mapping_service
         )
-
         result = await projections_pac_service.calculate_pac_async(entity_id, year_month)
         return result.dict()
 

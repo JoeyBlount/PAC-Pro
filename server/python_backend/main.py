@@ -152,15 +152,10 @@ def get_identity(authorization: Optional[str] = Header(None),
         except Exception:
             raise HTTPException(status_code=401, detail="Invalid Firebase ID token")
 
-    # Mock mode
+    # In non-firebase environments, reject unauthenticated access instead of mock
     if x_dev_email:
-        return {"email": x_dev_email, "uid": "mock-uid"}
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization.split(" ", 1)[1]
-        email = _extract_email_from_bearer(token)
-        if email:
-            return {"email": email, "uid": "mock-uid"}
-    return {"email": "dev@example.com", "uid": "mock-uid"}
+        return {"email": x_dev_email, "uid": "dev-bypass"}
+    raise HTTPException(status_code=401, detail="Authentication required")
 
 # ---------- Firestore helpers ----------
 def _get_user_doc_by_email(db, email: str):
@@ -204,18 +199,7 @@ def get_me(identity=Depends(get_identity)):
             assignedStores=assigned,
         )
 
-    # Mock mode
-    _ensure_mock_seed()
-    if email not in _mock_users:
-        _mock_users[email] = Me(
-            id="mock-user-id",
-            firstName="Dev",
-            lastName="User",
-            email=email,
-            role="Admin",
-            assignedStores=[],
-        )
-    return _mock_users[email]
+    raise HTTPException(status_code=503, detail="Firebase not initialized")
 
 @account_router.get("/stores", response_model=List[Store])
 def list_stores(identity=Depends(get_identity)):
@@ -235,8 +219,7 @@ def list_stores(identity=Depends(get_identity)):
             )
         return stores
 
-    _ensure_mock_seed()
-    return list(_mock_stores.values())
+    raise HTTPException(status_code=503, detail="Firebase not initialized")
 
 @account_router.post("/me/assigned-stores", response_model=Me)
 def assign_store(payload: AssignPayload, identity=Depends(get_identity)):
@@ -278,18 +261,7 @@ def assign_store(payload: AssignPayload, identity=Depends(get_identity)):
             assignedStores=_normalize_assigned_stores(updated.get("assignedStores", [])),
         )
 
-    # Mock mode
-    _ensure_mock_seed()
-    user = _mock_users.get(email) or Me(
-        id="mock-user-id", firstName="Dev", lastName="User", email=email, role="Admin", assignedStores=[]
-    )
-    store = _mock_stores.get(payload.storeId)
-    if not store:
-        raise HTTPException(status_code=404, detail="Store not found")
-    if not any(s.id == store.id for s in user.assignedStores):
-        user.assignedStores.append(store)
-    _mock_users[email] = user
-    return user
+    raise HTTPException(status_code=503, detail="Firebase not initialized")
 
 @account_router.delete("/me/assigned-stores/{store_id}", response_model=Me)
 def unassign_store(store_id: str, identity=Depends(get_identity)):
@@ -315,13 +287,7 @@ def unassign_store(store_id: str, identity=Depends(get_identity)):
             assignedStores=_normalize_assigned_stores(updated.get("assignedStores", [])),
         )
 
-    # Mock mode
-    user = _mock_users.get(email)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    user.assignedStores = [s for s in user.assignedStores if s.id != store_id]
-    _mock_users[email] = user
-    return user
+    raise HTTPException(status_code=503, detail="Firebase not initialized")
 
 #new Account router
 app.include_router(account_router)
@@ -381,254 +347,12 @@ class GenerateOut(GenerateIn):
     id: str
     savedAt: str
 
-# simple in-memory store for mock mode
-_mock_pacgen: dict[str, dict[str, GenerateOut]] = {}  # keyed by [storeId][period]
-
-@pac_router.post("/generate", response_model=GenerateOut)
-def save_generate(payload: GenerateIn, identity=Depends(get_identity)):
-    db = _firestore()
-    now_iso = datetime.utcnow().isoformat() + "Z"
-
-    if db:
-        # Firestore live mode
-        doc_data = payload.dict()
-        doc_data["uid"] = identity.get("uid")
-        doc_data["email"] = identity.get("email")
-        doc_data["savedAt"] = now_iso
-
-        # Use auto ID; alternatively build deterministic docId
-        # docId = f"{payload.storeId}_{payload.period.replace('-', '')}"
-        ref = db.collection("pacGen").document()
-        # server timestamp if you'd like: firestore.SERVER_TIMESTAMP
-        ref.set({**doc_data, "createdAt": firestore.SERVER_TIMESTAMP})
-
-        return GenerateOut(id=ref.id, savedAt=now_iso, **payload.dict())
-
-    # Mock mode
-    store = _mock_pacgen.setdefault(payload.storeId, {})
-    mock_id = f"mock-{payload.storeId}-{payload.period}"
-    out = GenerateOut(id=mock_id, savedAt=now_iso, **payload.dict())
-    store[payload.period] = out
-    return out
-
-# (optional) fetch last saved Generate for a store/period
-@pac_router.get("/generate/{store_id}/{year_month}", response_model=Optional[GenerateOut])
-def get_generate(store_id: str, year_month: str, identity=Depends(get_identity)):
-    db = _firestore()
-    if db:
-        # naive: scan latest match (optimize with a composite index if you need)
-        q = (db.collection("pacGen")
-                .where("storeId", "==", store_id)
-                .where("period", "==", year_month)
-                .order_by("createdAt", direction=firestore.Query.DESCENDING)
-                .limit(1)
-             )
-        snaps = list(q.stream())
-        if not snaps:
-            return None
-        d = snaps[0]
-        data = d.to_dict() or {}
-        return GenerateOut(
-            id=str(d.id),
-            savedAt=(data.get("savedAt") or ""),
-            **{k: data[k] for k in GenerateIn.__fields__.keys()}
-        )
-    # mock
-    return _mock_pacgen.get(store_id, {}).get(year_month)
+# Legacy pacGen endpoints removed; use pac-projections and invoices instead
 
 # mount the router
 app.include_router(pac_router)
 
-# ---------------------------------------------------
-# Mock PAC endpoints (including projections) for dev
-# ---------------------------------------------------
-# These do NOT collide with real routes; they live under /api/pac-mock/...
-# Use them while Firebase is disabled or uninitialized.
-mock_router = APIRouter(prefix="/api/pac-mock", tags=["PAC (mock)"])
-
-def _mock_pac_data(entity_id: str, year_month: str):
-    """Generate realistic-ish PAC data with variations."""
-    import random
-    random.seed(hash(entity_id + year_month))
-
-    base_sales = 155000.00 + random.uniform(-10000, 15000)
-    all_sales = base_sales + random.uniform(15000, 25000)
-
-    base_food_var = random.uniform(0.85, 1.15)
-    labor_var = random.uniform(0.90, 1.10)
-    other_var = random.uniform(0.85, 1.15)
-
-    base_food = 46500.00 * base_food_var
-    crew_labor = 36167.00 * labor_var
-    management_labor = 15500.00 * labor_var
-    payroll_tax = (crew_labor + management_labor) * 0.11
-
-    employee_meal = 3100.00 * other_var
-    condiment = 2067.00 * other_var
-    total_waste = 5167.00 * base_food_var
-    paper = 8267.00 * other_var
-    travel = 1033.00 * other_var
-    advertising = 3100.00 * other_var
-    advertising_other = 1550.00 * other_var
-    promotion = 2067.00 * other_var
-    outside_services = 1240.00 * other_var
-    linen = 827.00 * other_var
-    op_supply = 1550.00 * other_var
-    maintenance_repair = 2583.00 * other_var
-    small_equipment = 1860.00 * other_var
-    utilities = 4133.00 * other_var
-    office = 620.00 * other_var
-    cash_adjustments = 517.00 * other_var
-    misc_cr_tr_ds = 310.00 * other_var
-
-    total_controllable = (
-        base_food + employee_meal + condiment + total_waste + paper +
-        crew_labor + management_labor + payroll_tax + travel + advertising +
-        advertising_other + promotion + outside_services + linen + op_supply +
-        maintenance_repair + small_equipment + utilities + office +
-        cash_adjustments + misc_cr_tr_ds
-    )
-
-    pac_dollars = base_sales - total_controllable
-    pac_percent = (pac_dollars / base_sales) * 100 if base_sales > 0 else 0
-
-    return {
-        "entity_id": entity_id,
-        "year_month": year_month,
-        "product_net_sales": round(base_sales, 2),
-        "all_net_sales": round(all_sales, 2),
-        "amount_used": {
-            "food": round(base_food, 2),
-            "paper": round(paper, 2),
-            "condiment": round(condiment, 2),
-            "non_product": round(employee_meal + total_waste, 2),
-            "op_supplies": round(op_supply, 2),
-        },
-        "controllable_expenses": {
-            "base_food": {"dollars": round(base_food, 2), "percent": round((base_food / base_sales) * 100, 2)},
-            "employee_meal": {"dollars": round(employee_meal, 2), "percent": round((employee_meal / base_sales) * 100, 2)},
-            "condiment": {"dollars": round(condiment, 2), "percent": round((condiment / base_sales) * 100, 2)},
-            "total_waste": {"dollars": round(total_waste, 2), "percent": round((total_waste / base_sales) * 100, 2)},
-            "paper": {"dollars": round(paper, 2), "percent": round((paper / base_sales) * 100, 2)},
-            "crew_labor": {"dollars": round(crew_labor, 2), "percent": round((crew_labor / base_sales) * 100, 2)},
-            "management_labor": {"dollars": round(management_labor, 2), "percent": round((management_labor / base_sales) * 100, 2)},
-            "payroll_tax": {"dollars": round(payroll_tax, 2), "percent": round((payroll_tax / base_sales) * 100, 2)},
-            "travel": {"dollars": round(travel, 2), "percent": round((travel / base_sales) * 100, 2)},
-            "advertising": {"dollars": round(advertising, 2), "percent": round((advertising / base_sales) * 100, 2)},
-            "advertising_other": {"dollars": round(advertising_other, 2), "percent": round((advertising_other / base_sales) * 100, 2)},
-            "promotion": {"dollars": round(promotion, 2), "percent": round((promotion / base_sales) * 100, 2)},
-            "outside_services": {"dollars": round(outside_services, 2), "percent": round((outside_services / base_sales) * 100, 2)},
-            "linen": {"dollars": round(linen, 2), "percent": round((linen / base_sales) * 100, 2)},
-            "op_supply": {"dollars": round(op_supply, 2), "percent": round((op_supply / base_sales) * 100, 2)},
-            "maintenance_repair": {"dollars": round(maintenance_repair, 2), "percent": round((maintenance_repair / base_sales) * 100, 2)},
-            "small_equipment": {"dollars": round(small_equipment, 2), "percent": round((small_equipment / base_sales) * 100, 2)},
-            "utilities": {"dollars": round(utilities, 2), "percent": round((utilities / base_sales) * 100, 2)},
-            "office": {"dollars": round(office, 2), "percent": round((office / base_sales) * 100, 2)},
-            "cash_adjustments": {"dollars": round(cash_adjustments, 2), "percent": round((cash_adjustments / base_sales) * 100, 2)},
-            "misc_cr_tr_ds": {"dollars": round(misc_cr_tr_ds, 2), "percent": round((misc_cr_tr_ds / base_sales) * 100, 2)},
-        },
-        "total_controllable_dollars": round(total_controllable, 2),
-        "total_controllable_percent": round((total_controllable / base_sales) * 100, 2),
-        "pac_dollars": round(pac_dollars, 2),
-        "pac_percent": round(pac_percent, 2),
-        "status": "calculated (mock)",
-    }
-
-@mock_router.get("/{entity_id}/{year_month}")
-async def get_pac_data_mock(entity_id: str, year_month: str):
-    """Mock PAC calculations (dev mode)"""
-    return _mock_pac_data(entity_id, year_month)
-
-@mock_router.get("/{entity_id}/{year_month}/input")
-async def get_input_data_mock(entity_id: str, year_month: str):
-    """Mock PAC input data (dev mode)"""
-    return {
-        "entity_id": entity_id,
-        "year_month": year_month,
-        "input_data": {
-            "sales_data": {"food_sales": 150000.00, "labor_sales": 80000.00},
-            "cost_data": {"food_cost": 120000.00, "labor_cost": 60000.00},
-            "expenses": {"utilities": 5000.00, "maintenance": 3000.00, "supplies": 2000.00},
-        },
-        "status": "retrieved (mock mode)",
-    }
-
-@mock_router.get("/projections/{entity_id}/{year_month}")
-async def get_projections_mock(entity_id: str, year_month: str):
-    """Mock projections (consistent baseline) with totals."""
-    projected_sales = 155000.00
-    projected_all_sales = 175000.00
-
-    projected_base_food = 46500.00
-    projected_employee_meal = 3100.00
-    projected_condiment = 2067.00
-    projected_total_waste = 5167.00
-    projected_paper = 8267.00
-    projected_crew_labor = 36167.00
-    projected_management_labor = 15500.00
-    projected_payroll_tax = 4133.00
-    projected_travel = 1033.00
-    projected_advertising = 3100.00
-    projected_advertising_other = 1550.00
-    projected_promotion = 2067.00
-    projected_outside_services = 1240.00
-    projected_linen = 827.00
-    projected_op_supply = 1550.00
-    projected_maintenance_repair = 2583.00
-    projected_small_equipment = 1860.00
-    projected_utilities = 4133.00
-    projected_office = 620.00
-    projected_cash_adjustments = 517.00
-    projected_misc_cr_tr_ds = 310.00
-
-    projected_total_controllable = (
-        projected_base_food + projected_employee_meal + projected_condiment +
-        projected_total_waste + projected_paper + projected_crew_labor +
-        projected_management_labor + projected_payroll_tax + projected_travel +
-        projected_advertising + projected_advertising_other + projected_promotion +
-        projected_outside_services + projected_linen + projected_op_supply +
-        projected_maintenance_repair + projected_small_equipment + projected_utilities +
-        projected_office + projected_cash_adjustments + projected_misc_cr_tr_ds
-    )
-    projected_pac = projected_sales - projected_total_controllable
-
-    return {
-        "entity_id": entity_id,
-        "year_month": year_month,
-        "product_net_sales": projected_sales,
-        "all_net_sales": projected_all_sales,
-        "controllable_expenses": {
-            "base_food": {"dollars": projected_base_food, "percent": 30.0},
-            "employee_meal": {"dollars": projected_employee_meal, "percent": 2.0},
-            "condiment": {"dollars": projected_condiment, "percent": 1.33},
-            "total_waste": {"dollars": projected_total_waste, "percent": 3.33},
-            "paper": {"dollars": projected_paper, "percent": 5.33},
-            "crew_labor": {"dollars": projected_crew_labor, "percent": 23.33},
-            "management_labor": {"dollars": projected_management_labor, "percent": 10.0},
-            "payroll_tax": {"dollars": projected_payroll_tax, "percent": 2.67},
-            "travel": {"dollars": projected_travel, "percent": 0.67},
-            "advertising": {"dollars": projected_advertising, "percent": 2.0},
-            "advertising_other": {"dollars": projected_advertising_other, "percent": 1.0},
-            "promotion": {"dollars": projected_promotion, "percent": 1.33},
-            "outside_services": {"dollars": projected_outside_services, "percent": 0.8},
-            "linen": {"dollars": projected_linen, "percent": 0.53},
-            "op_supply": {"dollars": projected_op_supply, "percent": 1.0},
-            "maintenance_repair": {"dollars": projected_maintenance_repair, "percent": 1.67},
-            "small_equipment": {"dollars": projected_small_equipment, "percent": 1.2},
-            "utilities": {"dollars": projected_utilities, "percent": 2.67},
-            "office": {"dollars": projected_office, "percent": 0.4},
-            "cash_adjustments": {"dollars": projected_cash_adjustments, "percent": 0.33},
-            "misc_cr_tr_ds": {"dollars": projected_misc_cr_tr_ds, "percent": 0.2},
-        },
-        "total_controllable_dollars": projected_total_controllable,
-        "total_controllable_percent": 84.0,
-        "pac_dollars": projected_pac,
-        "pac_percent": 16.0,
-        "status": "projected (mock mode)",
-    }
-
-if not FIREBASE_AVAILABLE or not FIREBASE_INITIALIZED:
-    app.include_router(mock_router)
+    # No mock endpoints; backend requires real data
 
 
 @app.get("/")

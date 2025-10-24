@@ -12,7 +12,7 @@ firestore/
 │   ├── store_001/            # Downtown Location
 │   ├── store_002/            # Mall Branch
 │   └── ...
-└── pac_input_data/           # PAC calculation input data
+└── pac-projections/          # Projections and structured fields
     ├── store_001_202501/     # January 2025 data
     ├── store_001_202502/     # February 2025 data
     └── ...
@@ -31,7 +31,7 @@ firestore/
 }
 ```
 
-### PAC Input Data Collection (`pac_input_data`)
+### Projections Collection (`pac-projections`)
 
 **Document ID**: `{store_id}_{year_month}` (e.g., `store_001_202501`)
 
@@ -90,6 +90,7 @@ firestore/
 ## 📊 Generated Test Data
 
 ### Stores (8 locations)
+
 - **store_001**: Downtown Location (New York, NY) - High volume
 - **store_002**: Mall Branch (Los Angeles, CA) - Medium-high volume
 - **store_003**: Airport Terminal (Chicago, IL) - High volume
@@ -100,6 +101,7 @@ firestore/
 - **store_008**: Historic District (Philadelphia, PA) - Lower volume
 
 ### Time Period
+
 - **Year**: 2025
 - **Months**: January through December (12 months)
 - **Total Records**: 96 PAC data records (8 stores × 12 months)
@@ -107,6 +109,7 @@ firestore/
 ### Data Characteristics
 
 #### Seasonal Variations
+
 - **January**: 85% of base (post-holiday slump)
 - **February**: 90% of base (Valentine's boost)
 - **March**: 105% of base (spring pickup)
@@ -121,6 +124,7 @@ firestore/
 - **December**: 130% of base (holiday peak)
 
 #### Realistic Variations
+
 - **Sales Data**: ±5% random variation
 - **Labor Percentages**: 22-28% crew, 30-40% total
 - **Waste Percentages**: 2-3.5% complete, 1.5-2.5% raw
@@ -181,6 +185,7 @@ curl http://localhost:5140/api/pac/store_002/202507
 ## 📈 Data Validation
 
 The generated data includes:
+
 - ✅ Realistic seasonal patterns
 - ✅ Store-specific variations
 - ✅ Proper data types and ranges
@@ -207,6 +212,7 @@ The generated data includes:
 ## 📞 Support
 
 For issues with Firebase integration:
+
 1. Check `FIREBASE_SETUP.md` for setup instructions
 2. Verify service account key configuration
 3. Ensure Firestore is enabled in Firebase Console
