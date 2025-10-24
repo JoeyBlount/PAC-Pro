@@ -667,6 +667,7 @@ const SubmitInvoice = () => {
               <FormControl sx={{ minWidth: 150 }}>
                 <InputLabel>Month</InputLabel>
                 <Select
+                  data-testid="month-select"
                   value={targetMonth}
                   onChange={(e) => setTargetMonth(e.target.value)}
                   label="Month"
@@ -816,6 +817,7 @@ const SubmitInvoice = () => {
             />
             <button
               type="submit"
+              data-testid="submit-invoice-btn"
               className={styles.submitBtn}
               disabled={isMonthLocked()}
             >
