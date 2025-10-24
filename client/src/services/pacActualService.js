@@ -283,8 +283,18 @@ const calculatePacActual = (
     (Number(inventoryEnding.paper) || 0); // Ending Inventory Paper
 
   // Purchases calculations (from invoice log totals)
-  const promotion = (Number(sales.promo) || 0) * 0.3;
-  const advertising = ((Number(sales.advertising) || 0) / 100) * allNetSales;
+  const promotionFromGenerateInput = (Number(sales.promo) || 0) * 0.3;
+  const advertisingFromGenerateInput =
+    ((Number(sales.advertising) || 0) / 100) * allNetSales;
+
+  // Include invoice log totals for advertising and promotion if they exist
+  const promotionFromInvoices = Number(invoiceTotals.PROMOTION) || 0;
+  const advertisingFromInvoices = Number(invoiceTotals.ADVERTISING) || 0;
+
+  // Combine both sources for total values
+  const promotion = promotionFromGenerateInput + promotionFromInvoices;
+  const advertising = advertisingFromGenerateInput + advertisingFromInvoices;
+
   const cashPlusMinus = -(Number(sales.cash) || 0); // Flip the sign
 
   console.log("[PAC Actual] Calculated values:", {
@@ -296,7 +306,11 @@ const calculatePacActual = (
     totalWaste,
     paper,
     promotion,
+    promotionFromGenerateInput,
+    promotionFromInvoices,
     advertising,
+    advertisingFromGenerateInput,
+    advertisingFromInvoices,
     cashPlusMinus,
   });
 
@@ -325,9 +339,9 @@ const calculatePacActual = (
     crewLaborDollars + managementLaborDollars + payrollTaxDollars;
   const purchasesTotal =
     (Number(invoiceTotals.TRAVEL) || 0) +
-    advertising + // Advertising from generate input (% of all net sales)
+    advertising + // Advertising (generate input % + invoice log totals)
     (Number(invoiceTotals["ADV-OTHER"]) || 0) +
-    promotion +
+    promotion + // Promotion (generate input % + invoice log totals)
     (Number(invoiceTotals["OUTSIDE SVC"]) || 0) +
     (Number(invoiceTotals.LINEN) || 0) +
     (Number(invoiceTotals["OP. SUPPLY"]) || 0) +
