@@ -3,8 +3,7 @@ import { test, expect, chromium, Page, Locator } from '@playwright/test';
 const FRONTEND = 'http://localhost:3000';
 const PAC_URL = `${FRONTEND}/navi/pac`;
 
-/* ---------------- helpers ---------------- */
-
+// helpers
 // Strip zero-width chars, currency, commas; keep digits, dot, minus; convert (x)→-x
 const normalizeNumericText = (s: string) =>
   s
@@ -112,7 +111,7 @@ async function trySetPacGoal(page: Page, percent: number): Promise<boolean> {
   const goalInput = page.locator('thead input[type="number"]').first();
   if (!(await goalInput.isVisible())) return false;
 
-  // Fill exact percent (2 decimals is fine per your tolerance ±0.01)
+  // Fill exact percent 
   const toSet = percent.toFixed(2);
   await goalInput.fill('');
   await goalInput.fill(toSet);
@@ -127,7 +126,40 @@ async function trySetPacGoal(page: Page, percent: number): Promise<boolean> {
   return true;
 }
 
-/* ---------------- the test ---------------- */
+// fingerprints to detect month-to-month data changes
+
+async function fingerprintProjections(page: Page): Promise<string> {
+  await page.getByRole('tab', { name: 'Projections' }).click();
+  // Capture every tbody text (there may be multiple tables/sections)
+  const bodies = page.locator('tbody');
+  const n = await bodies.count();
+  const chunks: string[] = [];
+  for (let i = 0; i < n; i++) chunks.push(await bodies.nth(i).innerText());
+  // Normalize so numbers/structure drive the diff, not whitespace
+  return normalizeNumericText(chunks.join('|'));
+}
+
+async function fingerprintGenerate(page: Page): Promise<string> {
+  await page.getByRole('tab', { name: 'Generate' }).click();
+  const root = page.locator('.pac-section');
+  await root.first().waitFor({ state: 'visible', timeout: 5000 });
+
+  // Take both text and current numeric inputs; combine for a stronger signal.
+  const textParts = await root.allInnerTexts();
+  const textBlock = normalizeNumericText(textParts.join('|'));
+
+  const inputs = page.locator('.pac-section input[type="number"]');
+  const cnt = await inputs.count();
+  const values: string[] = [];
+  for (let i = 0; i < cnt; i++) {
+    const inp = inputs.nth(i);
+    if (await inp.isVisible()) values.push(await inp.inputValue());
+  }
+  const inputsBlock = normalizeNumericText(values.join(','));
+
+  return `${textBlock}::${inputsBlock}`;
+}
+
 
 test.describe('PAC – full input coverage + Apply/Submit (auto-enable Apply)', () => {
   test('Projections: edit all inputs + auto-match PAC Goal + Apply; Generate: edit all inputs + Submit', async () => {
@@ -141,7 +173,7 @@ test.describe('PAC – full input coverage + Apply/Submit (auto-enable Apply)', 
 
     // Manual login first time
     await page.goto(FRONTEND);
-    await page.pause(); 
+    await page.pause();
     console.log('sign in manually, then Resume.');
 
     // Optional: refresh Firebase id token
@@ -152,13 +184,37 @@ test.describe('PAC – full input coverage + Apply/Submit (auto-enable Apply)', 
       if (user?.getIdToken) await user.getIdToken(true);
     });
 
-    // PAC page + pick unlocked period
+    // PAC page + pick unlocked period (first)
     await page.goto(PAC_URL);
-    console.log('pick an UNLOCKED month/year(September if you want apply to work, any other month if not), then Resume.');
+    console.log('pick an UNLOCKED month (November), then Resume.');
     await page.pause();
     ensurePageOpen(page);
 
-    /* ---------------- PROJECTIONS ---------------- */
+    // capture fingerprints for current month before editing
+    const beforeProj = await fingerprintProjections(page);
+    const beforeGen  = await fingerprintGenerate(page);
+
+    // Pause to manually switch to a DIFFERENT month/year
+    console.log('switch to a DIFFERENT month (September if you want Apply to work), then Resume.');
+    await page.pause();
+    ensurePageOpen(page);
+
+    // Give any reloads/recomputations a moment
+    await waitForNextSeed(page, 5000);
+
+    // Re-capture fingerprints for the new month
+    const afterProj = await fingerprintProjections(page);
+    const afterGen  = await fingerprintGenerate(page);
+
+    const projChanged = beforeProj !== afterProj;
+    const genChanged  = beforeGen  !== afterGen;
+
+    expect(
+      projChanged || genChanged,
+      'Expected data to change after switching month on at least one of Projections or Generate tabs'
+    ).toBeTruthy();
+
+    /* test Projections */
     await page.getByRole('tab', { name: 'Projections' }).click();
 
     // Iterate all visible rows; try editing Projected $ (cell 1) and Projected % (cell 2).
@@ -179,12 +235,12 @@ test.describe('PAC – full input coverage + Apply/Submit (auto-enable Apply)', 
 
       // Special cases: Product Sales and All Net Sales
       if (/^Product Sales$/i.test(nameText)) {
-        await fillIfEditable(row, 1, '20000'); 
-        await fillIfEditable(row, 2, '2');     
-      } 
+        await fillIfEditable(row, 1, '20000');
+        await fillIfEditable(row, 2, '2');
+      }
       else if (/^All Net Sales$/i.test(nameText)) {
         await fillIfEditable(row, 1, '100000');
-        await fillIfEditable(row, 2, '2');     
+        await fillIfEditable(row, 2, '2');
       }
       else {
         // Default behavior for other rows
@@ -195,7 +251,6 @@ test.describe('PAC – full input coverage + Apply/Submit (auto-enable Apply)', 
       if (/^All Net Sales$/i.test(nameText)) allNetRowFound = row;
       if (/^Advertising\b/i.test(nameText)) advRowFound = row;
     }
-
 
     // If both rows present and editable, assert $ math: 100000 at All Net Sales + 2% at Advertising → $2000
     if (allNetRowFound && advRowFound) {
@@ -238,13 +293,12 @@ test.describe('PAC – full input coverage + Apply/Submit (auto-enable Apply)', 
       });
       await applyButton.click();
       await page.waitForTimeout(800); // wait for potential alert
-        console.log('Apply ', dialogs.join(' | '));
-      
+      console.log('Apply ', dialogs.join(' | '));
     } else {
       console.log('Apply is disabled (PAC mismatch and goal not editable).');
     }
 
-    /* ---------------- GENERATE ---------------- */
+    /* test Generate */
     await page.getByRole('tab', { name: 'Generate' }).click();
 
     // Fill EVERY numeric input in Generate
