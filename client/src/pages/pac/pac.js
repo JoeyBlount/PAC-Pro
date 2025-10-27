@@ -1,16 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { db, auth } from "../../config/firebase-config";
-import {
-  collection,
-  addDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  getDocs,
-  serverTimestamp,
-} from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import {
   Box,
   Container,
@@ -38,28 +29,63 @@ import { StoreContext } from "../../context/storeContext";
 import PacTab from "./PacTab";
 import { useAuth } from "../../context/AuthContext";
 import MonthLockService from "../../services/monthLockService";
+import { saveGenerateInput } from "../../services/generateInputService";
+import {
+  computeAndSavePacActual,
+  getPacActual,
+} from "../../services/pacActualService";
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 
 
 
 const expenseList = [
-  "Product Sales", "All Net Sales",
-  "Base Food", "Employee Meal", "Condiment", "Total Waste", "Paper",
-  "Crew Labor", "Management Labor", "Payroll Tax", "Advertising",
-  "Travel", "Adv Other", "Promotion", "Outside Services",
-  "Linen", "OP. Supply", "Maint. & Repair", "Small Equipment", "Utilities", "Office", "Cash +/-", "Crew Relations", "Training",
-  "Total Controllable", "P.A.C."
+  "Product Sales",
+  "All Net Sales",
+  "Base Food",
+  "Employee Meal",
+  "Condiment",
+  "Total Waste",
+  "Paper",
+  "Crew Labor",
+  "Management Labor",
+  "Payroll Tax",
+  "Advertising",
+  "Travel",
+  "Adv Other",
+  "Promotion",
+  "Outside Services",
+  "Linen",
+  "OP. Supply",
+  "Maint. & Repair",
+  "Small Equipment",
+  "Utilities",
+  "Office",
+  "Cash +/-",
+  "Crew Relations",
+  "Training",
+  "Total Controllable",
+  "P.A.C.",
 ];
 
 // Add expense(s) to this array to disable projected $ text field. Case-senstive.
 const hasUserInputAmountField = [
-  "Product Sales", "All Net Sales",
-  "Travel", "Adv Other", "Outside Services",
-  "Linen", "OP. Supply", "Maint. & Repair", "Small Equipment", "Utilities", "Office", "Cash +/-", "Crew Relations", "Training",
-  "Promotion"
+  "Product Sales",
+  "All Net Sales",
+  "Travel",
+  "Adv Other",
+  "Outside Services",
+  "Linen",
+  "OP. Supply",
+  "Maint. & Repair",
+  "Small Equipment",
+  "Utilities",
+  "Office",
+  "Cash +/-",
+  "Crew Relations",
+  "Training",
+  "Promotion",
 ];
-
 
 // Backend (Generate tab)
 const BASE_URL = "http://127.0.0.1:5140";
@@ -67,7 +93,9 @@ async function api(path, { method = "GET", body } = {}) {
   const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
   const headers = {
     "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : { "X-Dev-Email": "dev@example.com" }),
+    ...(token
+      ? { Authorization: `Bearer ${token}` }
+      : { "X-Dev-Email": "dev@example.com" }),
   };
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -78,25 +106,40 @@ async function api(path, { method = "GET", body } = {}) {
   return res.json();
 }
 
-
 // Add expense(s) to this array to disable projected % text field. Case-senstive.
 const hasUserInputedPercentageField = [
-  "Base Food", "Employee Meal", "Condiment", "Total Waste", "Paper",
-  "Crew Labor", "Management Labor", "Payroll Tax",
-  "Advertising"
+  "Base Food",
+  "Employee Meal",
+  "Condiment",
+  "Total Waste",
+  "Paper",
+  "Crew Labor",
+  "Management Labor",
+  "Payroll Tax",
+  "Advertising",
 ];
 
 const getLabel = (key) => {
   const specialLabels = {
     "Payroll Tax": "% of Total Labor",
-    "Advertising": "% of All Net Sales"
+    Advertising: "% of All Net Sales",
   };
 
   return specialLabels[key] || "";
 };
 
-const fmtUsd = (v) => new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(v || 0));
-const fmtPercent = (v) => new Intl.NumberFormat('en-US', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits:2, }).format(v/100);
+const fmtUsd = (v) =>
+  new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(Number(v || 0));
+const fmtPercent = (v) =>
+  new Intl.NumberFormat("en-US", {
+    style: "percent",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(v / 100);
 
 const PAC = () => {
   const location = useLocation();
@@ -106,10 +149,27 @@ const PAC = () => {
   const [month, setMonth] = useState(currentMonth);
 
   const pad2 = (n) => String(n).padStart(2, "0");
-  const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const months = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 11 }, (_, i) => currentYear - i);
   const [year, setYear] = useState(currentYear);
+
+  // Separate state for actual data dropdowns in projections tab
+  const [actualMonth, setActualMonth] = useState(currentMonth);
+  const [actualYear, setActualYear] = useState(currentYear);
 
   // Handle navigation from Reports page
   useEffect(() => {
@@ -142,8 +202,16 @@ const PAC = () => {
 
   // Map getPacRowColor() -> MUI cell styles
   const PAC_COLOR_STYLES = {
-    green: { backgroundColor: "rgba(46,125,50,0.12)", color: "#2e7d32", fontWeight: 700 },
-    red: { backgroundColor: "rgba(211,47,47,0.12)", color: "#d32f2f", fontWeight: 700 },
+    green: {
+      backgroundColor: "rgba(46,125,50,0.12)",
+      color: "#2e7d32",
+      fontWeight: 700,
+    },
+    red: {
+      backgroundColor: "rgba(211,47,47,0.12)",
+      color: "#d32f2f",
+      fontWeight: 700,
+    },
   };
 
   // projections API wrappers
@@ -181,10 +249,8 @@ const PAC = () => {
     });
   }
 
-
   // UI state for admin edit mode
   const [editingGoal, setEditingGoal] = useState(false);
-
 
   const handleResetToLastSubmitted = async () => {
     if (!selectedStore) return;
@@ -192,25 +258,33 @@ const PAC = () => {
     const prevYear = prevDate.getFullYear();
     const prevMonthName = months[prevDate.getMonth()];
     try {
-      const data = await seedProjections(selectedStore, prevYear, prevMonthName);
+      const data = await seedProjections(
+        selectedStore,
+        prevYear,
+        prevMonthName
+      );
       if (!data || !Array.isArray(data.rows) || data.rows.length === 0) {
         alert("No previous submission found.");
         return;
       }
       setProjections(data.rows);
-      if (typeof data.pacGoal !== "undefined") setPacGoal(String(data.pacGoal));
+      // persist previous month rows into current draft so inputs reflect immediately
+      try {
+        localStorage.setItem(draftKey, JSON.stringify(data.rows));
+      } catch { }
+      // Do NOT change PAC Goal when resetting to previous month
     } catch (e) {
       console.error("reset to previous month error", e);
       alert("Failed to load previous month.");
     }
   };
 
-  // State variables for Generate tab; may need to change these
-  const pacGenRef = collection(db, "pacGen");
+  // State variables for Generate tab; legacy pacGen removed
   const [productNetSales, setProductNetSales] = useState(0);
   const [cash, setCash] = useState(0);
   const [promo, setPromo] = useState(0);
   const [allNetSales, setAllNetSales] = useState(0);
+  const [managerMeal, setManagerMeal] = useState(0);
   const [advertising, setAdvertising] = useState(0);
 
   const [crewLabor, setCrewLabor] = useState(0);
@@ -241,6 +315,25 @@ const PAC = () => {
 
   const isAdmin = (userRole || "").toLowerCase() === "admin";
 
+  // Function to get user's full name
+  const getUserFullName = async () => {
+    try {
+      if (auth.currentUser?.email) {
+        const userRef = doc(db, "users", auth.currentUser.email);
+        const userDoc = await getDoc(userRef);
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          return `${userData.firstName || ""} ${userData.lastName || ""
+            }`.trim();
+        }
+      }
+      return auth.currentUser?.displayName || "Unknown User";
+    } catch (error) {
+      console.error("Error getting user full name:", error);
+      return "Unknown User";
+    }
+  };
+
   // Month locking state
   const [monthLockStatus, setMonthLockStatus] = useState(null);
   const [lastUpdatedTimestamp, setLastUpdatedTimestamp] = useState(null);
@@ -252,18 +345,20 @@ const PAC = () => {
   );
 
   // Only admins can unlock months
-  const canUnlockMonth = isAdmin; const getPrevPeriod = (y, mName) => {
-    const i = months.indexOf(mName);              // 0..11
-    const d = new Date(y, i - 1, 1);              // prev month
+  const canUnlockMonth = isAdmin;
+  const getPrevPeriod = (y, mName) => {
+    const i = months.indexOf(mName); // 0..11
+    const d = new Date(y, i - 1, 1); // prev month
     return { y: d.getFullYear(), m: d.getMonth() + 1 }; // 1..12
   };
-
 
   // returns { monthIndex, year }
   function getPrevMonthYear(d = new Date()) {
     const m = d.getMonth(); // 0..11
     const y = d.getFullYear();
-    return m === 0 ? { monthIndex: 11, year: y - 1 } : { monthIndex: m - 1, year: y };
+    return m === 0
+      ? { monthIndex: 11, year: y - 1 }
+      : { monthIndex: m - 1, year: y };
   }
   // ---------- keys & ids ----------
   const monthIndex = months.indexOf(month); // 0..11
@@ -297,22 +392,23 @@ const PAC = () => {
       );
       setMonthLockStatus(lockStatus);
 
-      // Fetch last updated timestamp from pacGen collection
-      const monthIndex = months.indexOf(month);
-      const period = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-
-      const pacQuery = query(
-        pacGenRef,
-        where("Period", "==", period),
-        orderBy("createdAt", "desc"),
-        limit(1)
-      );
-      const pacSnapshot = await getDocs(pacQuery);
-      if (!pacSnapshot.empty) {
-        const doc = pacSnapshot.docs[0];
-        const data = doc.data();
-        setLastUpdatedTimestamp(data.createdAt?.toDate?.() || new Date());
-      }
+      // Last Updated timestamp now based on pac-projections doc
+      try {
+        const monthIndex = months.indexOf(month);
+        const id = `${selectedStore}_${year}${String(monthIndex + 1).padStart(
+          2,
+          "0"
+        )}`;
+        const ref = doc(db, "pac-projections", id);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          const d = snap.data();
+          const ts = d.updatedAt?.toDate?.() || new Date();
+          setLastUpdatedTimestamp(ts);
+        } else {
+          setLastUpdatedTimestamp(null);
+        }
+      } catch { }
     } catch (error) {
       console.error("Error fetching month lock status:", error);
     }
@@ -364,30 +460,22 @@ const PAC = () => {
         await fetchMonthLockStatus();
         await fetchLockedMonths();
 
-        const auth = getAuth();
-        const currentUser = auth.currentUser;
+        const firstName = (await getUserFullName()).split(" ")[0] || "Someone";
 
-        const lockerUser =
-        userData && userData.firstName
-          ? userData
-          : currentUser
-          ? { firstName: currentUser.displayName?.split(" ")[0] || "Someone" }
-          : { firstName: "Someone" };
         await fetch("http://localhost:5140/api/pac/notifications/send", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          context: {
-            event: monthLockStatus,
-            firstName: lockerUser.firstName || "Someone",
-            month,
-            year,
-            store: selectedStore,
-          },
-        }),
-      });
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            context: {
+              event: monthLockStatus, // or result if your API expects the new status
+              firstName,
+              month,
+              year,
+              store: selectedStore,
+            },
+          }),
+        });
+
       } else {
         alert(result.message);
       }
@@ -405,6 +493,9 @@ const PAC = () => {
     return isMonthLocked();
   };
 
+  // Disable Generate tab inputs when month is locked
+  const inputsDisabled = isCurrentPeriodLocked();
+
   useEffect(() => {
     if (!selectedStore || tabIndex !== 0) return;
 
@@ -413,14 +504,15 @@ const PAC = () => {
         const data = await seedProjections(selectedStore, year, month);
         // { source, pacGoal, rows }
         setPacGoal(String(data.pacGoal ?? ""));
-        setProjections(Array.isArray(data.rows) ? data.rows : makeEmptyProjectionRows());
+        setProjections(
+          Array.isArray(data.rows) ? data.rows : makeEmptyProjectionRows()
+        );
       } catch (e) {
         console.error("seedProjections error", e);
         // fallback: keep current projections
       }
     })();
   }, [selectedStore, tabIndex, month, year]);
-
 
   useEffect(() => {
     if (!selectedStore) return;
@@ -442,6 +534,79 @@ const PAC = () => {
     }
   }, [selectedStore, draftKey]);
 
+  // Function to load existing generate input data for autofill
+  const loadExistingGenerateData = async () => {
+    if (!selectedStore || !month || !year || tabIndex !== 1) return;
+
+    try {
+      const { getGenerateInput } = await import(
+        "../../services/generateInputService"
+      );
+      // Normalize store id to canonical form used in Firestore docs
+      const norm = (val) => {
+        if (!val) return val;
+        const m = String(val).match(/(\d{1,3})$/);
+        if (m) return `store_${String(parseInt(m[1], 10)).padStart(3, "0")}`;
+        return String(val).toLowerCase();
+      };
+      const existingData = await getGenerateInput(
+        norm(selectedStore),
+        year,
+        month
+      );
+
+      if (existingData) {
+        console.log(
+          "Autofilling Generate tab with existing data:",
+          existingData
+        );
+
+        // Sales section
+        setProductNetSales(existingData.sales?.productNetSales || 0);
+        setCash(existingData.sales?.cash || 0);
+        setPromo(existingData.sales?.promo || 0);
+        setAllNetSales(existingData.sales?.allNetSales || 0);
+        setManagerMeal(existingData.sales?.managerMeal || 0);
+        setAdvertising(existingData.sales?.advertising || 0);
+
+        // Labor section
+        setCrewLabor(existingData.labor?.crewLabor || 0);
+        setTotalLabor(existingData.labor?.totalLabor || 0);
+        setPayrollTax(existingData.labor?.payrollTax || 0);
+
+        // Food section
+        setCompleteWaste(existingData.food?.completeWaste || 0);
+        setRawWaste(existingData.food?.rawWaste || 0);
+        setCondiment(existingData.food?.condiment || 0);
+        setVariance(existingData.food?.variance || 0);
+        setUnexplained(existingData.food?.unexplained || 0);
+        setDiscounts(existingData.food?.discounts || 0);
+        setBaseFood(existingData.food?.baseFood || 0);
+
+        // Inventory - Starting
+        setStartingFood(existingData.inventoryStarting?.food || 0);
+        setStartingCondiment(existingData.inventoryStarting?.condiment || 0);
+        setStartingPaper(existingData.inventoryStarting?.paper || 0);
+        setStartingNonProduct(existingData.inventoryStarting?.nonProduct || 0);
+        setStartingOpsSupplies(
+          existingData.inventoryStarting?.opsSupplies || 0
+        );
+
+        // Inventory - Ending
+        setEndingFood(existingData.inventoryEnding?.food || 0);
+        setEndingCondiment(existingData.inventoryEnding?.condiment || 0);
+        setEndingPaper(existingData.inventoryEnding?.paper || 0);
+        setEndingNonProduct(existingData.inventoryEnding?.nonProduct || 0);
+        setEndingOpsSupplies(existingData.inventoryEnding?.opsSupplies || 0);
+
+        console.log("Generate tab autofilled successfully");
+      } else {
+        console.log("No existing generate data found for autofill");
+      }
+    } catch (error) {
+      console.error("Error loading existing generate data:", error);
+    }
+  };
 
   // Fetch month lock status when month, year, or store changes
   useEffect(() => {
@@ -449,29 +614,89 @@ const PAC = () => {
     fetchLockedMonths();
   }, [month, year, selectedStore]);
 
+  // Load existing generate data when switching to Generate tab
+  useEffect(() => {
+    if (tabIndex === 1) {
+      loadExistingGenerateData();
+    }
+  }, [tabIndex, selectedStore, month, year]);
+
+  // Fetch PAC actual data when actualMonth/actualYear/store changes
+  useEffect(() => {
+    const fetchPacActualData = async () => {
+      if (!selectedStore || !actualMonth || !actualYear) return;
+
+      try {
+        const formattedStoreId = selectedStore.startsWith("store_")
+          ? selectedStore
+          : `store_${selectedStore.padStart(3, "0")}`;
+
+        const pacActualData = await getPacActual(
+          formattedStoreId,
+          actualYear,
+          actualMonth
+        );
+        setPacActualData(pacActualData);
+      } catch (error) {
+        console.error("Error fetching PAC actual data:", error);
+        setPacActualData(null);
+      }
+    };
+
+    fetchPacActualData();
+  }, [selectedStore, actualMonth, actualYear]);
+
   useEffect(() => {
     const loadHistoricalData = async () => {
       if (!selectedStore || !histYear || !histMonth || tabIndex !== 0) return;
       try {
-        const res = await fetchHistoricalRows(selectedStore, histYear, histMonth);
-        const histRows = Array.isArray(res.rows) ? res.rows : [];
-        setProjections(prev =>
-          prev.map(expense => {
-            const h = histRows.find(r => r.name === expense.name) || {};
-            return {
-              ...expense,
-              historicalDollar: h.historicalDollar ?? "-",
-              historicalPercent: h.historicalPercent ?? "-",
-            };
-          })
+        // Load PAC actual data for the selected month/year instead of historical data
+        const formattedStoreId = selectedStore.startsWith("store_")
+          ? selectedStore
+          : `store_${selectedStore.padStart(3, "0")}`;
+
+        const pacActualData = await getPacActual(
+          formattedStoreId,
+          histYear,
+          histMonth
         );
+
+        if (pacActualData) {
+          setProjections((prev) =>
+            prev.map((expense) => {
+              const pacActualValue = getPacActualValue(expense.name);
+              return {
+                ...expense,
+                historicalDollar: pacActualValue.dollars || 0,
+                historicalPercent: pacActualValue.percent || 0,
+              };
+            })
+          );
+        } else {
+          // Fallback to historical data if PAC actual data not found
+          const res = await fetchHistoricalRows(
+            selectedStore,
+            histYear,
+            histMonth
+          );
+          const histRows = Array.isArray(res.rows) ? res.rows : [];
+          setProjections((prev) =>
+            prev.map((expense) => {
+              const h = histRows.find((r) => r.name === expense.name) || {};
+              return {
+                ...expense,
+                historicalDollar: h.historicalDollar ?? "-",
+                historicalPercent: h.historicalPercent ?? "-",
+              };
+            })
+          );
+        }
       } catch (e) {
-        console.error("historical fetch error", e);
+        console.error("PAC actual data fetch error", e);
       }
     };
     loadHistoricalData();
   }, [selectedStore, tabIndex, histMonth, histYear]);
-
 
   const debouncedSave = (next) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -484,31 +709,45 @@ const PAC = () => {
     }, 500);
   };
 
-
   const handleInputChange = async (index, field, value) => {
     // Start from current state snapshot
-    const np = projections.map(r => ({ ...r }));
+    const np = projections.map((r) => ({ ...r }));
     np[index][field] = value;
 
     // Recompute simple local estimates you still want to show immediately (optional)
-    const crewLabor$ = parseFloat(np.find(e => e.name === "Crew Labor")?.projectedDollar) || 0;
-    const mgmtLabor$ = parseFloat(np.find(e => e.name === "Management Labor")?.projectedDollar) || 0;
-    const payrollTaxPct = parseFloat(np.find(e => e.name === "Payroll Tax")?.projectedPercent) || 0;
-    const ans$ = parseFloat(np.find(e => e.name === "All Net Sales")?.projectedDollar) || 0;
-    const advPct = parseFloat(np.find(e => e.name === "Advertising")?.projectedPercent) || 0;
+    const crewLabor$ =
+      parseFloat(np.find((e) => e.name === "Crew Labor")?.projectedDollar) || 0;
+    const mgmtLabor$ =
+      parseFloat(
+        np.find((e) => e.name === "Management Labor")?.projectedDollar
+      ) || 0;
+    const payrollTaxPct =
+      parseFloat(np.find((e) => e.name === "Payroll Tax")?.projectedPercent) ||
+      0;
+    const ans$ =
+      parseFloat(np.find((e) => e.name === "All Net Sales")?.projectedDollar) ||
+      0;
+    const advPct =
+      parseFloat(np.find((e) => e.name === "Advertising")?.projectedPercent) ||
+      0;
     np.forEach((row, idx) => {
       const hist$ = parseFloat(row.historicalDollar) || 0;
       const histPct = parseFloat(row.historicalPercent) || 0;
       const proj$ = parseFloat(row.projectedDollar) || 0;
       const projPct = parseFloat(row.projectedPercent) || 0;
-      if (row.name === "Payroll Tax") np[idx].projectedDollar = ((crewLabor$ + mgmtLabor$) * (payrollTaxPct / 100)).toFixed(2);
-      if (row.name === "Advertising") np[idx].projectedDollar = (ans$ * (advPct / 100)).toFixed(2);
+      if (row.name === "Payroll Tax")
+        np[idx].projectedDollar = (
+          (crewLabor$ + mgmtLabor$) *
+          (payrollTaxPct / 100)
+        ).toFixed(2);
+      if (row.name === "Advertising")
+        np[idx].projectedDollar = (ans$ * (advPct / 100)).toFixed(2);
       np[idx].estimatedDollar = ((proj$ + hist$) / 2).toFixed(2);
       np[idx].estimatedPercent = ((projPct + histPct) / 2).toFixed(2);
     });
 
     try {
-      const res = await applyRows(np);            // backend does the authoritative math
+      const res = await applyRows(np); // backend does the authoritative math
       const applied = Array.isArray(res.rows) ? res.rows : np;
       setProjections(applied);
       debouncedSave(applied);
@@ -547,13 +786,12 @@ const PAC = () => {
         year,
         month,
         pacGoal,
-        projections.map(p => ({
+        projections.map((p) => ({
           name: p.name,
           projectedDollar: Number(p.projectedDollar) || 0,
           projectedPercent: Number(p.projectedPercent) || 0,
         }))
       );
-
 
       // clear the refresh-proof draft now that the source of truth is saved
       localStorage.removeItem(draftKey);
@@ -565,7 +803,6 @@ const PAC = () => {
     }
   };
 
-
   const getEmptyHistoricalData = () => {
     return expenseList.map((expense) => ({
       name: expense,
@@ -576,8 +813,8 @@ const PAC = () => {
 
   const makeEmptyProjectionRows = () => {
     const historicalData = getEmptyHistoricalData();
-    return expenseList.map(expense => {
-      const h = historicalData.find(e => e.name === expense) || {};
+    return expenseList.map((expense) => {
+      const h = historicalData.find((e) => e.name === expense) || {};
       return {
         name: expense,
         projectedDollar: "",
@@ -585,33 +822,52 @@ const PAC = () => {
         estimatedDollar: h.historicalDollar || "",
         estimatedPercent: h.historicalPercent || "",
         historicalDollar: h.historicalDollar || "",
-        historicalPercent: h.historicalPercent || ""
+        historicalPercent: h.historicalPercent || "",
       };
     });
   };
-
 
   const [projections, setProjections] = useState(makeEmptyProjectionRows());
 
   const [storeNumber, setStoreNumber] = useState("Store 123"); // You might want to make this dynamic
   const [actualData, setActualData] = useState({}); // Will hold actual data from invoices
+  const [pacActualData, setPacActualData] = useState(null); // Will hold PAC actual data
   const [hoverInfo, setHoverInfo] = useState(null);
 
   // Categories for visual grouping
   const categories = {
-    'Sales': ['Product Sales', 'All Net Sales'],
-    'Food & Paper': ['Base Food', 'Employee Meal', 'Condiment', 'Total Waste', 'Paper'],
-    'Labor': ['Crew Labor', 'Management Labor', 'Payroll Tax'],
-    'Purchases': ['Advertising', 'Travel', 'Adv Other', 'Promotion', 'Outside Services',
-      'Linen', 'OP. Supply', 'Maint. & Repair', 'Small Equipment',
-      'Utilities', 'Office', 'Cash +/-', 'Crew Relations', 'Training']
+    Sales: ["Product Sales", "All Net Sales"],
+    "Food & Paper": [
+      "Base Food",
+      "Employee Meal",
+      "Condiment",
+      "Total Waste",
+      "Paper",
+    ],
+    Labor: ["Crew Labor", "Management Labor", "Payroll Tax"],
+    Purchases: [
+      "Advertising",
+      "Travel",
+      "Adv Other",
+      "Promotion",
+      "Outside Services",
+      "Linen",
+      "OP. Supply",
+      "Maint. & Repair",
+      "Small Equipment",
+      "Utilities",
+      "Office",
+      "Cash +/-",
+      "Crew Relations",
+      "Training",
+    ],
   };
 
   // Helper functions
   const getCategory = (expense) => {
     const input = expense.toLowerCase();
     for (const [key, values] of Object.entries(categories)) {
-      if (values.some(v => v.toLowerCase() === input)) {
+      if (values.some((v) => v.toLowerCase() === input)) {
         return key;
       }
     }
@@ -630,7 +886,7 @@ const PAC = () => {
 
   // this function saves all the user input data from the generate page via backend
   const handleGenerate = async (e) => {
-    // Check if current month is locked 
+    // Check if current month is locked
     if (isCurrentPeriodLocked()) {
       alert("This month is locked and cannot be modified.");
       return;
@@ -668,119 +924,282 @@ const PAC = () => {
     }
 
     try {
-      const monthIndex = [
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
-      ].indexOf(month);
-      const period = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-      const payload = {
-        storeId: selectedStore,
-        month,
+      if (!selectedStore) {
+        alert("No store selected");
+        return;
+      }
+
+      // Get user's full name
+      const submittedBy = await getUserFullName();
+
+      // Save generate input data
+      await saveGenerateInput(
+        selectedStore,
         year,
-        period,
+        month,
+        {
+          productNetSales,
+          cash,
+          promo,
+          allNetSales,
+          managerMeal,
+          advertising,
+          crewLabor,
+          totalLabor,
+          payrollTax,
+          completeWaste,
+          rawWaste,
+          condiment,
+          variance,
+          unexplained,
+          discounts,
+          baseFood,
+          startingFood,
+          startingCondiment,
+          startingPaper,
+          startingNonProduct,
+          startingOpsSupplies,
+          endingFood,
+          endingCondiment,
+          endingPaper,
+          endingNonProduct,
+          endingOpsSupplies,
+        },
+        submittedBy
+      );
 
-        // Sales
-        productNetSales: parseFloat(productNetSales),
-        cash: parseFloat(cash),
-        promo: parseFloat(promo),
-        allNetSales: parseFloat(allNetSales),
-        advertising: parseFloat(advertising),
+      // Persist current projections (authoritative structure for backend)
+      const monthIndex = months.indexOf(month); // 0..11
+      await saveProjections(
+        selectedStore,
+        year,
+        month,
+        pacGoal,
+        (projections || []).map((p) => ({
+          name: p.name,
+          projectedDollar: Number(p.projectedDollar) || 0,
+          projectedPercent: Number(p.projectedPercent) || 0,
+        }))
+      );
 
-        // Labor
-        crewLabor: parseFloat(crewLabor),
-        totalLabor: parseFloat(totalLabor),
-        payrollTax: parseFloat(payrollTax),
+      // Compute and save PAC actuals
+      try {
+        console.log("Starting PAC actual computation...", {
+          selectedStore,
+          year,
+          month,
+          submittedBy,
+        });
+        const result = await computeAndSavePacActual(
+          selectedStore,
+          year,
+          month,
+          submittedBy
+        );
+        console.log("PAC Actual computation successful:", result);
+      } catch (e) {
+        console.error("PAC Actual compute failed:", e);
+        alert(`PAC Actual computation failed: ${e.message}`);
+      }
 
-        // Food
-        completeWaste: parseFloat(completeWaste),
-        rawWaste: parseFloat(rawWaste),
-        condiment: parseFloat(condiment),
-        variance: parseFloat(variance),
-        unexplained: parseFloat(unexplained),
-        discounts: parseFloat(discounts),
-        baseFood: parseFloat(baseFood),
-
-        // Starting inventory
-        startingFood: parseFloat(startingFood),
-        startingCondiment: parseFloat(startingCondiment),
-        startingPaper: parseFloat(startingPaper),
-        startingNonProduct: parseFloat(startingNonProduct),
-        startingOpsSupplies: parseFloat(startingOpsSupplies),
-
-        // Ending inventory
-        endingFood: parseFloat(endingFood),
-        endingCondiment: parseFloat(endingCondiment),
-        endingPaper: parseFloat(endingPaper),
-        endingNonProduct: parseFloat(endingNonProduct),
-        endingOpsSupplies: parseFloat(endingOpsSupplies),
-      };
-
-      await api("/api/pac/generate", { method: "POST", body: payload });
-
-      await addDoc(pacGenRef, {
-        Month: month,
-        Year: year,
-        Period: period,
-        createdAt: serverTimestamp(),
-
-        ProductNetSales: parseFloat(productNetSales),
-        Cash: parseFloat(cash),
-        Promo: parseFloat(promo),
-        AllNetSales: parseFloat(allNetSales),
-        Advertising: parseFloat(advertising),
-
-        CrewLabor: parseFloat(crewLabor),
-        TotalLabor: parseFloat(totalLabor),
-        PayrollTax: parseFloat(payrollTax),
-
-        CompleteWaste: parseFloat(completeWaste),
-        RawWaste: parseFloat(rawWaste),
-        Condiment: parseFloat(condiment),
-        Variance: parseFloat(variance),
-        Unexplained: parseFloat(unexplained),
-        Discounts: parseFloat(discounts),
-        BaseFood: parseFloat(baseFood),
-
-        StartingFood: parseFloat(startingFood),
-        StartingCondiment: parseFloat(startingCondiment),
-        StartingPaper: parseFloat(startingPaper),
-        StartingNonProduct: parseFloat(startingNonProduct),
-        StartingOpsSupplies: parseFloat(startingOpsSupplies),
-
-        EndingFood: parseFloat(endingFood),
-        EndingCondiment: parseFloat(endingCondiment),
-        EndingPaper: parseFloat(endingPaper),
-        EndingNonProduct: parseFloat(endingNonProduct),
-        EndingOpsSupplies: parseFloat(endingOpsSupplies),
-      });
-
-      alert("Report generated successfully.");
+      alert("Generate submission saved to Firestore");
       await fetchMonthLockStatus();
       await fetchLockedMonths();
     } catch (error) {
-      console.error("Error saving report:", error);
-      alert("Failed to generate.");
+      console.error("Error saving generate submission:", error);
+      alert("Failed to save generate submission.");
     }
   };
 
-  // ----- PAC submit gating -----
+  // ----- PAC submit gating (percent-based) -----
   const goalNumeric = Number(pacGoal);
   const hasGoal = pacGoal !== "" && !Number.isNaN(goalNumeric);
 
-  const projectedPacDollar = Number(
-    projections.find(r => r.name === "P.A.C.")?.projectedDollar
-  ) || 0;
+  const projectedPacPercent =
+    Number(projections.find((r) => r.name === "P.A.C.")?.projectedPercent) || 0;
 
-  const pacEqual = Math.abs(pacGoal - projectedPacDollar) <= 1;
+  // Consider goal met if within 0.01 percentage points
+  const pacEqual = Math.abs(goalNumeric - projectedPacPercent) <= 0.01;
 
-  const pacBelow = hasGoal && projectedPacDollar < goalNumeric - 1e-9;
-  const pacMismatch = hasGoal && !pacEqual;  // includes below OR above
+  const pacBelow = hasGoal && projectedPacPercent < goalNumeric - 1e-9;
+  const pacMismatch = hasGoal && !pacEqual; // includes below OR above
+
+  // ----- Projection helpers for rendering -----
+  const getRow = (name) => projections.find((r) => r.name === name) || {};
+
+  // Helper function to get PAC actual values for a given expense name
+  const getPacActualValue = (expenseName) => {
+    if (!pacActualData) return { dollars: 0, percent: 0 };
+
+    // Map expense names to PAC actual data structure
+    switch (expenseName) {
+      case "Product Sales":
+        return pacActualData.sales?.productSales || { dollars: 0, percent: 0 };
+      case "All Net Sales":
+        return pacActualData.sales?.allNetSales || { dollars: 0, percent: 0 };
+      case "Base Food":
+        return (
+          pacActualData.foodAndPaper?.baseFood || { dollars: 0, percent: 0 }
+        );
+      case "Employee Meal":
+        return (
+          pacActualData.foodAndPaper?.employeeMeal || { dollars: 0, percent: 0 }
+        );
+      case "Condiment":
+        return (
+          pacActualData.foodAndPaper?.condiment || { dollars: 0, percent: 0 }
+        );
+      case "Total Waste":
+        return (
+          pacActualData.foodAndPaper?.totalWaste || { dollars: 0, percent: 0 }
+        );
+      case "Paper":
+        return pacActualData.foodAndPaper?.paper || { dollars: 0, percent: 0 };
+      case "Crew Labor":
+        return pacActualData.labor?.crewLabor || { dollars: 0, percent: 0 };
+      case "Management Labor":
+        return (
+          pacActualData.labor?.managementLabor || { dollars: 0, percent: 0 }
+        );
+      case "Payroll Tax":
+        return pacActualData.labor?.payrollTax || { dollars: 0, percent: 0 };
+      case "Travel":
+        return pacActualData.purchases?.travel || { dollars: 0, percent: 0 };
+      case "Advertising Other":
+        return pacActualData.purchases?.advOther || { dollars: 0, percent: 0 };
+      case "Promotion":
+        return pacActualData.purchases?.promotion || { dollars: 0, percent: 0 };
+      case "Outside Services":
+        return (
+          pacActualData.purchases?.outsideServices || { dollars: 0, percent: 0 }
+        );
+      case "Linen":
+        return pacActualData.purchases?.linen || { dollars: 0, percent: 0 };
+      case "Operating Supply":
+        return (
+          pacActualData.purchases?.opsSupplies || { dollars: 0, percent: 0 }
+        );
+      case "Maintenance & Repair":
+        return (
+          pacActualData.purchases?.maintenanceRepair || {
+            dollars: 0,
+            percent: 0,
+          }
+        );
+      case "Small Equipment":
+        return (
+          pacActualData.purchases?.smallEquipment || { dollars: 0, percent: 0 }
+        );
+      case "Utilities":
+        return pacActualData.purchases?.utilities || { dollars: 0, percent: 0 };
+      case "Office":
+        return pacActualData.purchases?.office || { dollars: 0, percent: 0 };
+      case "Cash +/-":
+        return (
+          pacActualData.purchases?.cashPlusMinus || { dollars: 0, percent: 0 }
+        );
+      case "Crew Relations":
+        return (
+          pacActualData.purchases?.crewRelations || { dollars: 0, percent: 0 }
+        );
+      case "Training":
+        return pacActualData.purchases?.training || { dollars: 0, percent: 0 };
+      case "Advertising":
+        return (
+          pacActualData.purchases?.advertising || { dollars: 0, percent: 0 }
+        );
+      case "Total Controllable":
+        return (
+          pacActualData.totals?.totalControllable || { dollars: 0, percent: 0 }
+        );
+      case "P.A.C.":
+        return pacActualData.totals?.pac || { dollars: 0, percent: 0 };
+      default:
+        return { dollars: 0, percent: 0 };
+    }
+  };
+  const productSalesDollar =
+    Number(getRow("Product Sales").projectedDollar) || 0;
+  const payrollTaxDollar = Number(getRow("Payroll Tax").projectedDollar) || 0;
+  const advertisingDollar = Number(getRow("Advertising").projectedDollar) || 0;
+  const payrollTaxPctOfPS =
+    productSalesDollar > 0 ? (payrollTaxDollar / productSalesDollar) * 100 : 0;
+  const advertisingPctOfPS =
+    productSalesDollar > 0 ? (advertisingDollar / productSalesDollar) * 100 : 0;
+
+  const productSalesActualDollar =
+    Number(getRow("Product Sales").historicalDollar) || 0;
+  const payrollTaxActualDollar =
+    Number(getRow("Payroll Tax").historicalDollar) || 0;
+  const advertisingActualDollar =
+    Number(getRow("Advertising").historicalDollar) || 0;
+  const payrollTaxActualPctOfPS =
+    productSalesActualDollar > 0
+      ? (payrollTaxActualDollar / productSalesActualDollar) * 100
+      : 0;
+  const advertisingActualPctOfPS =
+    productSalesActualDollar > 0
+      ? (advertisingActualDollar / productSalesActualDollar) * 100
+      : 0;
+
+  const groupFoodPaper = [
+    "Base Food",
+    "Employee Meal",
+    "Condiment",
+    "Total Waste",
+    "Paper",
+  ];
+  const groupLabor = ["Crew Labor", "Management Labor", "Payroll Tax"];
+  const groupPurchases = [
+    "Advertising",
+    "Travel",
+    "Adv Other",
+    "Promotion",
+    "Outside Services",
+    "Linen",
+    "OP. Supply",
+    "Maint. & Repair",
+    "Small Equipment",
+    "Utilities",
+    "Office",
+    "Cash +/-",
+    "Crew Relations",
+    "Training",
+  ];
+
+  const sumProjected = (names) =>
+    names.reduce(
+      (acc, nm) => acc + (Number(getRow(nm).projectedDollar) || 0),
+      0
+    );
+  const sumProjectedPct = (names) =>
+    names.reduce((acc, nm) => {
+      if (nm === "Payroll Tax") return acc + payrollTaxPctOfPS;
+      if (nm === "Advertising") return acc + advertisingPctOfPS;
+      return acc + (Number(getRow(nm).projectedPercent) || 0);
+    }, 0);
+  const sumActual = (names) =>
+    names.reduce(
+      (acc, nm) => acc + (Number(getRow(nm).historicalDollar) || 0),
+      0
+    );
+  const sumActualPct = (names) =>
+    names.reduce((acc, nm) => {
+      if (nm === "Payroll Tax") return acc + payrollTaxActualPctOfPS;
+      if (nm === "Advertising") return acc + advertisingActualPctOfPS;
+      return acc + (Number(getRow(nm).historicalPercent) || 0);
+    }, 0);
 
   return (
     <Box sx={{ flexGrow: 1 }}>
       <Container>
-        <Paper sx={{ padding: '10px' }}>
-          <Grid container wrap="wrap" justifyContent="space-between" alignItems="center">
+        <Paper sx={{ padding: "10px" }}>
+          <Grid
+            container
+            wrap="wrap"
+            justifyContent="space-between"
+            alignItems="center"
+          >
             <Grid item xs={12} sm={6} md={4}>
               <Box sx={{ padding: "10px", marginLeft: "5px" }}>
                 <h1 className="Header">PAC</h1>
@@ -866,10 +1285,8 @@ const PAC = () => {
           </Grid>
         </Paper>
       </Container>
-
-
       {tabIndex === 0 && (
-        <Container sx={{ marginTop: '20px' }}>
+        <Container sx={{ marginTop: "20px" }}>
           <TableContainer component={Paper}>
             <Table>
               <TableHead>
@@ -899,7 +1316,9 @@ const PAC = () => {
                         boxShadow: 1,
                       }}
                     >
-                      <Box sx={{ fontWeight: 700, fontSize: 14, opacity: 0.8 }}>PAC Goal</Box>
+                      <Box sx={{ fontWeight: 700, fontSize: 14, opacity: 0.8 }}>
+                        PAC Goal
+                      </Box>
 
                       {/* Non-admins: always see value only */}
                       {!isAdmin && (
@@ -935,7 +1354,11 @@ const PAC = () => {
 
                           {/* Change button only if current/future period */}
                           {!isPastPeriod(year, month) && (
-                            <Button variant="outlined" size="small" onClick={() => setEditingGoal(true)}>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={() => setEditingGoal(true)}
+                            >
                               Change
                             </Button>
                           )}
@@ -951,7 +1374,11 @@ const PAC = () => {
                             value={pacGoal}
                             onChange={(e) => setPacGoal(e.target.value)}
                             InputProps={{
-                              startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                              endAdornment: (
+                                <InputAdornment position="end">
+                                  %
+                                </InputAdornment>
+                              ),
                             }}
                             sx={{
                               "& .MuiInputBase-input": { fontWeight: 700 },
@@ -967,32 +1394,47 @@ const PAC = () => {
                               const numericGoal = Number(pacGoal) || 0;
 
                               const monthIdx = months.indexOf(month);
-                              const periodId = `${selectedStore}_${year}${String(monthIdx + 1).padStart(2, "0")}`;
+                              const periodId = `${selectedStore}_${year}${String(
+                                monthIdx + 1
+                              ).padStart(2, "0")}`;
 
-                              await saveProjections(selectedStore, year, month, numericGoal, projections.map(p => ({
-                                name: p.name,
-                                projectedDollar: Number(p.projectedDollar) || 0,
-                                projectedPercent: Number(p.projectedPercent) || 0,
-                              })));
+                              await saveProjections(
+                                selectedStore,
+                                year,
+                                month,
+                                numericGoal,
+                                projections.map((p) => ({
+                                  name: p.name,
+                                  projectedDollar:
+                                    Number(p.projectedDollar) || 0,
+                                  projectedPercent:
+                                    Number(p.projectedPercent) || 0,
+                                }))
+                              );
 
                               setEditingGoal(false);
                             }}
                           >
                             Save
                           </Button>
-                          <Button variant="text" size="small" onClick={() => setEditingGoal(false)}>
+                          <Button
+                            variant="text"
+                            size="small"
+                            onClick={() => setEditingGoal(false)}
+                          >
                             Cancel
                           </Button>
                         </>
                       )}
                     </Box>
-
                   </TableCell>
 
                   {/* Divider column */}
-                  <TableCell sx={{ borderRight: "20px solid #f5f5f5ff", width: "12px" }} />
+                  <TableCell
+                    sx={{ borderRight: "20px solid #f5f5f5ff", width: "12px" }}
+                  />
 
-                  {/* Right: Historical selectors (spans Historical $/%) */}
+                  {/* Right: Actual selectors (spans Actual $/%) */}
                   <TableCell colSpan={2}>
                     <Box
                       sx={{
@@ -1001,11 +1443,12 @@ const PAC = () => {
                         gap: 2,
                       }}
                     >
-
                       {/* Month */}
                       <Select
-                        value={histMonth}
-                        onChange={(e) => { setHistMonth(e.target.value); }}
+                        value={actualMonth}
+                        onChange={(e) => {
+                          setActualMonth(e.target.value);
+                        }}
                         size="small"
                         sx={{ width: 150, backgroundColor: "background.paper" }}
                       >
@@ -1018,8 +1461,8 @@ const PAC = () => {
 
                       {/* Year */}
                       <Select
-                        value={histYear}
-                        onChange={(e) => setHistYear(e.target.value)}
+                        value={actualYear}
+                        onChange={(e) => setActualYear(e.target.value)}
                         size="small"
                         sx={{ width: 100, backgroundColor: "background.paper" }}
                       >
@@ -1032,97 +1475,446 @@ const PAC = () => {
                     </Box>
 
                     <Box sx={{ mt: 1, textAlign: "left", fontWeight: 700 }}>
-                      {`Displaying Historical Data for ${histMonth} ${histYear}`}
+                      {`Displaying Actual Data for ${actualMonth} ${actualYear}`}
                     </Box>
                   </TableCell>
                 </TableRow>
 
                 {/* Regular header row */}
                 <TableRow sx={{ whiteSpace: "nowrap" }}>
-                  <TableCell><strong>Expense Name</strong></TableCell>
-                  <TableCell><strong>Projected $</strong></TableCell>
-                  <TableCell><strong>Projected %</strong></TableCell>
-                  <TableCell sx={{ borderRight: "20px solid #f5f5f5ff", width: "12px" }} />
-                  <TableCell><strong>Historical $</strong></TableCell>
-                  <TableCell><strong>Historical %</strong></TableCell>
+                  <TableCell>
+                    <strong>Expense Name</strong>
+                  </TableCell>
+                  <TableCell align="center">
+                    <strong>Projected $</strong>
+                  </TableCell>
+                  <TableCell align="center">
+                    <strong>Projected %</strong>
+                  </TableCell>
+                  <TableCell
+                    sx={{ borderRight: "20px solid #f5f5f5ff", width: "12px" }}
+                  />
+                  <TableCell align="center">
+                    <strong>Actual $</strong>
+                  </TableCell>
+                  <TableCell align="center">
+                    <strong>Actual %</strong>
+                  </TableCell>
                 </TableRow>
               </TableHead>
 
               <TableBody>
                 {projections.map((expense, index) => {
                   const isPac = expense.name === "P.A.C.";
-                  const pacColor = isPac ? getPacRowColor(projections, pacGoal) : undefined;
+                  const pacColor = isPac
+                    ? getPacRowColor(projections, pacGoal)
+                    : undefined;
 
                   return (
-                    <TableRow
-                      key={expense.name}
-                      sx={{
-                        // normal rows keep category background
-                        backgroundColor: !isPac ? getCategoryColor(getCategory(expense.name)) : "transparent",
-                        // for P.A.C., apply style to all its cells (td/th)
-                        ...(isPac ? { "& td, & th": PAC_COLOR_STYLES[pacColor] ?? {} } : {}),
-                      }}
-                    >
-                      <TableCell>{expense.name}</TableCell>
+                    <React.Fragment key={expense.name}>
+                      <TableRow
+                        sx={{
+                          // normal rows keep category background
+                          backgroundColor: !isPac
+                            ? getCategoryColor(getCategory(expense.name))
+                            : "transparent",
+                          // for P.A.C., apply style to all its cells (td/th)
+                          ...(isPac
+                            ? { "& td, & th": PAC_COLOR_STYLES[pacColor] ?? {} }
+                            : {}),
+                        }}
+                      >
+                        <TableCell>{expense.name}</TableCell>
 
-                      <TableCell>
-                        {hasUserInputAmountField.includes(expense.name) && !isPac ? (
-                          <TextField
-                            type="number"
-                            size="small"
-                            variant="outlined"
-                            sx={{ width: "150px", backgroundColor: "#ffffff" }}
-                            InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }}
-                            value={expense.projectedDollar ?? ""}
-                            placeholder="0.00"
-                            onChange={(e) => handleInputChange(index, "projectedDollar", Number(e.target.value))}
-                          />
-                        ) : (
-                          <span>${expense.projectedDollar || 0}</span>
-                        )}
-                      </TableCell>
-
-
-                      <TableCell>
-                        <FormControl>
-                          {hasUserInputedPercentageField.includes(expense.name) && !isPac ? (
+                        <TableCell align="center">
+                          {hasUserInputAmountField.includes(expense.name) &&
+                            !isPac ? (
                             <TextField
                               type="number"
                               size="small"
                               variant="outlined"
-                              sx={{ width: "125px", backgroundColor: "#ffffff" }}
-                              InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
-                              value={expense.projectedPercent ?? ""}
+                              sx={{
+                                width: "150px",
+                                backgroundColor: "#ffffff",
+                                mx: "auto",
+                              }}
+                              InputProps={{
+                                startAdornment: (
+                                  <InputAdornment position="start">
+                                    $
+                                  </InputAdornment>
+                                ),
+                              }}
+                              value={expense.projectedDollar ?? ""}
                               placeholder="0.00"
-                              onChange={(e) => handleInputChange(index, "projectedPercent", Number(e.target.value))}
+                              disabled={isMonthLocked()}
+                              onChange={(e) =>
+                                handleInputChange(
+                                  index,
+                                  "projectedDollar",
+                                  Number(e.target.value)
+                                )
+                              }
                             />
                           ) : (
-                            <span>{expense.projectedPercent || 0}%</span>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                minWidth: 80,
+                                textAlign: "center",
+                              }}
+                            >
+                              {fmtUsd(expense.projectedDollar || 0)}
+                            </span>
                           )}
-                          <FormLabel sx={{ fontSize: "0.75rem" }}>{getLabel(expense.name)}</FormLabel>
-                        </FormControl>
-                      </TableCell>
+                        </TableCell>
 
-                      <TableCell sx={{ borderRight: "20px solid #f5f5f5ff", width: "12px" }} />
+                        <TableCell align="center">
+                          <FormControl>
+                            {(() => {
+                              // Blank % display for Product Sales and All Net Sales
+                              if (
+                                expense.name === "Product Sales" ||
+                                expense.name === "All Net Sales"
+                              ) {
+                                return (
+                                  <span
+                                    style={{
+                                      display: "inline-block",
+                                      minWidth: 80,
+                                    }}
+                                  ></span>
+                                );
+                              }
+                              // Special display for Payroll Tax / Advertising: show computed % of Product Sales to the left
+                              if (expense.name === "Payroll Tax") {
+                                return (
+                                  <Box
+                                    sx={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 2,
+                                    }}
+                                  >
+                                    <Box
+                                      sx={{ minWidth: 80, textAlign: "center" }}
+                                    >
+                                      {(payrollTaxPctOfPS || 0).toFixed(2)}%
+                                    </Box>
+                                    <Box
+                                      sx={{
+                                        ml: "auto",
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        alignItems: "center",
+                                        minWidth: 140,
+                                      }}
+                                    >
+                                      <TextField
+                                        type="number"
+                                        size="small"
+                                        variant="outlined"
+                                        sx={{
+                                          width: "125px",
+                                          backgroundColor: "#ffffff",
+                                          mx: "auto",
+                                        }}
+                                        InputProps={{
+                                          endAdornment: (
+                                            <InputAdornment position="end">
+                                              %
+                                            </InputAdornment>
+                                          ),
+                                        }}
+                                        value={expense.projectedPercent ?? ""}
+                                        placeholder="0.00"
+                                        disabled={isMonthLocked()}
+                                        onChange={(e) =>
+                                          handleInputChange(
+                                            index,
+                                            "projectedPercent",
+                                            Number(e.target.value)
+                                          )
+                                        }
+                                      />
+                                      <FormLabel
+                                        sx={{
+                                          fontSize: "0.75rem",
+                                          mt: 0.5,
+                                          textAlign: "center",
+                                        }}
+                                      >
+                                        {getLabel(expense.name)}
+                                      </FormLabel>
+                                    </Box>
+                                  </Box>
+                                );
+                              }
+                              if (expense.name === "Advertising") {
+                                return (
+                                  <Box
+                                    sx={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 2,
+                                    }}
+                                  >
+                                    <Box
+                                      sx={{ minWidth: 80, textAlign: "center" }}
+                                    >
+                                      {(advertisingPctOfPS || 0).toFixed(2)}%
+                                    </Box>
+                                    <Box
+                                      sx={{
+                                        ml: "auto",
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        alignItems: "center",
+                                        minWidth: 140,
+                                      }}
+                                    >
+                                      <TextField
+                                        type="number"
+                                        size="small"
+                                        variant="outlined"
+                                        sx={{
+                                          width: "125px",
+                                          backgroundColor: "#ffffff",
+                                          mx: "auto",
+                                        }}
+                                        InputProps={{
+                                          endAdornment: (
+                                            <InputAdornment position="end">
+                                              %
+                                            </InputAdornment>
+                                          ),
+                                        }}
+                                        value={expense.projectedPercent ?? ""}
+                                        placeholder="0.00"
+                                        disabled={isMonthLocked()}
+                                        onChange={(e) =>
+                                          handleInputChange(
+                                            index,
+                                            "projectedPercent",
+                                            Number(e.target.value)
+                                          )
+                                        }
+                                      />
+                                      <FormLabel
+                                        sx={{
+                                          fontSize: "0.75rem",
+                                          mt: 0.5,
+                                          textAlign: "center",
+                                        }}
+                                      >
+                                        {getLabel(expense.name)}
+                                      </FormLabel>
+                                    </Box>
+                                  </Box>
+                                );
+                              }
+                              // Normal editable % inputs (shift slightly right for alignment)
+                              if (
+                                hasUserInputedPercentageField.includes(
+                                  expense.name
+                                ) &&
+                                !isPac
+                              ) {
+                                return (
+                                  <TextField
+                                    type="number"
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{
+                                      width: "125px",
+                                      backgroundColor: "#ffffff",
+                                      mx: "auto",
+                                    }}
+                                    InputProps={{
+                                      endAdornment: (
+                                        <InputAdornment position="end">
+                                          %
+                                        </InputAdornment>
+                                      ),
+                                    }}
+                                    value={expense.projectedPercent ?? ""}
+                                    placeholder="0.00"
+                                    disabled={isMonthLocked()}
+                                    onChange={(e) =>
+                                      handleInputChange(
+                                        index,
+                                        "projectedPercent",
+                                        Number(e.target.value)
+                                      )
+                                    }
+                                  />
+                                );
+                              }
+                              return (
+                                <span
+                                  style={{
+                                    display: "inline-block",
+                                    minWidth: 80,
+                                    textAlign: "center",
+                                  }}
+                                >
+                                  {expense.projectedPercent || 0}%
+                                </span>
+                              );
+                            })()}
+                            {expense.name !== "Payroll Tax" &&
+                              expense.name !== "Advertising" && (
+                                <FormLabel
+                                  sx={{
+                                    fontSize: "0.75rem",
+                                    textAlign: "center",
+                                  }}
+                                >
+                                  {getLabel(expense.name)}
+                                </FormLabel>
+                              )}
+                          </FormControl>
+                        </TableCell>
 
-                      <TableCell>{"$" + expense.historicalDollar}</TableCell>
-                      <TableCell>{expense.historicalPercent + "%"}</TableCell>
-                    </TableRow>
+                        <TableCell
+                          sx={{
+                            borderRight: "20px solid #f5f5f5ff",
+                            width: "12px",
+                          }}
+                        />
+
+                        <TableCell align="center">
+                          {fmtUsd(getPacActualValue(expense.name).dollars || 0)}
+                        </TableCell>
+                        <TableCell align="center">
+                          {getPacActualValue(expense.name).percent.toFixed(2) +
+                            "%"}
+                        </TableCell>
+                      </TableRow>
+
+                      {/* Group totals rows */}
+                      {expense.name === "Paper" && (
+                        <TableRow
+                          sx={{
+                            fontWeight: 700,
+                            backgroundColor: "#dbeedc",
+                            "& td": { fontWeight: 700 },
+                          }}
+                        >
+                          <TableCell>Food & Paper Totals</TableCell>
+                          <TableCell align="center">
+                            {fmtUsd(sumProjected(groupFoodPaper))}
+                          </TableCell>
+                          <TableCell align="center">
+                            {sumProjectedPct(groupFoodPaper).toFixed(2) + "%"}
+                          </TableCell>
+                          <TableCell
+                            sx={{
+                              borderRight: "20px solid #f5f5f5ff",
+                              width: "12px",
+                            }}
+                          />
+                          <TableCell align="center">
+                            {fmtUsd(
+                              pacActualData?.foodAndPaper?.total?.dollars || 0
+                            )}
+                          </TableCell>
+                          <TableCell align="center">
+                            {(
+                              pacActualData?.foodAndPaper?.total?.percent || 0
+                            ).toFixed(2) + "%"}
+                          </TableCell>
+                        </TableRow>
+                      )}
+
+                      {expense.name === "Payroll Tax" && (
+                        <TableRow
+                          sx={{
+                            fontWeight: 700,
+                            backgroundColor: "#ffe7c2",
+                            "& td": { fontWeight: 700 },
+                          }}
+                        >
+                          <TableCell>Labor Totals</TableCell>
+                          <TableCell align="center">
+                            {fmtUsd(sumProjected(groupLabor))}
+                          </TableCell>
+                          <TableCell align="center">
+                            {sumProjectedPct(groupLabor).toFixed(2) + "%"}
+                          </TableCell>
+                          <TableCell
+                            sx={{
+                              borderRight: "20px solid #f5f5f5ff",
+                              width: "12px",
+                            }}
+                          />
+                          <TableCell align="center">
+                            {fmtUsd(pacActualData?.labor?.total?.dollars || 0)}
+                          </TableCell>
+                          <TableCell align="center">
+                            {(
+                              pacActualData?.labor?.total?.percent || 0
+                            ).toFixed(2) + "%"}
+                          </TableCell>
+                        </TableRow>
+                      )}
+
+                      {expense.name === "Training" && (
+                        <TableRow
+                          sx={{
+                            fontWeight: 700,
+                            backgroundColor: "#e8d1f0",
+                            "& td": { fontWeight: 700 },
+                          }}
+                        >
+                          <TableCell>Purchases Totals</TableCell>
+                          <TableCell align="center">
+                            {fmtUsd(sumProjected(groupPurchases))}
+                          </TableCell>
+                          <TableCell align="center">
+                            {sumProjectedPct(groupPurchases).toFixed(2) + "%"}
+                          </TableCell>
+                          <TableCell
+                            sx={{
+                              borderRight: "20px solid #f5f5f5ff",
+                              width: "12px",
+                            }}
+                          />
+                          <TableCell align="center">
+                            {fmtUsd(sumActual(groupPurchases))}
+                          </TableCell>
+                          <TableCell align="center">
+                            {sumActualPct(groupPurchases).toFixed(2) + "%"}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </TableBody>
-
             </Table>
           </TableContainer>
 
           {/*The Apply button*/}
           <Box
             textAlign="center"
-            sx={{ pt: 1, pb: 1, display: "flex", gap: 2, flexDirection: "column", alignItems: "center" }}
+            sx={{
+              pt: 1,
+              pb: 1,
+              display: "flex",
+              gap: 2,
+              flexDirection: "column",
+              alignItems: "center",
+            }}
           >
             <Box sx={{ display: "flex", gap: 2 }}>
-              <Button variant="outlined" size="large" onClick={handleResetToLastSubmitted}>
-                Reset to  previous month
+              <Button
+                variant="outlined"
+                size="large"
+                onClick={handleResetToLastSubmitted}
+                disabled={isMonthLocked()}
+              >
+                Reset to previous month
               </Button>
 
               <Button
@@ -1130,7 +1922,11 @@ const PAC = () => {
                 size="large"
                 onClick={handleApply}
                 disabled={pacMismatch}
-                title={pacMismatch ? "PAC Projections do not match the goal" : undefined}
+                title={
+                  pacMismatch
+                    ? "PAC Projections do not match the goal"
+                    : undefined
+                }
               >
                 Apply
               </Button>
@@ -1148,276 +1944,340 @@ const PAC = () => {
                   ? "PAC Projections are below the goal, please update to submit."
                   : "PAC Projections entered do not match goal, please update to submit."}
                 <Box component="span" sx={{ ml: 1, opacity: 0.8 }}>
-                  Current: {fmtUsd(projectedPacDollar)} • Goal: {fmtUsd(goalNumeric)}
+                  Current: {fmtPercent(projectedPacPercent)} • Goal:{" "}
+                  {fmtPercent(goalNumeric)}
                 </Box>
               </Box>
             )}
           </Box>
-
         </Container>
-      )
-      } {/* end of Projections page */}
-
-      {
-        tabIndex === 1 && (
-          <Container>
-            <div style={{ display: "flex", flexDirection: "column", gap: "24px", marginTop: "20px" }}>
-              {/* Sales */}
-              <div className="pac-section sales-section">
-                <h4>Sales</h4>
-                <div className="input-row"><label className="input-label">Product Net Sales ($)</label>
-                  <input
-                    type="number"
-                    value={productNetSales}
-                    onChange={(e) => setProductNetSales(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Cash +/- ($)</label>
-                  <input
-                    type="number"
-                    value={cash}
-                    onChange={(e) => setCash(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Promo ($)</label>
-                  <input
-                    type="number"
-                    value={promo}
-                    onChange={(e) => setPromo(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">All Net Sales ($)</label>
-                  <input
-                    type="number"
-                    value={allNetSales}
-                    onChange={(e) => setAllNetSales(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Advertising ($)</label>
-                  <input
-                    type="number"
-                    value={advertising}
-                    onChange={(e) => setAdvertising(e.target.value)}
-                  />
-                </div>
+      )}{" "}
+      {/* end of Projections page */}
+      {tabIndex === 1 && (
+        <Container>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "24px",
+              marginTop: "20px",
+            }}
+          >
+            {/* Sales */}
+            <div className="pac-section sales-section">
+              <h4>Sales</h4>
+              <div className="input-row">
+                <label className="input-label">Product Net Sales ($)</label>
+                <input
+                  type="number"
+                  value={productNetSales}
+                  onChange={(e) => setProductNetSales(e.target.value)}
+                  disabled={inputsDisabled}
+                />
               </div>
-
-              {/* Labor */}
-              <div className="pac-section labor-section">
-                <h4>Labor</h4>
-                <div className="input-row"><label className="input-label">Crew Labor %</label>
-                  <input
-                    type="number"
-                    value={crewLabor}
-                    onChange={(e) => setCrewLabor(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Total Labor %</label>
-                  <input
-                    type="number"
-                    value={totalLabor}
-                    onChange={(e) => setTotalLabor(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Payroll Tax ($)</label>
-                  <input
-                    type="number"
-                    value={payrollTax}
-                    onChange={(e) => setPayrollTax(e.target.value)}
-                  />
-                </div>
+              <div className="input-row">
+                <label className="input-label">All Net Sales ($)</label>
+                <input
+                  type="number"
+                  value={allNetSales}
+                  onChange={(e) => setAllNetSales(e.target.value)}
+                  disabled={inputsDisabled}
+                />
               </div>
-
-              {/* Food */}
-              <div className="pac-section food-section">
-                <h4>Food</h4>
-                <div className="input-row"><label className="input-label">Complete Waste %</label>
-                  <input
-                    type="number"
-                    value={completeWaste}
-                    onChange={(e) => setCompleteWaste(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Raw Waste %</label>
-                  <input
-                    type="number"
-                    value={rawWaste}
-                    onChange={(e) => setRawWaste(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Condiment %</label>
-                  <input
-                    type="number"
-                    value={condiment}
-                    onChange={(e) => setCondiment(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Variance Stat %</label>
-                  <input
-                    type="number"
-                    value={variance}
-                    onChange={(e) => setVariance(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Unexplained %</label>
-                  <input
-                    type="number"
-                    value={unexplained}
-                    onChange={(e) => setUnexplained(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Discounts %</label>
-                  <input
-                    type="number"
-                    value={discounts}
-                    onChange={(e) => setDiscounts(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Base Food %</label>
-                  <input
-                    type="number"
-                    value={baseFood}
-                    onChange={(e) => setBaseFood(e.target.value)}
-                  />
-                </div>
+              <div className="input-row">
+                <label className="input-label">Promotion ($)</label>
+                <input
+                  type="number"
+                  value={promo}
+                  onChange={(e) => setPromo(e.target.value)}
+                  disabled={inputsDisabled}
+                />
               </div>
-
-              {/* Starting Inventory */}
-              <div className="pac-section starting-inventory-section">
-                <h4>Starting Inventory</h4>
-                <div className="input-row"><label className="input-label">Food ($)</label>
-                  <input
-                    type="number"
-                    value={startingFood}
-                    onChange={(e) => setStartingFood(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Condiment ($)</label>
-                  <input
-                    type="number"
-                    value={startingCondiment}
-                    onChange={(e) => setStartingCondiment(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Paper ($)</label>
-                  <input
-                    type="number"
-                    value={startingPaper}
-                    onChange={(e) => setStartingPaper(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Non Product ($)</label>
-                  <input
-                    type="number"
-                    value={startingNonProduct}
-                    onChange={(e) => setStartingNonProduct(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label"> Office Supplies ($)</label>
-                  <input
-                    type="number"
-                    value={startingOpsSupplies}
-                    onChange={(e) => setStartingOpsSupplies(e.target.value)}
-                  />
-                </div>
+              <div className="input-row">
+                <label className="input-label">Manager Meal ($)</label>
+                <input
+                  type="number"
+                  value={managerMeal}
+                  onChange={(e) => setManagerMeal(e.target.value)}
+                  disabled={inputsDisabled}
+                />
               </div>
-
-              {/* Ending Inventory */}
-              <div className="pac-section ending-inventory-section">
-                <h4>Ending Inventory</h4>
-                <div className="input-row"><label className="input-label">Food ($)</label>
-                  <input
-                    type="number"
-                    value={endingFood}
-                    onChange={(e) => setEndingFood(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Condiment ($)</label>
-                  <input
-                    type="number"
-                    value={endingCondiment}
-                    onChange={(e) => setEndingCondiment(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Paper ($)</label>
-                  <input
-                    type="number"
-                    value={endingPaper}
-                    onChange={(e) => setEndingPaper(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label">Non Product ($)</label>
-                  <input
-                    type="number"
-                    value={endingNonProduct}
-                    onChange={(e) => setEndingNonProduct(e.target.value)}
-                  />
-                </div>
-                <div className="input-row"><label className="input-label"> Office Supplies ($)</label>
-                  <input
-                    type="number"
-                    value={endingOpsSupplies}
-                    onChange={(e) => setEndingOpsSupplies(e.target.value)}
-                  />
-                </div>
+              <div className="input-row">
+                <label className="input-label">Cash +/- ($)</label>
+                <input
+                  type="number"
+                  value={cash}
+                  onChange={(e) => setCash(e.target.value)}
+                  disabled={inputsDisabled}
+                />
               </div>
-
-              {/* Month Lock Status Alert */}
-              {isMonthLocked() && (
-                <Alert
-                  severity="warning"
-                  icon={<LockIcon />}
-                  sx={{ mt: 2, mb: 2 }}
-                >
-                  This month is locked and cannot be modified. Only administrators
-                  can unlock it.
-                </Alert>
-              )}
-
-              {/* Submit and Lock buttons */}
-              <Box
-                display="flex"
-                gap={2}
-                justifyContent="center"
-                sx={{ mt: 2, mb: 8 }}
-              >
-                <Button
-                  variant="contained"
-                  color="primary"
-                  size="large"
-                  sx={{
-                    width: "250px",
-                    backgroundColor: "#1976d2",
-                    "&:hover": {
-                      backgroundColor: "#42a5f5",
-                    },
-                  }}
-                  onClick={handleGenerate}
-                  disabled={isCurrentPeriodLocked()}
-                >
-                  Submit
-                </Button>
-
-                <Button
-                  variant={isMonthLocked() ? "contained" : "outlined"}
-                  color={isMonthLocked() ? "error" : "primary"}
-                  size="large"
-                  startIcon={isMonthLocked() ? <LockOpenIcon /> : <LockIcon />}
-                  sx={{
-                    width: "250px",
-                  }}
-                  onClick={handleLockMonth}
-                  disabled={
-                    (!isMonthLocked() && !canLockMonth) ||
-                    (isMonthLocked() && !canUnlockMonth)
-                  }
-                >
-                  {isMonthLocked() ? "Unlock Month" : "Lock Month"}
-                </Button>
-              </Box>
+              <div className="input-row">
+                <label className="input-label">Advertising (%)</label>
+                <input
+                  type="number"
+                  value={advertising}
+                  onChange={(e) => setAdvertising(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
             </div>
-          </Container>
-        )}{" "}
+
+            {/* Labor */}
+            <div className="pac-section labor-section">
+              <h4>Labor</h4>
+              <div className="input-row">
+                <label className="input-label">Crew Labor %</label>
+                <input
+                  type="number"
+                  value={crewLabor}
+                  onChange={(e) => setCrewLabor(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Total Labor %</label>
+                <input
+                  type="number"
+                  value={totalLabor}
+                  onChange={(e) => setTotalLabor(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Payroll Tax (%)</label>
+                <input
+                  type="number"
+                  value={payrollTax}
+                  onChange={(e) => setPayrollTax(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+            </div>
+
+            {/* Food */}
+            <div className="pac-section food-section">
+              <h4>Food</h4>
+              <div className="input-row">
+                <label className="input-label">Complete Waste %</label>
+                <input
+                  type="number"
+                  value={completeWaste}
+                  onChange={(e) => setCompleteWaste(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Raw Waste %</label>
+                <input
+                  type="number"
+                  value={rawWaste}
+                  onChange={(e) => setRawWaste(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Condiment %</label>
+                <input
+                  type="number"
+                  value={condiment}
+                  onChange={(e) => setCondiment(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Variance Stat %</label>
+                <input
+                  type="number"
+                  value={variance}
+                  onChange={(e) => setVariance(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Unexplained %</label>
+                <input
+                  type="number"
+                  value={unexplained}
+                  onChange={(e) => setUnexplained(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Discounts %</label>
+                <input
+                  type="number"
+                  value={discounts}
+                  onChange={(e) => setDiscounts(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Base Food %</label>
+                <input
+                  type="number"
+                  value={baseFood}
+                  onChange={(e) => setBaseFood(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+            </div>
+
+            {/* Starting Inventory */}
+            <div className="pac-section starting-inventory-section">
+              <h4>Starting Inventory</h4>
+              <div className="input-row">
+                <label className="input-label">Food ($)</label>
+                <input
+                  type="number"
+                  value={startingFood}
+                  onChange={(e) => setStartingFood(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Condiment ($)</label>
+                <input
+                  type="number"
+                  value={startingCondiment}
+                  onChange={(e) => setStartingCondiment(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Paper ($)</label>
+                <input
+                  type="number"
+                  value={startingPaper}
+                  onChange={(e) => setStartingPaper(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Non Product ($)</label>
+                <input
+                  type="number"
+                  value={startingNonProduct}
+                  onChange={(e) => setStartingNonProduct(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label"> Office Supplies ($)</label>
+                <input
+                  type="number"
+                  value={startingOpsSupplies}
+                  onChange={(e) => setStartingOpsSupplies(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+            </div>
+
+            {/* Ending Inventory */}
+            <div className="pac-section ending-inventory-section">
+              <h4>Ending Inventory</h4>
+              <div className="input-row">
+                <label className="input-label">Food ($)</label>
+                <input
+                  type="number"
+                  value={endingFood}
+                  onChange={(e) => setEndingFood(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Condiment ($)</label>
+                <input
+                  type="number"
+                  value={endingCondiment}
+                  onChange={(e) => setEndingCondiment(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Paper ($)</label>
+                <input
+                  type="number"
+                  value={endingPaper}
+                  onChange={(e) => setEndingPaper(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Non Product ($)</label>
+                <input
+                  type="number"
+                  value={endingNonProduct}
+                  onChange={(e) => setEndingNonProduct(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label"> Office Supplies ($)</label>
+                <input
+                  type="number"
+                  value={endingOpsSupplies}
+                  onChange={(e) => setEndingOpsSupplies(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+            </div>
+
+            {/* Month Lock Status Alert */}
+            {isMonthLocked() && (
+              <Alert
+                severity="warning"
+                icon={<LockIcon />}
+                sx={{ mt: 2, mb: 2 }}
+              >
+                This month is locked and cannot be modified. Only administrators
+                can unlock it.
+              </Alert>
+            )}
+
+            {/* Submit and Lock buttons */}
+            <Box
+              display="flex"
+              gap={2}
+              justifyContent="center"
+              sx={{ mt: 2, mb: 8 }}
+            >
+              <Button
+                variant="contained"
+                color="primary"
+                size="large"
+                sx={{
+                  width: "250px",
+                  backgroundColor: "#1976d2",
+                  "&:hover": {
+                    backgroundColor: "#42a5f5",
+                  },
+                }}
+                onClick={handleGenerate}
+                disabled={isCurrentPeriodLocked()}
+              >
+                Submit
+              </Button>
+
+              <Button
+                variant={isMonthLocked() ? "contained" : "outlined"}
+                color={isMonthLocked() ? "error" : "primary"}
+                size="large"
+                startIcon={isMonthLocked() ? <LockOpenIcon /> : <LockIcon />}
+                sx={{
+                  width: "250px",
+                }}
+                onClick={handleLockMonth}
+                disabled={
+                  (!isMonthLocked() && !canLockMonth) ||
+                  (isMonthLocked() && !canUnlockMonth)
+                }
+              >
+                {isMonthLocked() ? "Unlock Month" : "Lock Month"}
+              </Button>
+            </Box>
+          </div>
+        </Container>
+      )}{" "}
       {/* end of Generate page */}
       {tabIndex === 2 && (
         <Container>
