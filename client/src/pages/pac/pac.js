@@ -271,7 +271,7 @@ const PAC = () => {
       // persist previous month rows into current draft so inputs reflect immediately
       try {
         localStorage.setItem(draftKey, JSON.stringify(data.rows));
-      } catch {}
+      } catch { }
       // Do NOT change PAC Goal when resetting to previous month
     } catch (e) {
       console.error("reset to previous month error", e);
@@ -323,9 +323,8 @@ const PAC = () => {
         const userDoc = await getDoc(userRef);
         if (userDoc.exists()) {
           const userData = userDoc.data();
-          return `${userData.firstName || ""} ${
-            userData.lastName || ""
-          }`.trim();
+          return `${userData.firstName || ""} ${userData.lastName || ""
+            }`.trim();
         }
       }
       return auth.currentUser?.displayName || "Unknown User";
@@ -409,7 +408,7 @@ const PAC = () => {
         } else {
           setLastUpdatedTimestamp(null);
         }
-      } catch {}
+      } catch { }
     } catch (error) {
       console.error("Error fetching month lock status:", error);
     }
@@ -461,30 +460,22 @@ const PAC = () => {
         await fetchMonthLockStatus();
         await fetchLockedMonths();
 
-        const auth = getAuth();
-        const currentUser = auth.currentUser;
+        const firstName = (await getUserFullName()).split(" ")[0] || "Someone";
 
-        const lockerUser =
-        userData && userData.firstName
-          ? userData
-          : currentUser
-          ? { firstName: currentUser.displayName?.split(" ")[0] || "Someone" }
-          : { firstName: "Someone" };
         await fetch("http://localhost:5140/api/pac/notifications/send", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          context: {
-            event: monthLockStatus,
-            firstName: lockerUser.firstName || "Someone",
-            month,
-            year,
-            store: selectedStore,
-          },
-        }),
-      });
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            context: {
+              event: monthLockStatus, // or result if your API expects the new status
+              firstName,
+              month,
+              year,
+              store: selectedStore,
+            },
+          }),
+        });
+
       } else {
         alert(result.message);
       }
@@ -1537,7 +1528,7 @@ const PAC = () => {
 
                         <TableCell align="center">
                           {hasUserInputAmountField.includes(expense.name) &&
-                          !isPac ? (
+                            !isPac ? (
                             <TextField
                               type="number"
                               size="small"
@@ -2301,9 +2292,8 @@ const PAC = () => {
               {isMonthLocked() && (
                 <Chip
                   icon={<LockIcon />}
-                  label={`Month Locked by ${
-                    monthLockStatus?.locked_by || "Unknown"
-                  }`}
+                  label={`Month Locked by ${monthLockStatus?.locked_by || "Unknown"
+                    }`}
                   color="warning"
                   variant="outlined"
                 />
