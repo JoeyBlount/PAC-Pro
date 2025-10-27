@@ -44,6 +44,15 @@ TRAVEL_THRU_TRAINING: List[str] = [
     "Utilities", "Office", "Cash +/-", "Crew Relations", "Training",
 ]
 
+# Group definitions to mirror the UI group totals
+FOOD_PAPER_GROUP: List[str] = [
+    "Base Food", "Employee Meal", "Condiment", "Total Waste", "Paper",
+]
+LABOR_GROUP: List[str] = [
+    "Crew Labor", "Management Labor", "Payroll Tax",
+]
+PURCHASES_GROUP: List[str] = ["Advertising", *TRAVEL_THRU_TRAINING]
+
 
 # -----------------------------------------------------------------------------
 # Numeric helpers
@@ -201,30 +210,69 @@ class ProjCalculationService:
 
     def apply_controllables(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         next_rows = [dict(r) for r in rows]
-        proj_total = self._sum_range(next_rows, CONTROLLABLE_START, CONTROLLABLE_END, "projectedDollar")
-        hist_total = self._sum_range(next_rows, CONTROLLABLE_START, CONTROLLABLE_END, "historicalDollar")
-        ans_proj = _D(self._find_value(next_rows, "All Net Sales", "projectedDollar"))
-        ans_hist = _D(self._find_value(next_rows, "All Net Sales", "historicalDollar"))
+        # Dollars: sum of group totals (Food & Paper + Labor + Purchases)
+        def sum_group(names: List[str], key: str) -> Decimal:
+            return _q2(sum((_D(self._find_value(next_rows, nm, key)) for nm in names), Decimal("0.00")))
+
+        proj_total = _q2(
+            sum_group(FOOD_PAPER_GROUP, "projectedDollar")
+            + sum_group(LABOR_GROUP, "projectedDollar")
+            + sum_group(PURCHASES_GROUP, "projectedDollar")
+        )
+        hist_total = _q2(
+            sum_group(FOOD_PAPER_GROUP, "historicalDollar")
+            + sum_group(LABOR_GROUP, "historicalDollar")
+            + sum_group(PURCHASES_GROUP, "historicalDollar")
+        )
+
+        # Percent: SUM of each line's percent-of-Product-Sales
+        ps_proj = _D(self._find_value(next_rows, "Product Sales", "projectedDollar"))
+        ps_hist = _D(self._find_value(next_rows, "Product Sales", "historicalDollar"))
+        # Percent from group dollar totals relative to Product Sales
+        summ_proj_pct = _q2((proj_total / ps_proj) * 100) if ps_proj > 0 else Decimal("0.00")
+        summ_hist_pct = _q2((hist_total / ps_hist) * 100) if ps_hist > 0 else Decimal("0.00")
+        names = [r.get("name") for r in next_rows]
+        try:
+            s = names.index(CONTROLLABLE_START)
+            e = names.index(CONTROLLABLE_END)
+        except ValueError:
+            s, e = 0, -1
+        # (no need to iterate rows for percent; use group totals for precision)
+        summ_proj_pct = _q2(summ_proj_pct)
+        summ_hist_pct = _q2(summ_hist_pct)
 
         for r in next_rows:
             if r.get("name") == "Total Controllable":
                 r["projectedDollar"] = float(_q2(proj_total))
                 r["historicalDollar"] = float(_q2(hist_total))
-                r["projectedPercent"] = float(_q2((proj_total / ans_proj) * 100)) if ans_proj > 0 else 0.0
-                r["historicalPercent"] = float(_q2((hist_total / ans_hist) * 100)) if ans_hist > 0 else 0.0
+                r["projectedPercent"] = float(summ_proj_pct)
+                r["historicalPercent"] = float(summ_hist_pct)
                 break
         return next_rows
 
     def apply_pac(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         next_rows = [dict(r) for r in rows]
-        ans_proj = _D(self._find_value(next_rows, "All Net Sales", "projectedDollar"))
-        ctrl_proj = self._sum_range(next_rows, CONTROLLABLE_START, CONTROLLABLE_END, "projectedDollar")
-        pac_d = ans_proj - ctrl_proj
+        # PAC$ = Product Sales - Total Controllables (sum of group totals)
+        ps_proj = _D(self._find_value(next_rows, "Product Sales", "projectedDollar"))
+        ctrl_proj = _q2(
+            _D(self._find_value(next_rows, "Total Controllable", "projectedDollar"))
+        )
+        pac_d = ps_proj - ctrl_proj
+
+        # PAC% = 100 - Total Controllable%
+        total_ctrl_percent = 0
+        # Find the total controllable percent we set in apply_controllables
+        for r in next_rows:
+            if r.get("name") == "Total Controllable":
+                total_ctrl_percent = _D(r.get("projectedPercent"))
+                break
+
+        pac_percent = _q2(Decimal("100") - total_ctrl_percent) if ps_proj > 0 else Decimal("0.00")
 
         for r in next_rows:
             if r.get("name") == "P.A.C.":
                 r["projectedDollar"] = float(_q2(pac_d))
-                r["projectedPercent"] = float(_q2((pac_d / ans_proj) * 100)) if ans_proj > 0 else 0.0
+                r["projectedPercent"] = float(pac_percent)
                 break
         return next_rows
 
