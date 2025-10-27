@@ -56,7 +56,8 @@ class PacCalculationService:
         Returns:
             Input data required for PAC calculations
         """
-        return await self.data_ingestion_service.get_input_data(entity_id, year_month)
+        # Delegate to the ingestion service's async fetch
+        return await self.data_ingestion_service.get_input_data_async(entity_id, year_month)
     
     def calculate_pac_from_input(self, input_data: PacInputData) -> PacCalculationResult:
         """
@@ -70,6 +71,23 @@ class PacCalculationService:
         """
         result = PacCalculationResult()
         S = input_data.product_net_sales  # Product Net Sales for percentage calculations
+
+        # Guard against division by zero when no sales data is available
+        try:
+            if S is None or S <= 0:
+                # Populate top-level sales for completeness and return zeros elsewhere
+                result.product_net_sales = input_data.product_net_sales
+                result.all_net_sales = (
+                    input_data.product_net_sales
+                    + input_data.cash_adjustments
+                    + input_data.promotions
+                    + input_data.manager_meals
+                )
+                # Leave other fields at defaults (zeros via model defaults)
+                return result
+        except Exception:
+            # If S isn't comparable, default to safe zeroed result
+            return result
         
         # 1) Sales Section
         result.product_net_sales = input_data.product_net_sales
@@ -301,18 +319,31 @@ class PacCalculationService:
             percent=(office_dollars / S) * 100
         )
         
-        # Cash +/- (negative expense when positive cash overage)
-        cash_adjustments_dollars = -input_data.cash_adjustments
+        # Cash +/- (treat as positive expense for UI consistency)
+        cash_adjustments_dollars = input_data.cash_adjustments
         expenses.cash_adjustments = ExpenseLine(
             dollars=cash_adjustments_dollars,
             percent=(cash_adjustments_dollars / S) * 100
         )
         
-        # Misc: CR/TR/D&S (Credit Receipts + Training)
-        misc_dollars = input_data.purchases.training + input_data.purchases.crew_relations
+        # Crew Relations (separate line)
+        crew_relations_dollars = input_data.purchases.crew_relations
+        expenses.crew_relations = ExpenseLine(
+            dollars=crew_relations_dollars,
+            percent=(crew_relations_dollars / S) * 100
+        )
+
+        # Training (separate line)
+        training_dollars = input_data.purchases.training
+        expenses.training = ExpenseLine(
+            dollars=training_dollars,
+            percent=(training_dollars / S) * 100
+        )
+
+        # Misc: CR/TR/D&S kept for backward compatibility but do not double count
         expenses.misc_cr_tr_ds = ExpenseLine(
-            dollars=misc_dollars,
-            percent=(misc_dollars / S) * 100
+            dollars=Decimal('0'),
+            percent=Decimal('0')
         )
         
         return expenses
@@ -348,6 +379,8 @@ class PacCalculationService:
             expenses.utilities.dollars +
             expenses.office.dollars +
             expenses.cash_adjustments.dollars +
+            expenses.crew_relations.dollars +
+            expenses.training.dollars +
             expenses.misc_cr_tr_ds.dollars
         )
     
