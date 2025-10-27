@@ -43,12 +43,14 @@ import { getStorage, ref, getDownloadURL } from "firebase/storage";
 
 import { invoiceCatList } from "../settings/InvoiceSettings";
 import MonthLockService from "../../services/monthLockService";
+import { recomputeMonthlyTotals } from "../../services/invoiceTotalsService";
 
 // Map Invoice Log category IDs -> PAC "projections[].name"
 const PROJECTION_LOOKUP = {
-  FOOD: "Base Food",
-  CONDIMENT: "Condiment",
-  PAPER: "Paper",
+  // Excluded from Invoice Log budget (pull 0)
+  FOOD: null,
+  CONDIMENT: null,
+  PAPER: null,
   NONPRODUCT: null, // not present in PAC; default 0
   TRAVEL: "Travel",
   "ADV-OTHER": "Adv Other",
@@ -60,9 +62,19 @@ const PROJECTION_LOOKUP = {
   "SML EQUIP": "Small Equipment",
   UTILITIES: "Utilities",
   OFFICE: "Office",
+  // Match Projections naming precisely
+  "CREW RELATIONS": "Crew Relations",
   TRAINING: "Training",
-  CR: "Crew Relations",
 };
+
+// Categories to hide in the Budget row (show blank)
+const EXCLUDED_BUDGET_CATS = new Set([
+  "FOOD",
+  "CONDIMENT",
+  "PAPER",
+  "NONPRODUCT",
+  "Advertising",
+]);
 
 const InvoiceLogs = () => {
   const location = useLocation();
@@ -110,7 +122,6 @@ const InvoiceLogs = () => {
   const [showRecentlyDeleted, setShowRecentlyDeleted] = useState(false);
   const [recentlyDeleted, setRecentlyDeleted] = useState([]);
   const [budgetData, setBudgetData] = useState({});
-  const [pacTotals, setPacTotals] = useState({});
 
   // Invoice dialog state
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -157,96 +168,97 @@ const InvoiceLogs = () => {
       const res = await fetch(`${API_URL}/notifications/send`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ event, context }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Failed to send notification");
+      if (!res.ok)
+        throw new Error(data.detail || "Failed to send notification");
 
       console.log("✅ Notification sent:", data.message);
     } catch (err) {
       console.error("Error sending notification:", err);
     }
   }
-//   async function sendEditInvoiceNotifications(editorUser, invoiceNumber, companyName) {
-//   try {
-//     const settingsRef = doc(db, "settings", "notifications");
-//     const settingsSnap = await getDoc(settingsRef);
+  //   async function sendEditInvoiceNotifications(editorUser, invoiceNumber, companyName) {
+  //   try {
+  //     const settingsRef = doc(db, "settings", "notifications");
+  //     const settingsSnap = await getDoc(settingsRef);
 
-//     if (!settingsSnap.exists()) {
-//       console.error("No notification settings found.");
-//       return;
-//     }
+  //     if (!settingsSnap.exists()) {
+  //       console.error("No notification settings found.");
+  //       return;
+  //     }
 
-//     const notifSettings = settingsSnap.data();
-//     const editSetting = notifSettings["Invoice Edit"];
+  //     const notifSettings = settingsSnap.data();
+  //     const editSetting = notifSettings["Invoice Edit"];
 
-//     if (!editSetting?.enabled) return;
+  //     if (!editSetting?.enabled) return;
 
-//     const roles = editSetting.roles || [];
+  //     const roles = editSetting.roles || [];
 
-//     const q = query(collection(db, "users"), where("role", "in", roles));
-//     const snapshot = await getDocs(q);
+  //     const q = query(collection(db, "users"), where("role", "in", roles));
+  //     const snapshot = await getDocs(q);
 
-//     for (const userDoc of snapshot.docs) {
-//       const userData = userDoc.data();
-//       await addDoc(collection(db, "notifications"), {
-//         title: "Invoice Edited",
-//         message: `${editorUser.firstName || "Someone"} edited invoice #${invoiceNumber} for ${companyName}.`,
-//         type: "invoice_edit",
-//         toEmail: userData.email,
-//         createdAt: new Date(),
-//         read: false
-//       });
-//     }
+  //     for (const userDoc of snapshot.docs) {
+  //       const userData = userDoc.data();
+  //       await addDoc(collection(db, "notifications"), {
+  //         title: "Invoice Edited",
+  //         message: `${editorUser.firstName || "Someone"} edited invoice #${invoiceNumber} for ${companyName}.`,
+  //         type: "invoice_edit",
+  //         toEmail: userData.email,
+  //         createdAt: new Date(),
+  //         read: false
+  //       });
+  //     }
 
-//     console.log(`Invoice Edit notifications sent to roles: ${roles.join(", ")}`);
-//   } catch (err) {
-//     console.error("Error sending edit invoice notifications:", err);
-//   }
-// }
+  //     console.log(`Invoice Edit notifications sent to roles: ${roles.join(", ")}`);
+  //   } catch (err) {
+  //     console.error("Error sending edit invoice notifications:", err);
+  //   }
+  // }
 
-// async function sendDeleteInvoiceNotifications(invoice, deleterUser) {
-//   try {
-//     const settingsRef = doc(db, "settings", "notifications");
-//     const settingsSnap = await getDoc(settingsRef);
-//     const notifSettings = settingsSnap.exists() ? settingsSnap.data() : {};
-//     const deleteSetting = notifSettings["Invoice Deletion"];
+  // async function sendDeleteInvoiceNotifications(invoice, deleterUser) {
+  //   try {
+  //     const settingsRef = doc(db, "settings", "notifications");
+  //     const settingsSnap = await getDoc(settingsRef);
+  //     const notifSettings = settingsSnap.exists() ? settingsSnap.data() : {};
+  //     const deleteSetting = notifSettings["Invoice Deletion"];
 
-//     if (!deleteSetting || !deleteSetting.enabled) {
-//       console.log("Invoice Deletion notifications disabled or not found");
-//       return;
-//     }
+  //     if (!deleteSetting || !deleteSetting.enabled) {
+  //       console.log("Invoice Deletion notifications disabled or not found");
+  //       return;
+  //     }
 
-//     const roles = deleteSetting.roles || [];
-//     if (roles.length === 0) {
-//       console.log("No roles set for Invoice Deletion notifications");
-//       return;
-//     }
+  //     const roles = deleteSetting.roles || [];
+  //     if (roles.length === 0) {
+  //       console.log("No roles set for Invoice Deletion notifications");
+  //       return;
+  //     }
 
-//     const usersQuery = query(collection(db, "users"), where("role", "in", roles));
-//     const usersSnapshot = await getDocs(usersQuery);
+  //     const usersQuery = query(collection(db, "users"), where("role", "in", roles));
+  //     const usersSnapshot = await getDocs(usersQuery);
 
-//     for (const userDoc of usersSnapshot.docs) {
-//       const userData = userDoc.data();
-//       await addDoc(collection(db, "notifications"), {
-//         title: "Invoice Deleted",
-//         message: `${deleterUser.firstName || "Someone"} deleted invoice #${invoice.invoiceNumber || ""} from ${invoice.companyName || "a company"}.`,
-//         type: "invoice_deleted",
-//         toEmail: userData.email,
-//         createdAt: new Date(),
-//         read: false,
-//       });
-//     }
+  //     for (const userDoc of usersSnapshot.docs) {
+  //       const userData = userDoc.data();
+  //       await addDoc(collection(db, "notifications"), {
+  //         title: "Invoice Deleted",
+  //         message: `${deleterUser.firstName || "Someone"} deleted invoice #${invoice.invoiceNumber || ""} from ${invoice.companyName || "a company"}.`,
+  //         type: "invoice_deleted",
+  //         toEmail: userData.email,
+  //         createdAt: new Date(),
+  //         read: false,
+  //       });
+  //     }
 
-//     console.log("Invoice Deletion notifications sent successfully.");
-//   } catch (err) {
-//     console.error("Error sending delete invoice notifications:", err);
-//   }
-// }
+  //     console.log("Invoice Deletion notifications sent successfully.");
+  //   } catch (err) {
+  //     console.error("Error sending delete invoice notifications:", err);
+  //   }
+  // }
 
   //this function makes sure we can only edit/delete the current month in the invoice.
   const isCurrentMonth = (dateStr) => {
@@ -279,6 +291,22 @@ const InvoiceLogs = () => {
       // 2. Now delete it from the 'invoices' collection
       await deleteDoc(doc(db, "invoices", invoice.id));
 
+      // 3. Update invoice totals for this store/month/year
+      try {
+        await recomputeMonthlyTotals(
+          invoice.storeID,
+          invoice.targetMonth,
+          invoice.targetYear
+        );
+        console.log("Invoice totals updated after deletion");
+      } catch (totalsError) {
+        console.error(
+          "Error updating invoice totals after deletion:",
+          totalsError
+        );
+        // Don't fail the deletion if totals update fails
+      }
+
       alert("Invoice moved to Recently Deleted.");
       const auth = getAuth();
       const currentUser = auth.currentUser;
@@ -287,11 +315,11 @@ const InvoiceLogs = () => {
         : { firstName: "Someone" };
 
       await sendNotification("Invoice Deletion", {
-      firstName: deleterUser.firstName,
-      invoiceNumber: invoice.invoiceNumber,
-      companyName: invoice.companyName,
-    });
-      // 3. Refresh invoices on the page
+        firstName: deleterUser.firstName,
+        invoiceNumber: invoice.invoiceNumber,
+        companyName: invoice.companyName,
+      });
+      // 4. Refresh invoices on the page
       setData((prev) => ({
         ...prev,
         invoices: prev.invoices.filter((inv) => inv.id !== invoice.id),
@@ -375,11 +403,10 @@ const InvoiceLogs = () => {
       const invoiceRef = doc(db, "invoices", invoiceID);
       await updateDoc(invoiceRef, {
         locked: false,
-            });
-    alert("Invoice unlocked.");
-    fetchInvoices(); // refresh from Firestore
-  } catch (error) {
-
+      });
+      alert("Invoice unlocked.");
+      fetchInvoices(); // refresh from Firestore
+    } catch (error) {
       console.error("Error unlocking invoice:", error);
       alert("Failed to unlock invoice.");
     }
@@ -395,23 +422,21 @@ const InvoiceLogs = () => {
       const editorUser = auth.currentUser || { firstName: "User" };
       const token = await editorUser?.getIdToken();
       await fetch("http://localhost:5140/api/pac/notifications/send", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        event: "Invoice Edit",
-        context: {
-          firstName: editorUser?.displayName?.split(" ")[0] || "Someone",
-          invoiceNumber: updatedInvoice.invoiceNumber,
-          companyName: updatedInvoice.companyName,
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
-      }),
-    });
+        body: JSON.stringify({
+          event: "Invoice Edit",
+          context: {
+            firstName: editorUser?.displayName?.split(" ")[0] || "Someone",
+            invoiceNumber: updatedInvoice.invoiceNumber,
+            companyName: updatedInvoice.companyName,
+          },
+        }),
+      });
 
-
-      
       alert("Invoice updated successfully!");
       setEditDialogOpen(false);
       fetchInvoices(); // refresh from Firestore
@@ -431,12 +456,21 @@ const InvoiceLogs = () => {
           id: doc.id,
           ...doc.data(), // Expect each doc to have fields: name, bankAccountNum, etc.
         }));
-        
+
         // Sort columns according to the order defined in InvoiceSettings
-        const orderedColumns = invoiceCatList.map(categoryId => 
-          allColumns.find(col => col.id === categoryId)
-        ).filter(Boolean); // Remove any undefined entries
-        
+        const orderedColumns = invoiceCatList
+          .map((categoryId) => allColumns.find((col) => col.id === categoryId))
+          .filter(Boolean); // Remove any undefined entries
+
+        // Ensure order matches Projections page: Crew Relations before Training
+        const idxCR = orderedColumns.findIndex((c) => c.id === "CR");
+        const idxTR = orderedColumns.findIndex((c) => c.id === "TRAINING");
+        if (idxCR !== -1 && idxTR !== -1 && idxCR > idxTR) {
+          const tmp = orderedColumns[idxCR];
+          orderedColumns[idxCR] = orderedColumns[idxTR];
+          orderedColumns[idxTR] = tmp;
+        }
+
         setMonetaryColumns(orderedColumns);
       } catch (error) {
         console.error("Error fetching category columns:", error);
@@ -450,7 +484,7 @@ const InvoiceLogs = () => {
     if (selectedStore && monetaryColumns.length > 0) {
       fetchInvoices();
     }
-  }, [selectedStore, monetaryColumns, budgetData, pacTotals]);
+  }, [selectedStore, monetaryColumns, budgetData]);
 
   // Fetch budget data when store or month/year changes
   useEffect(() => {
@@ -461,7 +495,6 @@ const InvoiceLogs = () => {
       const yearMonth = `${year}${String(month).padStart(2, "0")}`;
 
       fetchBudgetData(selectedStore, yearMonth);
-      fetchPacTotals(selectedStore, yearMonth);
     }
   }, [selectedStore, selectedMonth, selectedYear, monetaryColumns]);
 
@@ -596,26 +629,29 @@ const InvoiceLogs = () => {
         return true;
       });
 
+      // Compute totals strictly from invoices assigned to the selected month/year
       const totals = {};
       monetaryColumns.forEach((col) => {
-        const categoryId = col.id; // This matches the document ID from invoiceCategories
-        const categoryName = col.id; // Use col.id as the category name since that's what's stored in invoices
+        const categoryId = col.id;
         totals[categoryId] = filteredInvoices.reduce((sum, inv) => {
-          const categoryValue = getCategoryValue(inv, categoryName);
+          const categoryValue = getCategoryValue(inv, categoryId);
           return sum + categoryValue;
         }, 0);
       });
 
-      // Use budget data from pac_projections instead of invoiceCategories
+      // Use budget data from pac-projections instead of invoiceCategories
       const budgets = {};
       monetaryColumns.forEach((col) => {
-        // Use budgetData if available, otherwise fall back to invoiceCategories budget
-        budgets[col.id] = budgetData[col.id] || Number(col.budget) || 0;
+        // Use budgetData if available, otherwise 0 (no fallback to invoiceCategories)
+        budgets[col.id] = budgetData[col.id] || 0;
       });
 
-      const usePacTotals = pacTotals && Object.keys(pacTotals).length > 0;
-      console.log("Setting totals in fetchInvoices:", { usePacTotals, pacTotals, computedTotals: totals, budgets });
-      setData({ invoices, total: usePacTotals ? pacTotals : totals, budget: budgets });
+      console.log("Setting totals in fetchInvoices:", {
+        computedTotals: totals,
+        budgets,
+      });
+      // TOTAL row must reflect only the sum of invoice entries for the selected month/year
+      setData({ invoices, total: totals, budget: budgets });
     } catch (err) {
       console.error("Error loading invoices:", err);
     }
@@ -667,7 +703,11 @@ const InvoiceLogs = () => {
       }
 
       const pac = snap.data() || {};
-      const rows = Array.isArray(pac.projections) ? pac.projections : [];
+      const rows = Array.isArray(pac.rows)
+        ? pac.rows
+        : Array.isArray(pac.projections)
+        ? pac.projections
+        : [];
 
       // Build budget map aligned to your table's categories
       const nextBudget = {};
@@ -690,46 +730,7 @@ const InvoiceLogs = () => {
     }
   };
 
-  // Fetch PAC input totals from pac_input_data collection
-  const fetchPacTotals = async (storeId, yearMonth) => {
-    try {
-      const formattedStoreId = storeId.startsWith('store_') ? storeId : `store_${storeId.padStart(3, '0')}`;
-      const docId = `${formattedStoreId}_${yearMonth}`;
-
-      const docRef = doc(db, "pac_input_data", docId);
-      const docSnap = await getDoc(docRef);
-
-      if (docSnap.exists()) {
-        const pacData = docSnap.data();
-
-        const totalsMapping = {
-          'FOOD': pacData.purchases?.food || 0,
-          'CONDIMENT': pacData.purchases?.condiment || 0,
-          'PAPER': pacData.purchases?.paper || 0,
-          'NONPRODUCT': pacData.purchases?.non_product || 0,
-          'TRAVEL': pacData.purchases?.travel || 0,
-          'ADV-OTHER': pacData.purchases?.advertising_other || 0,
-          'PROMO': pacData.purchases?.promotion || 0,
-          'OUTSIDE SVC': pacData.purchases?.outside_services || 0,
-          'LINEN': pacData.purchases?.linen || 0,
-          'OP. SUPPLY': pacData.purchases?.operating_supply || 0,
-          'M+R': pacData.purchases?.maintenance_repair || 0,
-          'SML EQUIP': pacData.purchases?.small_equipment || 0,
-          'UTILITIES': pacData.purchases?.utilities || 0,
-          'OFFICE': pacData.purchases?.office || 0,
-          'TRAINING': pacData.purchases?.training || 0,
-          'CR': pacData.purchases?.crew_relations || 0
-        };
-
-        setPacTotals(totalsMapping);
-      } else {
-        setPacTotals({});
-      }
-    } catch (error) {
-      console.error("Error loading PAC input totals:", error);
-      setPacTotals({});
-    }
-  };
+  // Removed legacy pac_input_data totals; budgets come from pac-projections and totals from invoices
 
   // Export functions remain unchanged
   const handleExportPDF = async () => {
@@ -770,40 +771,41 @@ const InvoiceLogs = () => {
     setExportDialogOpen(false);
   };
 
-const handleRowClick = async (invoice) => {
-  setSelectedInvoice(invoice);
+  const handleRowClick = async (invoice) => {
+    setSelectedInvoice(invoice);
 
-  try {
-    const storage = getStorage();
+    try {
+      const storage = getStorage();
 
-    // ✅ Case 1: Firestore already has a public download URL
-    if (invoice.imageURL && invoice.imageURL.startsWith("http")) {
-      setInvoiceImage(invoice.imageURL);
+      // ✅ Case 1: Firestore already has a public download URL
+      if (invoice.imageURL && invoice.imageURL.startsWith("http")) {
+        setInvoiceImage(invoice.imageURL);
+        setInvoiceDialogOpen(true);
+        return;
+      }
+
+      // ✅ Case 2: It’s a storage path like "images/file.png"
+      if (invoice.imageURL) {
+        const imageRef = ref(storage, invoice.imageURL);
+        const url = await getDownloadURL(imageRef);
+        setInvoiceImage(url);
+        setInvoiceDialogOpen(true);
+        return;
+      }
+
+      // ❌ No image field at all
+      console.warn("Invoice missing imageURL field:", invoice);
+      setInvoiceImage(null);
       setInvoiceDialogOpen(true);
-      return;
-    }
-
-    // ✅ Case 2: It’s a storage path like "images/file.png"
-    if (invoice.imageURL) {
-      const imageRef = ref(storage, invoice.imageURL);
-      const url = await getDownloadURL(imageRef);
-      setInvoiceImage(url);
+    } catch (error) {
+      console.error("Error loading invoice image:", error);
+      alert(
+        "Failed to load invoice image. Please check Firebase Storage permissions."
+      );
+      setInvoiceImage(null);
       setInvoiceDialogOpen(true);
-      return;
     }
-
-    // ❌ No image field at all
-    console.warn("Invoice missing imageURL field:", invoice);
-    setInvoiceImage(null);
-    setInvoiceDialogOpen(true);
-  } catch (error) {
-    console.error("Error loading invoice image:", error);
-    alert("Failed to load invoice image. Please check Firebase Storage permissions.");
-    setInvoiceImage(null);
-    setInvoiceDialogOpen(true);
-  }
-};
-
+  };
 
   const handleExportInvoicePDF = async () => {
     if (!invoiceImage) return;
@@ -1048,13 +1050,15 @@ const handleRowClick = async (invoice) => {
       return (
         <tr
           key={i}
-          className={`invoice-row ${isLocked ? 'locked-row' : 'unlocked-row'}`}
+          className={`invoice-row ${isLocked ? "locked-row" : "unlocked-row"}`}
           onClick={() => handleRowClick(inv)}
         >
           <td className="tableCell">
             {inv.targetMonth && inv.targetYear
               ? `${inv.targetMonth}/${inv.targetYear}`
-              : `${new Date(inv.dateSubmitted).getMonth() + 1}/${new Date(inv.dateSubmitted).getFullYear()} (legacy)`}
+              : `${new Date(inv.dateSubmitted).getMonth() + 1}/${new Date(
+                  inv.dateSubmitted
+                ).getFullYear()} (legacy)`}
           </td>
           <td className="tableCell">{inv.storeID}</td>
           <td className="tableCell dateCell">
@@ -1085,50 +1089,56 @@ const handleRowClick = async (invoice) => {
           })}
 
           <td className="tableCell">
-          {(canEdit || userRole === "Supervisor" || userRole === "Admin") &&
-            !isInvoiceMonthLocked(
-              inv.targetMonth || new Date(inv.dateSubmitted).getMonth() + 1,
-              inv.targetYear || new Date(inv.dateSubmitted).getFullYear()
-            ) && (
-              <>
-                <button
-                  className="edit-button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleEdit(inv);
-                  }}
-                >
-                  ✏️ Edit
-                </button>
-                <button
-                  className="delete-button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(inv);
-                  }}
-                >
-                  🗑️ Delete
-                </button>
-                <button
-                  className={`lock-toggle-button ${isLocked ? 'locked' : 'unlocked'}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    console.log('Invoice lock status:', inv.locked, 'isLocked:', isLocked);
-                    if (isLocked) {
-                      console.log('Unlocking invoice:', inv.id);
-                      unlockInvoice(inv.id);
-                    } else {
-                      console.log('Locking invoice:', inv.id);
-                      lockInvoice(inv.id);
-                    }
-                  }}
-                >
-                  {isLocked ? '🔓 Unlock' : '🔒 Lock'}
-                </button>
-              </>
-            )}
-        </td>
-
+            {(canEdit || userRole === "Supervisor" || userRole === "Admin") &&
+              !isInvoiceMonthLocked(
+                inv.targetMonth || new Date(inv.dateSubmitted).getMonth() + 1,
+                inv.targetYear || new Date(inv.dateSubmitted).getFullYear()
+              ) && (
+                <>
+                  <button
+                    className="edit-button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEdit(inv);
+                    }}
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button
+                    className="delete-button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(inv);
+                    }}
+                  >
+                    🗑️ Delete
+                  </button>
+                  <button
+                    className={`lock-toggle-button ${
+                      isLocked ? "locked" : "unlocked"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log(
+                        "Invoice lock status:",
+                        inv.locked,
+                        "isLocked:",
+                        isLocked
+                      );
+                      if (isLocked) {
+                        console.log("Unlocking invoice:", inv.id);
+                        unlockInvoice(inv.id);
+                      } else {
+                        console.log("Locking invoice:", inv.id);
+                        lockInvoice(inv.id);
+                      }
+                    }}
+                  >
+                    {isLocked ? "🔓 Unlock" : "🔒 Lock"}
+                  </button>
+                </>
+              )}
+          </td>
         </tr>
       );
     });
@@ -1182,6 +1192,15 @@ const handleRowClick = async (invoice) => {
         </td>
         {monetaryColumns.map((col, i) => {
           const val = Math.round(values[col.id] || 0);
+          // For Budget and Difference rows, hide excluded categories (show blank)
+          if (
+            (label === "BUDGET" || label === "Difference") &&
+            EXCLUDED_BUDGET_CATS.has(col.id)
+          ) {
+            return (
+              <td key={i} className="tableCell summaryCell" style={{}}></td>
+            );
+          }
           return (
             <td key={i} className="tableCell summaryCell" style={styleFn(val)}>
               {val.toLocaleString("en-US", {

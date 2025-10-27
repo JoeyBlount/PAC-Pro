@@ -101,6 +101,9 @@ class ControllableExpenses(BaseModel):
     utilities: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
     office: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
     cash_adjustments: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
+    crew_relations: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
+    training: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
+    # Back-compat: keep legacy aggregated line so older code doesn't break
     misc_cr_tr_ds: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
 
 
