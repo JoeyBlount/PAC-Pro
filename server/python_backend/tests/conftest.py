@@ -24,7 +24,7 @@ def mock_firestore(monkeypatch):
         "condiment_percent": 3.2,
         "advertising_percent": 2.0,
 
-        # ✅ Use dicts (not Pydantic models)
+
         "beginning_inventory": {
             "food": 1000,
             "paper": 500,
@@ -42,7 +42,7 @@ def mock_firestore(monkeypatch):
         "purchases": {
             "food": 45000,
             "paper": 800,
-            "condiment": 3000,  # ✅ expected by test
+            "condiment": 3000,
             "non_product": 300,
             "op_supplies": 100,
             "travel": 800,
