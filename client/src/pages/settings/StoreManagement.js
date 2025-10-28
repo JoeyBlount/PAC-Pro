@@ -37,6 +37,8 @@ import {
   deleteDoc,
   updateDoc,
   doc,
+  setDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 
 const months = [
@@ -49,6 +51,7 @@ const currentMonth = months[new Date().getMonth()];
 const StoreManagement = () => {
   const { userRole } = useAuth();
   const isAccountant = userRole === ROLES.ACCOUNTANT;
+
   const [rows, setRows] = useState([]);
   const [prevRows, setPrevRows] = useState([]);
   const [hasChanges, setHasChanges] = useState(false);
@@ -67,19 +70,36 @@ const StoreManagement = () => {
   const [deletedRows, setDeletedRows] = useState([]);
 
   const storeCollection = collection(db, "stores");
-  
-  //Stores from firebase.
+  const deletedStoreCollection = collection(db, "deletedStores");
+
+  // Fetch active stores
   const fetchStores = async () => {
     const snapshot = await getDocs(storeCollection);
-    const data = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
+    const data = snapshot.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
     }));
     setRows(data);
   };
 
+  // Fetch deleted stores from different collection.
+  const fetchDeletedStores = async () => {
+    const snapshot = await getDocs(deletedStoreCollection);
+    const data = snapshot.docs.map((d) => {
+      const payload = d.data();
+      return {
+        ...payload,
+        id: payload.originalId || null,   
+        deletedRefId: d.id,            
+      };
+    });
+    setDeletedRows(data);
+  };
+
+  // Initial load
   useEffect(() => {
     fetchStores();
+    fetchDeletedStores();
   }, []);
 
   const handleOpen = () => {
@@ -92,13 +112,11 @@ const StoreManagement = () => {
     setNewStore({ subName: "", address: "", storeID: "", entity: "", startMonth: currentMonth });
   };
 
-  //Change store data.
   const handleChange = (e) => {
     if (isAccountant) return;
     setNewStore({ ...newStore, [e.target.name]: e.target.value });
   };
 
-  //Save changes my by user in edit/modify mode.
   const handleSave = async () => {
     if (isAccountant) return;
     const { subName, address, storeID, entity, startMonth } = newStore;
@@ -109,34 +127,64 @@ const StoreManagement = () => {
     }
   };
 
-  //Deletes store and its data, able to restore in a set amount of time in edit mode.
-  const handleDelete = (index) => {
+  // Move store to "deletedStores" collection
+  const handleDelete = async (index) => {
     if (isAccountant) return;
     const store = rows[index];
+
+    const deletedPayload = {
+      originalId: store.id,
+      subName: store.subName,
+      address: store.address,
+      entity: store.entity,
+      storeID: store.storeID,
+      startMonth: store.startMonth,
+      deletedAt: serverTimestamp(),
+      deletedByRole: userRole || null,
+    };
+
+    const deletedRef = await addDoc(deletedStoreCollection, deletedPayload);
+    await deleteDoc(doc(db, "stores", store.id));
+
+    // Update local state
     const updatedRows = [...rows];
     updatedRows.splice(index, 1);
     setRows(updatedRows);
 
-    const timerId = setTimeout(async () => {
-      await deleteDoc(doc(db, "stores", store.id));
-      setDeletedRows((prev) => prev.filter((item) => item.id !== store.id));
-    }, 86400000); // 1 day to restore, change if needed!
+    setDeletedRows((prev) => [
+      ...prev,
+      { ...deletedPayload, id: store.id, deletedRefId: deletedRef.id },
+    ]);
 
-    setDeletedRows((prev) => [...prev, { ...store, timerId }]);
     setHasChanges(true);
   };
 
-  //Restores deleted table. 
-  const handleRestore = (row) => {
+  // Restore store from "deletedStores"
+  const handleRestore = async (row) => {
     if (isAccountant) return;
-    setRows((prev) => [...prev, row]);
-    clearTimeout(row.timerId);
-    setDeletedRows((prev) => prev.filter((item) => item.id !== row.id));
+    const targetId = row.originalId || row.id;
+
+    await setDoc(doc(db, "stores", targetId), {
+      subName: row.subName,
+      address: row.address,
+      entity: row.entity,
+      storeID: row.storeID,
+      startMonth: row.startMonth,
+    });
+
+    if (row.deletedRefId) {
+      await deleteDoc(doc(db, "deletedStores", row.deletedRefId));
+    }
+
+    await fetchStores();
+    // Also refresh deleted list in case other items changed
+    await fetchDeletedStores();
+
     setHasChanges(true);
   };
 
-  //Enter Editing or Modify mode.
-  const handleModifyToggle = () => {
+  // Toggle modify mode; refresh deleted list when entering modify mode again
+  const handleModifyToggle = async () => {
     if (isAccountant) return;
     if (modifyMode) {
       if (hasChanges) {
@@ -147,10 +195,11 @@ const StoreManagement = () => {
     } else {
       setPrevRows(JSON.parse(JSON.stringify(rows)));
       setModifyMode(true);
+      // Ensure deleted list is fresh when re-entering modify mode
+      await fetchDeletedStores();
     }
   };
 
-  //Only able to modify when in editing mode.
   const handleCellClick = (rowIndex, field) => {
     if (isAccountant || !modifyMode) return;
     if (["storeID", "startMonth"].includes(field)) return;
@@ -168,7 +217,6 @@ const StoreManagement = () => {
     setEditingCell({ row: null, field: null });
   };
 
-  //Confirm data changes made by user.
   const handleConfirmSave = async () => {
     if (isAccountant) return;
     for (const row of rows) {
@@ -187,7 +235,6 @@ const StoreManagement = () => {
     setConfirmChangesDialog(false);
   };
 
-  //Avoid changes made by user in editing mode, restore prior data.
   const handleCancelSave = () => {
     if (isAccountant) return;
     setRows(prevRows);
@@ -206,8 +253,8 @@ const StoreManagement = () => {
     setHasChanges(!isEqual);
   }, [rows, prevRows, modifyMode]);
 
-  // Filter rows to not include any that are currently in deletedRows
-  const visibleRows = rows.filter(row => !deletedRows.some(d => d.id === row.id));
+  // Active rows (no need to filter by deleted now since we remove from stores)
+  const visibleRows = rows;
 
   return (
     <Container sx={{ marginTop: 10 }}>
@@ -229,11 +276,11 @@ const StoreManagement = () => {
             <Button
               variant="contained"
               sx={{
-                backgroundColor: modifyMode ? hasChanges ? "green" : "#d3d3d3" : "green",
+                backgroundColor: modifyMode ? (hasChanges ? "green" : "#d3d3d3") : "green",
                 color: "white",
                 marginRight: 2,
                 "&:hover": {
-                  backgroundColor: modifyMode ? hasChanges ? "#007f00" : "#c0c0c0" : "#007f00",
+                  backgroundColor: modifyMode ? (hasChanges ? "#007f00" : "#c0c0c0") : "#007f00",
                 },
               }}
               onClick={handleModifyToggle}
@@ -308,7 +355,7 @@ const StoreManagement = () => {
 
       {modifyMode && !isAccountant && deletedRows.length > 0 && (
         <Box mt={4}>
-          <Typography variant="h6">Recently Deleted (Restorable within 1 day)</Typography>
+          <Typography variant="h6">Recently Deleted</Typography>
           <TableContainer component={Paper} sx={{ mt: 1 }}>
             <Table>
               <TableHead>
@@ -323,7 +370,7 @@ const StoreManagement = () => {
               </TableHead>
               <TableBody>
                 {deletedRows.map((row, index) => (
-                  <TableRow key={index}>
+                  <TableRow key={row.deletedRefId || index}>
                     <TableCell>{row.subName}</TableCell>
                     <TableCell>{row.address}</TableCell>
                     <TableCell>{row.storeID}</TableCell>
