@@ -16,6 +16,7 @@ import {
   Select,
   InputLabel,
   FormControl,
+  Menu,
 } from "@mui/material";
 // Firebase imports removed - now using backend API
 import CloseIcon from "@mui/icons-material/Close";
@@ -33,6 +34,11 @@ const UserManagement = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [newUser, setNewUser] = useState({ firstName: "", lastName: "", email: "", role: "" });
   const [editingUser, setEditingUser] = useState({ id: null, role: "" });
+  const [allStores, setAllStores] = useState([]);
+  const [newUserAssignedStores, setNewUserAssignedStores] = useState([]);
+  const [assignAnchorEl, setAssignAnchorEl] = useState(null);
+  const [editAssignedStores, setEditAssignedStores] = useState([]);
+  const [editAssignAnchorEl, setEditAssignAnchorEl] = useState(null);
 
   // Permissions check based on role hierarchy
   const canManageUsers = userRole === ROLES.ADMIN || userRole === ROLES.OFFICE_MANAGER;
@@ -109,6 +115,44 @@ const UserManagement = () => {
   // --- Add Handlers ---
   const handleAddUserClick = () => {
     setAddDialogOpen(true);
+    setNewUserAssignedStores([]);
+    fetchAllStores();
+  };
+
+  const fetchAllStores = async () => {
+    try {
+      const token = currentUser ? await currentUser.getIdToken() : null;
+      const response = await fetch('http://localhost:5140/api/account/stores', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : { 'X-Dev-Email': currentUser?.email || 'dev@example.com' }),
+        },
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+      }
+      const data = await response.json();
+      setAllStores(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching stores for assignment:', error);
+      setAllStores([]);
+    }
+  };
+
+  const handleAssignMenuOpen = (event) => setAssignAnchorEl(event.currentTarget);
+  const handleAssignMenuClose = () => setAssignAnchorEl(null);
+
+  const handleAddAssignedStore = (store) => {
+    if (!store) return;
+    if (newUserAssignedStores.some((s) => s.id === store.id)) return;
+    setNewUserAssignedStores((prev) => [...prev, store]);
+    handleAssignMenuClose();
+  };
+
+  const handleRemoveAssignedStore = (storeId) => {
+    setNewUserAssignedStores((prev) => prev.filter((s) => s.id !== storeId));
   };
 
   const handleAddUserSubmit = async () => {
@@ -116,6 +160,14 @@ const UserManagement = () => {
     if (newUser.role === ROLES.ADMIN && !isAdmin) {
       alert("Only Admins can create other Admin users.");
       return;
+    }
+
+    // Require at least one store for non-admin roles
+    if (newUser.role && newUser.role !== ROLES.ADMIN) {
+      if (newUserAssignedStores.length === 0) {
+        alert("Please assign at least one store for non-Admin users.");
+        return;
+      }
     }
 
     if (newUser.firstName && newUser.lastName && newUser.email && newUser.role) {
@@ -130,6 +182,10 @@ const UserManagement = () => {
             lastName: newUser.lastName,
             email: newUser.email,
             role: newUser.role,
+            // Include assignedStores for non-admins; admins imply access to all stores
+            ...(newUser.role === ROLES.ADMIN
+              ? { assignedStores: [] }
+              : { assignedStores: newUserAssignedStores.map((s) => ({ id: s.id, name: s.name, address: s.address })) }),
           }),
         });
 
@@ -144,6 +200,7 @@ const UserManagement = () => {
         fetchUsers(); // Refresh the user list
         setAddDialogOpen(false);
         setNewUser({ firstName: "", lastName: "", email: "", role: "" });
+        setNewUserAssignedStores([]);
       } catch (error) {
         console.error("Error adding user:", error);
         alert(`Failed to add user: ${error.message}`);
@@ -161,11 +218,27 @@ const UserManagement = () => {
     }
     setSelectedUser(user); // Keep track of the full user object if needed
     setEditingUser({ id: user.id, email: user.email, role: user.role }); // Set user ID (or email) and current role
+    setEditAssignedStores(user.assignedStores || []);
     setEditDialogOpen(true);
+    fetchAllStores();
   };
 
   const handleEditRoleChange = (event) => {
     setEditingUser({ ...editingUser, role: event.target.value });
+  };
+
+  const handleEditAssignMenuOpen = (event) => setEditAssignAnchorEl(event.currentTarget);
+  const handleEditAssignMenuClose = () => setEditAssignAnchorEl(null);
+
+  const handleEditAddAssignedStore = (store) => {
+    if (!store) return;
+    if (editAssignedStores.some((s) => s.id === store.id)) return;
+    setEditAssignedStores((prev) => [...prev, store]);
+    handleEditAssignMenuClose();
+  };
+
+  const handleEditRemoveAssignedStore = (storeId) => {
+    setEditAssignedStores((prev) => prev.filter((s) => s.id !== storeId));
   };
 
   const handleEditSubmit = async () => {
@@ -180,14 +253,25 @@ const UserManagement = () => {
     }
 
     try {
+      // Build body according to role rules
+      let body = { role: editingUser.role };
+      if (editingUser.role === ROLES.ADMIN) {
+        body.assignedStores = [];
+      } else {
+        // Non-admin must have at least one store
+        if (!editAssignedStores || editAssignedStores.length === 0) {
+          alert("Please assign at least one store for non-Admin users.");
+          return;
+        }
+        body.assignedStores = editAssignedStores.map((s) => ({ id: s.id, name: s.name, address: s.address }));
+      }
+
       const response = await fetch(`http://localhost:5140/api/pac/userManagement/edit?user_email=${encodeURIComponent(editingUser.email)}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          role: editingUser.role
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -303,6 +387,53 @@ const UserManagement = () => {
               <MenuItem value={ROLES.ACCOUNTANT}>Accountant</MenuItem>
             </Select>
           </FormControl>
+
+          {/* Assigned Stores Section */}
+          {newUser.role === ROLES.ADMIN ? (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2">Assigned Stores</Typography>
+              <Typography variant="body2" color="text.secondary">All</Typography>
+            </Box>
+          ) : (
+            <Box sx={{ mt: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="subtitle2">Assigned Stores</Typography>
+                <Button size="small" variant="outlined" onClick={handleAssignMenuOpen} disabled={!allStores.length}>
+                  Assign Store
+                </Button>
+              </Box>
+              <Menu anchorEl={assignAnchorEl} open={Boolean(assignAnchorEl)} onClose={handleAssignMenuClose}>
+                {allStores
+                  .filter((store) => !newUserAssignedStores.some((s) => s.id === store.id))
+                  .map((store) => (
+                    <MenuItem key={store.id} onClick={() => handleAddAssignedStore(store)}>
+                      {store.name} — {store.address}
+                    </MenuItem>
+                  ))}
+                {!allStores.length && (
+                  <MenuItem disabled>No stores available</MenuItem>
+                )}
+              </Menu>
+
+              <Box sx={{ mt: 1 }}>
+                {newUserAssignedStores.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">No stores assigned</Typography>
+                ) : (
+                  newUserAssignedStores.map((store) => (
+                    <Paper key={store.id} variant="outlined" sx={{ p: 1, mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Box>
+                        <Typography variant="body2">{store.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">{store.address}</Typography>
+                      </Box>
+                      <IconButton size="small" onClick={() => handleRemoveAssignedStore(store.id)}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Paper>
+                  ))
+                )}
+              </Box>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAddDialogOpen(false)}>Cancel</Button>
@@ -330,6 +461,53 @@ const UserManagement = () => {
               <MenuItem value={ROLES.ACCOUNTANT}>Accountant</MenuItem>
             </Select>
           </FormControl>
+
+          {/* Edit Assigned Stores (role-dependent) */}
+          {editingUser.role === ROLES.ADMIN ? (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2">Assigned Stores</Typography>
+              <Typography variant="body2" color="text.secondary">All</Typography>
+            </Box>
+          ) : (
+            <Box sx={{ mt: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="subtitle2">Assigned Stores</Typography>
+                <Button size="small" variant="outlined" onClick={handleEditAssignMenuOpen} disabled={!allStores.length}>
+                  Assign Store
+                </Button>
+              </Box>
+              <Menu anchorEl={editAssignAnchorEl} open={Boolean(editAssignAnchorEl)} onClose={handleEditAssignMenuClose}>
+                {allStores
+                  .filter((store) => !editAssignedStores.some((s) => s.id === store.id))
+                  .map((store) => (
+                    <MenuItem key={store.id} onClick={() => handleEditAddAssignedStore(store)}>
+                      {store.name} — {store.address}
+                    </MenuItem>
+                  ))}
+                {!allStores.length && (
+                  <MenuItem disabled>No stores available</MenuItem>
+                )}
+              </Menu>
+
+              <Box sx={{ mt: 1 }}>
+                {editAssignedStores.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">No stores assigned</Typography>
+                ) : (
+                  editAssignedStores.map((store) => (
+                    <Paper key={store.id} variant="outlined" sx={{ p: 1, mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Box>
+                        <Typography variant="body2">{store.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">{store.address}</Typography>
+                      </Box>
+                      <IconButton size="small" onClick={() => handleEditRemoveAssignedStore(store.id)}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Paper>
+                  ))
+                )}
+              </Box>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
