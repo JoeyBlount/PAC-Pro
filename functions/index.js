@@ -253,3 +253,86 @@ exports.recomputeInvoiceTotals = functions.https.onRequest(async (req, res) => {
       .json({ success: false, error: String((err && err.message) || err) });
   }
 });
+/**
+ * 📧 Daily Notification Digest (runs once per day)
+ * Groups notifications from the past 24 hours and emails them as a summary.
+ * Uses Gmail via Nodemailer.
+ */
+
+const nodemailer = require("nodemailer");
+
+exports.dailyNotificationDigest = functions.pubsub
+  .schedule("0 7 * * *") // every day at 7 AM PST
+  .timeZone("America/Los_Angeles")
+  .onRun(async (context) => {
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: functions.config().gmail.email,
+        pass: functions.config().gmail.password,
+      },
+    });
+
+    const now = admin.firestore.Timestamp.now();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const since = admin.firestore.Timestamp.fromDate(yesterday);
+
+    // Get notifications created in the past 24 hours and not yet emailed
+    const snapshot = await db
+      .collection("notifications")
+      .where("createdAt", ">", since)
+      .where("emailed", "==", false)
+      .get()
+      .catch((err) => {
+        console.error("Error fetching notifications:", err);
+        return null;
+      });
+
+    if (!snapshot || snapshot.empty) {
+      console.log("No notifications to email today.");
+      return null;
+    }
+
+    // Group notifications by recipient
+    const grouped = {};
+    snapshot.forEach((doc) => {
+      const n = doc.data();
+      if (!n.toEmail) return;
+      if (!grouped[n.toEmail]) grouped[n.toEmail] = [];
+      grouped[n.toEmail].push({ id: doc.id, ...n });
+    });
+
+    // Loop through each user and send their summary
+    for (const [email, notifs] of Object.entries(grouped)) {
+      const lines = notifs.map(
+        (n) => `• ${n.title || n.type}\n  ${n.message || ""}`
+      );
+
+      const mailOptions = {
+        from: `"PAC-Pro Notifications" <${functions.config().gmail.email}>`,
+        to: email,
+        subject: "Your Daily PAC-Pro Activity Summary",
+        text: `Hello,\n\nHere’s your summary for ${new Date().toLocaleDateString()}:\n\n${lines.join(
+          "\n\n"
+        )}\n\n— PAC-Pro System`,
+      };
+
+      try {
+        await transporter.sendMail(mailOptions);
+        console.log(`✅ Sent digest to ${email}`);
+
+        // Mark as emailed
+        const batch = db.batch();
+        notifs.forEach((n) => {
+          const ref = db.collection("notifications").doc(n.id);
+          batch.update(ref, { emailed: true, emailedAt: admin.firestore.FieldValue.serverTimestamp() });
+        });
+        await batch.commit();
+      } catch (error) {
+        console.error(`❌ Failed to send to ${email}:`, error);
+      }
+    }
+
+    return null;
+  });
