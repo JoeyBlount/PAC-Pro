@@ -115,6 +115,22 @@ class UserManagementService:
             if user_ref.get().exists:
                 raise ValueError(f"User with email {user_email} already exists")
             
+            # Ensure assignedStores is stored as an array of simple dicts
+            assigned = user_data.get('assignedStores') or []
+            if not isinstance(assigned, list):
+                assigned = []
+            clean_assigned: List[Dict[str, Any]] = []
+            for s in assigned:
+                try:
+                    clean_assigned.append({
+                        'id': str(s.get('id', '')),
+                        'name': str(s.get('name', '')),
+                        'address': str(s.get('address', '')),
+                    })
+                except Exception:
+                    continue
+            user_data['assignedStores'] = clean_assigned
+
             # Add the user document
             user_ref.set(user_data)
             
@@ -147,6 +163,50 @@ class UserManagementService:
             
             # Update the user document (email is the document ID)
             user_ref = self.db.collection(self.users_collection).document(user_email)
+
+            # Load existing to determine role transition and validate assigned stores
+            existing_doc = user_ref.get()
+            if not existing_doc.exists:
+                raise ValueError("User not found")
+            existing = existing_doc.to_dict() or {}
+
+            old_role = str(existing.get('role', '') or '')
+            new_role = str(user_data.get('role', old_role) or '')
+
+            # Helper to sanitize assigned stores
+            def _sanitize_assigned(input_list) -> List[Dict[str, Any]]:
+                clean: List[Dict[str, Any]] = []
+                for s in input_list or []:
+                    if not isinstance(s, dict):
+                        continue
+                    sid = s.get('id')
+                    if not sid:
+                        continue
+                    clean.append({
+                        'id': str(s.get('id', '')),
+                        'name': str(s.get('name', '')),
+                        'address': str(s.get('address', '')),
+                    })
+                return clean
+
+            # Determine how to handle assignedStores based on role rules
+            provided_assigned = user_data.get('assignedStores', None)
+            if new_role.lower() == 'admin':
+                # Admin implies access to all stores; clear assigned list
+                user_data['assignedStores'] = []
+            else:
+                # Non-admins must have at least one assigned store
+                if old_role.lower() == 'admin' and new_role.lower() != 'admin':
+                    # Role demotion requires caller to provide stores
+                    if not isinstance(provided_assigned, list) or len(provided_assigned) == 0:
+                        raise ValueError('At least one assigned store is required when changing role from Admin to non-Admin')
+                if provided_assigned is not None:
+                    clean_assigned = _sanitize_assigned(provided_assigned)
+                    if len(clean_assigned) == 0:
+                        raise ValueError('assignedStores must include at least one valid store for non-Admin users')
+                    user_data['assignedStores'] = clean_assigned
+                # If not provided and staying non-admin, keep existing assigned stores as-is
+
             user_ref.update(user_data)
             
             logger.info(f"Successfully updated user with email: {user_email}")
