@@ -776,7 +776,7 @@ async def get_chart_years_sales(entity_id: str, year_month: str):
 
     try:
         db = firestore.client()
-        doc_ref = db.collection("pac-projections")
+        doc_ref = db.collection("pac_actual")
         docs = doc_ref.stream()
 
         totalSales = []
@@ -787,7 +787,8 @@ async def get_chart_years_sales(entity_id: str, year_month: str):
             yyyymm = doc_id[-6:]
             if storeID == entity_id and startDate <= yyyymm <= endDate:
                 result = doc.to_dict()
-                totalSales.append({"key": yyyymm, "netsales": result.get("product_net_sales")})
+                amt = result.get("sales", {}).get("allNetSales", {}).get("dollars")
+                totalSales.append({"key": yyyymm, "netsales": amt})
         return {"totalsales": totalSales}
         
     except Exception as e:
@@ -815,55 +816,53 @@ async def get_chart_budget_and_spending(entity_id: str, year_month: str):
     try:
         db = firestore.client()
         doc_id = f"{entity_id}_{year_month}"
-        doc_ref = db.collection("pac-projections").document(doc_id)
-        doc = doc_ref.get()
 
         budgetSpending = []
 
-        if not doc.exists:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No projections data found for {entity_id} in {year_month}",
-            )
+        ## Spending cacluation.
 
-        foodpaper = ["condiment", "food", "paper"]
-        labor = ["crew_labor_percent"]
-        purchase = ["advertising_other", "crew_relations", "linen", "maintenance_repair", "non_product", "office", "op_supplies", "outside_services", "promotion", "small_equipment", "training", "travel", "utilities"]
-
-        foodpaperbudget = 0
         foodpaperspending = 0
-        laborbudget = 0
         laborspending = 0
-        purchasebudget = 0
         purchasespending = 0
 
-        result = doc.to_dict()
+        doc_ref = db.collection("pac_actual").document(doc_id)
+        doc = doc_ref.get()
 
-        ## Spending cacluation.
-        ## Will need to be redone to reflect actual calculation
-        for i in foodpaper:
-            data = (result.get("purchases", {})).get(i)
-            if data is not None:
-                foodpaperspending = foodpaperspending + data
-            #else:
-                # print("ERROR: Unknown database field", doc_id + ".purchases." + i) # Uncomment for debug
-
-        for i in purchase:
-            data = (result.get("purchases", {})).get(i)
-            if data is not None:
-                purchasespending = purchasespending + (result.get("purchases", {})).get(i)
-            #else:
-                # print("ERROR: Unknown database field", doc_id + ".purchases." + i) # Uncomment for debug
-
-        laborspending = 10000 
+        if doc.exists:
+            result = doc.to_dict()
+            if "foodAndPaper" in result:
+                foodpaperspending = result.get("foodAndPaper", {}).get("total", {}).get("dollars")
+            if "labor" in result:
+                laborspending = result.get("labor", {}).get("total", {}).get("dollars")
+            if "purchases" in result:
+                purchasespending = result.get("purchases", {}).get("total", {}).get("dollars")
 
         ## Budget cacluation 
-        ## To be added. Temp using spending values.
 
-        foodpaperbudget = foodpaperspending
-        purchasebudget = purchasespending
-        laborbudget = laborspending
-        
+        foodpaperbudget = 0
+        laborbudget = 0
+        purchasebudget = 0        
+
+        foodpaper = ["Base Food", "Employee Meal", "Condiment", "Total Waste", "Paper" ]
+        labor = ["Crew Labor", "Management Labor", "Payroll Tax"]
+        purchase = ["Advertising", "Travel", "Adv Other", "Promotion", "Outside Services", "Linen", "OP. Supply", "Maint. & Repair", "Small Equipment", "Utilities", "Office", "Cash +/-", "Crew Relations", "Training"]
+
+        doc_ref = db.collection("pac-projections").document(doc_id)
+        doc = doc_ref.get()
+
+        if doc.exists:
+            result = doc.to_dict()
+            rows = result.get("rows", {})
+
+            values = [row['projectedDollar'] for row in rows if row['name'] in foodpaper]
+            foodpaperbudget = sum(values)
+
+            values = [row['projectedDollar'] for row in rows if row['name'] in labor]
+            laborbudget = sum(values)
+
+            values = [row['projectedDollar'] for row in rows if row['name'] in purchase]
+            purchasebudget = sum(values)
+                
 
         budgetSpending.append(
             {"key": year_month, 
@@ -910,32 +909,54 @@ async def get_chart_PAC_and_projection(entity_id: str, year_month: str):
 
     try:
         db = firestore.client()
-        doc_ref = db.collection("pac-projections")
+        doc_ref = db.collection("pac_actual")
         docs = doc_ref.stream()
 
         pacAndProjections = []
-
-        ## PAC Calulations.
-        ## To be added. Temp using set values.
+        pac = {}
+        projections = {}
 
         for doc in docs:
-            pac = 0
-            projections = 0
+            doc_id = doc.id
+            storeID = doc_id[:9]
+            yyyymm = doc_id[-6:]
 
+            if storeID == entity_id and startDate <= yyyymm <= endDate:
+                result = doc.to_dict()
+                pac[yyyymm] = 0                
+                if "totals" in result:
+                    pac[yyyymm] = result.get("totals", {}).get("pac", {}).get("dollars")
+
+        doc_ref = db.collection("pac-projections")
+        docs = doc_ref.stream()
+
+        for doc in docs:
             doc_id = doc.id
             storeID = doc_id[:9]
             yyyymm = doc_id[-6:]
             if storeID == entity_id and startDate <= yyyymm <= endDate:
                 result = doc.to_dict()
-                
-                if "product_net_sales" in result:
-                    pac = result.get("product_net_sales")
+                projections[yyyymm] = 0
+                rows = result.get("rows", [])
+                projections[yyyymm] = next((row['projectedDollar'] for row in rows if row['name'] == 'P.A.C.'), 0)
 
-                if "product_net_sales" in result:
-                    projections = result.get("product_net_sales")
-                    projections = projections * 1.1
+        pap = {}
 
-                pacAndProjections.append({"key": yyyymm, "pac": pac, "projections": projections })
+        for key in set(pac) | set(projections):
+            if key in pac and key in projections:
+                pap[key] = [pac[key], projections[key]]
+            elif key in pac:
+                pap[key] = [pac[key], 0]
+            else:
+                pap[key] = [0, projections[key]]
+
+        for x in pap:
+            p = pap[x][0]
+            pr = pap[x][1]
+
+            pacAndProjections.append({"key": x, "pac": p, "projections": pr })
+
+        # pacAndProjections.append({"key": yyyymm, "pac": pac, "projections": projections }) # output json
         return {"pacprojections": pacAndProjections}
         
     except Exception as e:
