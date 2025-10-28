@@ -169,7 +169,7 @@ const MonthlySalesChart = ({selectedStore}) => {
     const yearMonth = `${todayDate.getFullYear()}${String(todayDate.getMonth()).padStart(2, "0")}`;
     try {
       const response = await fetch(
-        `http://localhost:5140/api/pac/info/sales/${formatStoreID()}/${yearMonth}`
+        `http://localhost:5140/api/pac/info/sales/${formatStoreID(selectedStore)}/${yearMonth}`
       );
       if (response.ok) {
         const jsonData = await response.json();
@@ -288,7 +288,7 @@ const BudgetChart = ({selectedStore}) => {
     const yearMonth = `${todayDate.getFullYear()}${String(todayDate.getMonth()).padStart(2, "0")}`;
     try {
       const response = await fetch(
-        `http://localhost:5140/api/pac/info/budget/${formatStoreID()}/${yearMonth}`
+        `http://localhost:5140/api/pac/info/budget/${formatStoreID(selectedStore)}/${yearMonth}`
       );
       if (response.ok) {
         const jsonData = await response.json();
@@ -414,7 +414,7 @@ const PacVSProjectedChart = ({selectedStore}) => {
     const yearMonth = `${todayDate.getFullYear()}${String(todayDate.getMonth()).padStart(2, "0")}`;
     try {
       const response = await fetch(
-        `http://localhost:5140/api/pac/info/pac/${formatStoreID()}/${yearMonth}`
+        `http://localhost:5140/api/pac/info/pac/${formatStoreID(selectedStore)}/${yearMonth}`
       );
       if (response.ok) {
         const jsonData = await response.json();
