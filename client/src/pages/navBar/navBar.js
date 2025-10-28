@@ -2,7 +2,7 @@ import React, { useState, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./navBar.css";
 import { auth } from "../../config/firebase-config";
-import { getAuth, signOut } from "firebase/auth";
+import { signOut } from "firebase/auth";
 import {
   FormControl,
   InputLabel,
@@ -31,9 +31,6 @@ import {
   Dashboard,
 
   Print,
-  Assessment,
-  TrendingUp,
-  BarChart,
   Notifications,
   Delete,
   PersonAdd,
@@ -48,7 +45,6 @@ import {
   query,
   where,
   onSnapshot,
-  getDocs,
   orderBy,
   doc,
   updateDoc,
@@ -56,7 +52,6 @@ import {
 } from "firebase/firestore";
 import { db } from "../../config/firebase-config";
 import AnnoucementDialog from "./annoucement";
-import { useAuth } from "../../context/AuthContext";
 
 // Helper to format timestamps into "x minutes ago"
 function formatRelativeTime(timestamp) {
@@ -109,35 +104,38 @@ export function NavBar() {
 
   const { selectedStore, setSelectedStore } = useContext(StoreContext);
 
-  // Fetch user + stores
+  // Fetch allowed stores from backend and basic user info
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const user = auth.currentUser;
-        if (user) {
-          const userQuery = query(
-            collection(db, "users"),
-            where("uid", "==", user.uid)
-          );
-          const userSnapshot = await getDocs(userQuery);
-          if (!userSnapshot.empty) {
-            setUserData(userSnapshot.docs[0].data());
-          }
+        const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+        // Load allowed stores from backend
+        const res = await fetch('http://localhost:5140/api/pac/nav/allowed-stores', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : { 'X-Dev-Email': auth.currentUser?.email || 'dev@example.com' }),
+          },
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Failed to load stores: ${res.status} - ${errText}`);
         }
-
-        const storesSnapshot = await getDocs(collection(db, "stores"));
-        const storesData = storesSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+        const data = await res.json();
+        const storesData = data.stores || [];
         setStores(storesData);
 
+        // Set default selected store if not set
         if (!selectedStore && storesData.length > 0) {
           setSelectedStore(storesData[0].id);
         }
+
+        // Minimal user info for display (keep reading name from Firestore notifications or elsewhere if needed)
+        setUserData({ firstName: auth.currentUser?.displayName || 'User' });
       } catch (error) {
-        console.error("Error loading data from Firestore:", error);
+        console.error('Error loading allowed stores:', error);
+        setStores([]);
       } finally {
         setLoading(false);
       }

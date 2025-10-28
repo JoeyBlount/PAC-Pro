@@ -19,6 +19,7 @@ from services.proj_calculation_service import (
 from services.invoice_reader import InvoiceReader
 from services.invoice_submit import InvoiceSubmitService
 from services.user_management_service import UserManagementService
+from services.navBar_service import NavBarService
 import logging
 
 from pydantic import BaseModel
@@ -162,6 +163,12 @@ def get_user_management_service() -> UserManagementService:
     """
     return UserManagementService()
 
+def get_navbar_service() -> NavBarService:
+    """
+    Get the NavBar service instance.
+    """
+    return NavBarService()
+
 
 # ---- Helpers ----
 def is_valid_year_month(year_month: str) -> bool:
@@ -226,6 +233,37 @@ async def add_user(
         # Add timestamp and accept state
         user_data["createdAt"] = datetime.now().isoformat()
         user_data["acceptState"] = False
+
+        # Normalize and validate assigned stores
+        role_val = str(user_data.get("role", "")).strip()
+        assigned_stores = user_data.get("assignedStores")
+        if assigned_stores is None:
+            assigned_stores = []
+        if not isinstance(assigned_stores, list):
+            raise HTTPException(status_code=400, detail="assignedStores must be an array")
+
+        # For Admins, treat as access to all (store empty array for compatibility)
+        if role_val.lower() == "admin":
+            user_data["assignedStores"] = []
+        else:
+            # For non-admins, at least one store must be assigned
+            if len(assigned_stores) == 0:
+                raise HTTPException(status_code=400, detail="At least one assigned store is required for non-Admin users")
+
+            # Sanitize store entries to expected shape
+            sanitized: List[Dict[str, Any]] = []
+            for s in assigned_stores:
+                if not isinstance(s, dict):
+                    raise HTTPException(status_code=400, detail="Each assigned store must be an object")
+                sid = s.get("id")
+                if not sid:
+                    raise HTTPException(status_code=400, detail="Assigned store is missing 'id'")
+                sanitized.append({
+                    "id": str(s.get("id", "")),
+                    "name": str(s.get("name", "")),
+                    "address": str(s.get("address", "")),
+                })
+            user_data["assignedStores"] = sanitized
         
         result = await user_service.add_user(user_data)
         return {"success": True, "message": "User added successfully", "user": result}
@@ -255,6 +293,37 @@ async def edit_user(
         if not user_email:
             raise HTTPException(status_code=400, detail="User email is required")
         
+        # Normalize assignedStores if provided and enforce role/store rules
+        role_val = str((user_data or {}).get("role", "")).strip()
+        if user_data is None:
+            user_data = {}
+
+        if role_val:
+            if role_val.lower() == "admin":
+                # Clear assigned stores for admins
+                user_data["assignedStores"] = []
+            else:
+                # For non-admins, ensure assignedStores is present and valid when provided
+                if "assignedStores" in user_data:
+                    assigned_stores = user_data.get("assignedStores")
+                    if not isinstance(assigned_stores, list):
+                        raise HTTPException(status_code=400, detail="assignedStores must be an array")
+                    sanitized: List[Dict[str, Any]] = []
+                    for s in assigned_stores:
+                        if not isinstance(s, dict):
+                            raise HTTPException(status_code=400, detail="Each assigned store must be an object")
+                        sid = s.get("id")
+                        if not sid:
+                            raise HTTPException(status_code=400, detail="Assigned store is missing 'id'")
+                        sanitized.append({
+                            "id": str(s.get("id", "")),
+                            "name": str(s.get("name", "")),
+                            "address": str(s.get("address", "")),
+                        })
+                    if len(sanitized) == 0:
+                        raise HTTPException(status_code=400, detail="At least one assigned store is required for non-Admin users")
+                    user_data["assignedStores"] = sanitized
+
         result = await user_service.edit_user(user_email, user_data)
         return {"success": True, "message": "User updated successfully"}
     except HTTPException:
@@ -290,6 +359,33 @@ async def delete_user(
         logger.error(f"Error deleting user: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
 
+
+# ---- NavBar Routes ----
+@router.get("/nav/allowed-stores")
+async def get_allowed_stores(
+    auth_ctx: Dict[str, Any] = Depends(require_auth),
+    svc: NavBarService = Depends(get_navbar_service),
+) -> Dict[str, Any]:
+    """
+    Return list of stores the current user can access.
+    Admins receive all stores; non-admins receive their assigned stores.
+    """
+    if not svc.is_available():
+        raise HTTPException(status_code=503, detail="NavBar service not available - Firebase not initialized")
+
+    email = auth_ctx.get("email")
+    if not email:
+        # In dev/test, allow header override for email
+        raise HTTPException(status_code=401, detail="Email not found; ensure Authorization token includes email")
+
+    try:
+        stores = svc.fetch_allowed_stores(email)
+        return {"stores": stores, "count": len(stores)}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error fetching allowed stores: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch allowed stores")
 
 # ---- PAC Routes ----
 @router.get("/{entity_id}/{year_month}", response_model=PacCalculationResult)
