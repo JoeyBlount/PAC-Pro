@@ -5,8 +5,6 @@ import GoogleIcon from "@mui/icons-material/Google";
 import EmailIcon from '@mui/icons-material/Email';
 import MicrosoftIcon from "@mui/icons-material/Microsoft";
 //import { auth } from "../../config/firebaseConfigEmail";
-import { useMsal } from "@azure/msal-react"; // Import useMsal hook
-import { loginRequest } from "../../authconfig";
 import { auth, googleAuthProvider } from "../../config/firebase-config";
 import { signInWithPopup } from "firebase/auth";
 import { getFirestore, doc, getDoc } from "firebase/firestore"; // Firebase Firestore functions
@@ -21,38 +19,12 @@ const Login = () => {
 
   const navigate = useNavigate(); // Hook for navigation
   const user = auth.currentUser;
-  const { instance } = useMsal(); // MSAL instance
   const db = getFirestore(); // Initialize Firestore
 
   const handleMicrosoftLogin = async () => {
-    try {
-      const response = await instance.loginPopup(loginRequest);
-      console.log(response)
-      const userEmail = response.account.username; // Get the email from Google sign-in result
-      console.log(userEmail)
-
-      // Check if the email exists in the database (Firestore in this case)
-
-      const userRef = doc(db, "users", userEmail); // Assuming 'users' collection where emails are stored
-      const userDoc = await getDoc(userRef); // Get the document
-      console.log("hi")
-
-      try {
-        const userRef = doc(db, "users", userEmail);
-        const userDoc = await getDoc(userRef);
-        console.log("User document:", userDoc.exists());
-        if (userDoc.exists()) {
-          navigate("/navi/dashboard");
-        } else {
-          navigate("/not-allowed");
-        }
-      } catch (firestoreError) {
-        console.error("Firestore error:", firestoreError);
-      }
-      localStorage.setItem("user", JSON.stringify(response.account.username));
-    } catch (error) {
-      console.error("Microsoft login error:", error);
-    }
+    const BACKEND_BASE = "http://localhost:8000";
+    const redirect = encodeURIComponent(`${window.location.origin}/navi/dashboard`);
+    window.location.href = `${BACKEND_BASE}/api/auth/microsoft/login?redirect=${redirect}`;
   };
 
   // For debugging to see if user is actually logged out or not
