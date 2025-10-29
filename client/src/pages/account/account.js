@@ -6,7 +6,7 @@ import {
 } from "@mui/material";
 import { auth } from "../../config/firebase-config";
 import { signOut, onAuthStateChanged } from "firebase/auth";
-const BASE_URL = "http://127.0.0.1:5140";
+const BASE_URL = "http://localhost:8000";
 
 // Auth-aware fetch helper
 async function api(path, { method = "GET", body } = {}) {
@@ -21,6 +21,7 @@ async function api(path, { method = "GET", body } = {}) {
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers,
+    credentials: 'include',
     body: body ? JSON.stringify(body) : null,
   });
 
@@ -59,7 +60,11 @@ const Account = () => {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      // Sign out of Firebase if logged in via Google
+      try { await signOut(auth); } catch {}
+      // Clear backend Microsoft session cookie
+      await fetch(`${BASE_URL}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+      window.location.href = '/';
     } catch (err) {
       console.error("Logout Error:", err);
     }
