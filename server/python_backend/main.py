@@ -79,17 +79,21 @@ app.add_middleware(
 )
 
 
-# -----------------
-# Include routers
-# -----------------
+# Include routers...
 try:
-    # Expect these in your routers module (per earlier messages)
     from routers import router as api_router, compat as compat_router
-    app.include_router(api_router)     # /api/pac/...
-    app.include_router(compat_router)  # /api/invoiceread/read + /api/invoice-read/read
+    app.include_router(api_router)
+    app.include_router(compat_router)
 except ImportError as e:
     print(f"Warning: Failed to import routers ({e}). Starting with no API routes.")
     app.include_router(APIRouter())
+
+# Auth (Microsoft) router
+try:
+    from auth.microsoft import router as microsoft_auth_router
+    app.include_router(microsoft_auth_router)  # /api/auth/...
+except Exception as e:
+    print(f"Warning: Failed to include Microsoft auth router: {e}")
 
 # =======================================================================
 # Account page backend

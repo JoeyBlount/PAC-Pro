@@ -2,9 +2,6 @@ import React from 'react';
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import reportWebVitals from "./reportWebVitals";
-import { PublicClientApplication } from "@azure/msal-browser";
-import { MsalProvider } from "@azure/msal-react";
-import { msalConfig } from "./authconfig";
 // Imports for react-router-dom v6 data routers (createBrowserRouter)
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 // Imports for react-router-dom standard component routing (BrowserRouter, Routes, etc.)
@@ -35,8 +32,6 @@ import DeadlineManagement from "./pages/settings/DeadlineManagement";
 import { StoreProvider } from "./context/storeContext";
 import { AuthProvider } from './context/AuthContext';
 import { AdminRoute, AdminOrOmRoute, SettingsViewRoute, StoreManagementRoute, UserManagementRoute, ViewOnlyRoute, AllAuthenticatedUsersRoute } from './routes/ProtectedRoute';
-
-const msalInstance = new PublicClientApplication(msalConfig);
 
 const router = createBrowserRouter([
   {
@@ -76,13 +71,11 @@ const router = createBrowserRouter([
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
-    <MsalProvider instance={msalInstance}>
-      <AuthProvider>
-        <StoreProvider>
-          <RouterProvider router={router} />
-        </StoreProvider>
-      </AuthProvider>
-    </MsalProvider>
+    <AuthProvider>
+      <StoreProvider>
+        <RouterProvider router={router} />
+      </StoreProvider>
+    </AuthProvider>
   </React.StrictMode>
 );
 
