@@ -20,24 +20,43 @@ export const AuthProvider = ({ children }) => {
             try {
                 if (user) {
                     setCurrentUser(user);
-                    // User is signed in, fetch their role from Firestore
                     const userRef = doc(db, 'users', user.email);
                     const userDoc = await getDoc(userRef);
-                    
                     if (userDoc.exists()) {
                         const role = userDoc.data().role;
                         setUserRole(role);
-                        console.log('User Role:', role);
                     } else {
-                        console.log('User document not found in Firestore');
                         setUserRole(null);
                     }
                 } else {
-                    setCurrentUser(null);
-                    setUserRole(null);
+                    // Not signed in via Firebase; try backend session
+                    try {
+                        const res = await fetch('http://localhost:8000/api/auth/me', {
+                            credentials: 'include'
+                        });
+                        if (res.ok) {
+                            const me = await res.json();
+                            const pseudoUser = { email: me.email, displayName: me.name };
+                            setCurrentUser(pseudoUser);
+                            // Fetch role from Firestore by email
+                            const userRef = doc(db, 'users', me.email);
+                            const userDoc = await getDoc(userRef);
+                            if (userDoc.exists()) {
+                                const role = userDoc.data().role;
+                                setUserRole(role);
+                            } else {
+                                setUserRole(null);
+                            }
+                        } else {
+                            setCurrentUser(null);
+                            setUserRole(null);
+                        }
+                    } catch (e) {
+                        setCurrentUser(null);
+                        setUserRole(null);
+                    }
                 }
             } catch (error) {
-                console.error('Error in auth state change:', error);
                 setCurrentUser(null);
                 setUserRole(null);
             } finally {
