@@ -33,9 +33,13 @@ test.describe('Invoice Settings Tests', () => {
 
     // Navigate to settings page
     await page.goto('http://localhost:3000/navi/settings');
-    await expect(page).toHaveTitle(/PAC Pro - Settings/i);
+    await page.waitForURL(/.*settings.*/);
 
-    // Wait for invoice settings to load
+    // Click on Invoice Settings card
+    await page.getByText('Invoice Settings').click();
+    await page.waitForURL(/.*invoice-settings.*/);
+
+    // Wait for invoice settings table to load
     await page.waitForSelector('table', { timeout: 10000 });
 
     // Find the FOOD category row and get its original account number
@@ -83,3 +87,4 @@ test.describe('Invoice Settings Tests', () => {
     expect(revertedAccountNumber).toBe(originalAccountNumber);
   });
 });
+
