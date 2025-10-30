@@ -105,16 +105,8 @@ test.describe('Reports Tests', () => {
     // Wait for dialog to open
     await page.waitForSelector('[role="dialog"]', { timeout: 5000 });
     
-    // Set specific date (December 2024)
-    // Click month dropdown
-    await page.locator('[role="dialog"]').getByLabel('Month').click();
-    await page.getByRole('option', { name: 'December' }).click();
-    
-    // Click year dropdown
-    await page.locator('[role="dialog"]').getByLabel('Year').click();
-    await page.getByRole('option', { name: '2024' }).click();
-    
-    // Click View & Print button
+    // Verify default date is October 2025 and proceed with print
+    // Just click View & Print button (using defaults)
     await page.locator('[role="dialog"]').locator('button', { hasText: 'View & Print' }).click();
     
     // Wait for navigation to PAC page
@@ -161,16 +153,7 @@ test.describe('Reports Tests', () => {
     // Wait for dialog to open
     await page.waitForSelector('[role="dialog"]', { timeout: 5000 });
     
-    // Set specific date (December 2024)
-    // Click month dropdown
-    await page.locator('[role="dialog"]').getByLabel('Month').click();
-    await page.getByRole('option', { name: 'December' }).click();
-    
-    // Click year dropdown
-    await page.locator('[role="dialog"]').getByLabel('Year').click();
-    await page.getByRole('option', { name: '2024' }).click();
-    
-    // Click View & Print button
+    // Use default date (October 2025) and just click View & Print button
     await page.locator('[role="dialog"]').locator('button', { hasText: 'View & Print' }).click();
     
     // Wait for navigation to Invoice Logs page
