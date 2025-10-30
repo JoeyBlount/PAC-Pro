@@ -52,13 +52,18 @@ cd PAC-Pro
 ```bash
 cd client
 npm install
+# Required for export features
+npm install xlsx file-saver
 cd ..
 ```
 
 **Backend Dependencies:**
 ```bash
 cd server/python_backend
-python -m pip install fastapi uvicorn pydantic python-multipart python-dotenv httpx pytest pytest-asyncio requests
+python -m pip install --upgrade pip setuptools wheel
+pip install -r requirements.txt
+# Ensure auth libs present (if you installed earlier)
+python -m pip install msal PyJWT itsdangerous httpx
 cd ../..
 ```
 
@@ -198,10 +203,12 @@ export PROJECT_ROOT="/path/to/PAC-Pro"
 ##### Core Dependencies (Required)
 ```bash
 # Windows
-python -m pip install fastapi uvicorn pydantic python-multipart python-dotenv httpx pytest pytest-asyncio
+python -m pip install --upgrade pip setuptools wheel
+pip install -r requirements.txt
 
 # macOS/Linux
-python3 -m pip install fastapi uvicorn pydantic python-multipart python-dotenv httpx pytest pytest-asyncio
+python3 -m pip install --upgrade pip setuptools wheel
+pip install -r requirements.txt
 ```
 
 ##### Firebase Dependencies (Optional)
@@ -314,6 +321,19 @@ The application includes enhanced print functionality with:
 ### Environment Variables
 - `PROJECT_ROOT`: Set to your project directory path (automatically handled by startup scripts)
 
+Backend `.env` (create at `server/python_backend/.env`):
+```
+AUTH_SECRET=replace-with-long-random-string
+AZURE_TENANT_ID=your-tenant-id
+AZURE_CLIENT_ID=your-app-client-id
+AZURE_CLIENT_SECRET=your-client-secret-value
+AZURE_REDIRECT_URI=http://localhost:5140/api/auth/microsoft/callback
+FRONTEND_BASE_URL=http://localhost:3000
+```
+Notes:
+- Client secret must be the Secret Value (not the Secret ID)
+- Redirect URI must be listed under Azure App Registration → Authentication → Web
+
 ### Firebase Setup (Optional)
 
 If you want to use Firebase instead of mock data:
@@ -375,6 +395,20 @@ pip cache purge
 pip install --upgrade pip
 pip install -r requirements.txt --force-reinstall
 ```
+
+### Microsoft Login Setup (Summary)
+- Azure App Registration → Authentication:
+  - Platform: Web
+  - Redirect URIs: `http://localhost:5140/api/auth/microsoft/callback`
+  - Front-channel logout URL (optional): `http://localhost:3000/`
+  - Implicit grant and hybrid flows: leave unchecked (no Access/ID tokens)
+- Certificates & secrets: create a client secret (use the Value in `.env`)
+- API permissions: Microsoft Graph → Delegated → User.Read
+- Start backend:
+  ```bash
+  cd server/python_backend
+  python -m uvicorn main:app --host 127.0.0.1 --port 5140 --reload
+  ```
 
 ### Frontend Issues
 

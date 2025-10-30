@@ -282,3 +282,68 @@ For issues specific to your platform:
 - **Windows ARM64:** Use mock data mode if Firebase fails
 - **Cross-platform:** All core functionality works on all platforms
 - **Firebase issues:** Check Firebase Console and service account setup
+
+## Microsoft Login (Backend-Only) Setup
+
+This project now performs Microsoft login entirely on the backend. Follow these steps to enable it locally:
+
+### 1) Install/Upgrade Python dependencies
+
+```bash
+# From server/python_backend
+python -m pip install --upgrade pip setuptools wheel
+pip install -r requirements.txt
+
+# If you installed earlier and still see errors, explicitly ensure these are present
+python -m pip install msal PyJWT itsdangerous httpx
+```
+
+Requirements include:
+- fastapi, uvicorn[standard], pydantic==2.9.2, python-dotenv
+- httpx, pillow==11.0.0, pytest, pytest-asyncio
+- msal, PyJWT, itsdangerous
+
+### 2) Configure .env
+
+Create `server/python_backend/.env` with the following keys:
+
+```
+AUTH_SECRET=replace-with-long-random-string
+AZURE_TENANT_ID=your-tenant-id
+AZURE_CLIENT_ID=your-app-client-id
+AZURE_CLIENT_SECRET=your-client-secret-value
+AZURE_REDIRECT_URI=http://localhost:5140/api/auth/microsoft/callback
+FRONTEND_BASE_URL=http://localhost:3000
+```
+
+Notes:
+- The client secret must be the Secret Value from Azure, not the Secret ID.
+- The redirect URI must match the Azure App Registration (Web platform).
+
+### 3) Azure App Registration (Microsoft Entra ID)
+
+1. App registrations → Your app → Authentication
+2. Platform: Web
+3. Redirect URIs (Web): `http://localhost:5140/api/auth/microsoft/callback`
+4. Front-channel logout URL (optional): `http://localhost:3000/`
+5. Implicit grant and hybrid flows: leave both unchecked (no Access tokens, no ID tokens)
+6. Certificates & secrets: create a client secret (copy the Value)
+7. API permissions: Microsoft Graph → Delegated → User.Read (grant admin consent if needed)
+
+### 4) Start backend
+
+```bash
+# Preferred
+python -m uvicorn main:app --host 127.0.0.1 --port 5140 --reload
+
+# If port 5140 is blocked on Windows, try
+python -m uvicorn main:app --host localhost --port 5140 --reload
+```
+
+Troubleshooting on Windows:
+- If you see "WinError 10013" (socket access forbidden), run terminal as Administrator, or allow your python.exe on port 5140 via Windows Defender Firewall.
+
+### 5) Verify endpoints
+
+- Swagger UI: `http://localhost:5140/docs` (look for `/api/auth/microsoft/*` routes)
+- Microsoft Login: `GET /api/auth/microsoft/login` should redirect to Microsoft
