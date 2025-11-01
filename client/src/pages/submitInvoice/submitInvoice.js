@@ -1,20 +1,11 @@
 import React, { useState, useEffect, useContext } from "react";
-import { auth, db, storage } from "../../config/firebase-config";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  addDoc,
-  serverTimestamp,
-} from "firebase/firestore";
+import { auth } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext";
 import { useAuth } from "../../context/AuthContext";
 import MonthLockService from "../../services/monthLockService";
 import styles from "./submitInvoice.module.css";
 import { invoiceCatList } from "../settings/InvoiceSettings";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { recomputeMonthlyTotals } from "../../services/invoiceTotalsService";
+// Frontend no longer uploads to Storage or writes to Firestore; backend handles it
 import {
   Alert,
   TextField,
@@ -191,33 +182,6 @@ const SubmitInvoice = () => {
     return days;
   };
 
-  // Fetch user data from Firestore
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Get the current user from Firebase Auth
-        const user = auth.currentUser;
-        if (user) {
-          // Query the "users" collection for the current user's data
-          const userQuery = query(
-            collection(db, "users"),
-            where("uid", "==", user.uid)
-          );
-          const userSnapshot = await getDocs(userQuery);
-          if (!userSnapshot.empty) {
-            const userData = userSnapshot.docs[0].data();
-            setUserData(userData);
-            setIsAdmin(userData.role === "admin" || userData.role === "Admin");
-          }
-        }
-      } catch (error) {
-        console.error("Error loading data from Firestore:", error);
-      }
-    };
-
-    fetchData();
-  }, []);
-
   const normalizeCategory = (rawCategory) => {
     const category = rawCategory?.toUpperCase().trim();
     const mapping = {
@@ -378,47 +342,53 @@ const SubmitInvoice = () => {
     }
 
     try {
-      // Upload image to Firebase Storage
-      const imageRef = ref(
-        storage,
-        `images/${selectedStore}_${Date.now()}_${imageUpload.name}`
+      // Require at least one confirmed category/amount before submitting
+      if (!confirmedItems || confirmedItems.length === 0) {
+        alert("Please confirm at least one category amount before submitting.");
+        return;
+      }
+
+      // Build categories payload from confirmed items
+      const categories = confirmedItems.reduce((acc, { category, amount }) => {
+        const key = String(category || "").trim();
+        if (!key) return acc;
+        if (!Array.isArray(acc[key])) acc[key] = [];
+        acc[key].push(parseFloat(amount));
+        return acc;
+      }, {});
+
+      // Double-check payload not empty (safety)
+      if (Object.keys(categories).length === 0) {
+        alert("Please confirm at least one category amount before submitting.");
+        return;
+      }
+
+      // Create FormData for backend request
+      const formData = new FormData();
+      formData.append("image", imageUpload);
+      formData.append("invoice_number", invoiceNumber);
+      formData.append("company_name", companyName);
+      formData.append("invoice_day", invoiceDay.toString());
+      formData.append("invoice_month", invoiceMonth.toString());
+      formData.append("invoice_year", invoiceYear.toString());
+      formData.append("target_month", Number(targetMonth).toString());
+      formData.append("target_year", Number(targetYear).toString());
+      formData.append("store_id", selectedStore);
+      formData.append("user_email", user.email);
+      formData.append("categories", JSON.stringify(categories));
+
+      // Submit to backend service (no auth token required)
+      const response = await fetch(
+        "http://localhost:5140/api/pac/invoices/submit",
+        {
+          method: "POST",
+          body: formData,
+        }
       );
-      await uploadBytes(imageRef, imageUpload);
-      const downloadURL = await getDownloadURL(imageRef);
 
-      // Prepare the invoice document
-      const invoiceData = {
-        companyName,
-        invoiceNumber,
-        invoiceDate: `${invoiceMonth}/${invoiceDay}/${invoiceYear}`,
-        storeID: selectedStore,
-        user_email: user.email,
-        dateSubmitted: new Date().toLocaleDateString(),
-        imageURL: downloadURL,
-        // Persist month/year assignment to control which month the invoice belongs to
-        targetMonth: Number(targetMonth),
-        targetYear: Number(targetYear),
-        // Store category amounts as arrays so multiple entries per category can be aggregated
-        categories: confirmedItems.reduce((acc, { category, amount }) => {
-          const key = String(category || "").trim();
-          if (!key) return acc;
-          if (!Array.isArray(acc[key])) acc[key] = [];
-          acc[key].push(parseFloat(amount));
-          return acc;
-        }, {}),
-        createdAt: serverTimestamp(),
-      };
-
-      // Store it in Firestore
-      await addDoc(collection(db, "invoices"), invoiceData);
-
-      // Update invoice totals for this store/month/year
-      try {
-        await recomputeMonthlyTotals(selectedStore, targetMonth, targetYear);
-        console.log("Invoice totals updated successfully");
-      } catch (totalsError) {
-        console.error("Error updating invoice totals:", totalsError);
-        // Don't fail the invoice submission if totals update fails
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.detail || "Failed to submit invoice");
       }
 
       alert("Invoice submitted successfully!");
