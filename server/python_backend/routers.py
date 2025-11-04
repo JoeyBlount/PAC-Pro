@@ -20,6 +20,7 @@ from services.invoice_reader import InvoiceReader
 from services.invoice_submit import InvoiceSubmitService
 from services.user_management_service import UserManagementService
 from services.navBar_service import NavBarService
+from services.invoice_settings_service import InvoiceSettingsService
 import logging
 
 from pydantic import BaseModel
@@ -44,6 +45,10 @@ class HistoricalIn(BaseModel):
     store_id: str
     year: int
     month_index_1: int
+
+
+class UpdateInvoiceCategoryIn(BaseModel):
+    bankAccountNum: str
 
 
 
@@ -168,6 +173,62 @@ def get_navbar_service() -> NavBarService:
     Get the NavBar service instance.
     """
     return NavBarService()
+
+
+def get_invoice_settings_service() -> InvoiceSettingsService:
+    """
+    Get the invoice settings service instance.
+    """
+    return InvoiceSettingsService()
+
+
+# ---- Invoice Settings Routes ----
+@router.get("/invoice-settings/categories")
+async def get_invoice_categories(
+    svc: InvoiceSettingsService = Depends(get_invoice_settings_service),
+    _auth: Dict[str, Any] = Depends(require_roles(["Admin"])), #potentially add more users roles later
+) -> Dict[str, Any]:
+    """
+    Ensure default invoice categories exist and return them in canonical order.
+    Visible to Admins, Accountants, and Office Managers.
+    """
+    if not svc.is_available():
+        raise HTTPException(status_code=503, detail="Invoice settings service not available - Firebase not initialized")
+    try:
+        cats = await svc.get_categories()
+        return {"categories": cats, "count": len(cats)}
+    except Exception as e:
+        logger.error(f"Error fetching invoice categories: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch invoice categories: {str(e)}")
+
+
+@router.put("/invoice-settings/category/{category_id}")
+async def update_invoice_category(
+    category_id: str,
+    payload: UpdateInvoiceCategoryIn,
+    svc: InvoiceSettingsService = Depends(get_invoice_settings_service),
+    _auth: Dict[str, Any] = Depends(require_roles(["Admin"])),
+) -> Dict[str, Any]:
+    """
+    Update (or create) a category's bank account number. Admin only.
+    """
+    if not svc.is_available():
+        raise HTTPException(status_code=503, detail="Invoice settings service not available - Firebase not initialized")
+    try:
+        if not payload.bankAccountNum or not payload.bankAccountNum.strip():
+            raise HTTPException(status_code=400, detail="bankAccountNum is required")
+
+        # Enforce numeric-only like the client previously did
+        if not payload.bankAccountNum.isdigit():
+            raise HTTPException(status_code=400, detail="account number must be numeric")
+
+        updated = await svc.update_category(category_id, payload.bankAccountNum.strip())
+        return {"success": True, "category": updated}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating invoice category {category_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update category: {str(e)}")
 
 
 # ---- Helpers ----
