@@ -487,7 +487,6 @@ async def submit_invoice(
     user_email: str = Form(...),
     categories: str = Form(...),  # JSON string of categories
     submit_service: InvoiceSubmitService = Depends(get_invoice_submit_service),
-    _auth: Dict[str, Any] = Depends(require_roles(["Admin"])),
 ) -> Dict[str, Any]:
     """
     Submit invoice data and image to Firebase.
