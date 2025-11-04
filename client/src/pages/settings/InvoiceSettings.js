@@ -1,7 +1,6 @@
 // invoicesettings.js (Modified)
 import React, { useState, useEffect } from "react";
-import { collection, doc, getDoc, updateDoc, setDoc } from "firebase/firestore"; //added setDoc
-import { db } from "../../config/firebase-config";
+// Firestore access moved to backend API
 import { Container, Typography } from "@mui/material";
 import styles from "./InvoiceSettings.module.css"; 
 import { useAuth } from '../../context/AuthContext';
@@ -19,8 +18,7 @@ export const invoiceCatList = [
 ];
 
 const InvoiceSettings = () => {
-  const userRole = ROLES.ADMIN; // This line makes all user who access the invoice settings a admin regardless of their actual role. Delete this line and uncomment the line below when user roles are fixed.
-  //const { userRole } = useAuth(); // Get current user's role
+  const { userRole, currentUser } = useAuth(); // Get current user's role
   const [categories, setCategories] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState("");
@@ -34,47 +32,27 @@ const InvoiceSettings = () => {
   const isViewOnly = userRole === ROLES.ACCOUNTANT; // Accountants have view-only
 
 
-  const invoiceCatRef = collection(db, "invoiceCategories");
-
-  // Fetch categories from database, create missing ones with default values
+  // Fetch categories from backend
   const getCategories = async () => {
-    const categoryData = [];
     try {
-      for (const id of invoiceCatList) {
-        const docRef = doc(invoiceCatRef, id);
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-          // Document exists, use its data
-          categoryData.push({ id, ...docSnap.data() });
-        } else {
-          // Document doesn't exist, create it with default values
-          console.log(`Creating missing category document for: ${id}`);
-          const defaultData = {
-            bankAccountNum: "0000", // Default account number
-            name: id,
-            createdAt: new Date().toISOString(),
-            description: `Account settings for ${id} category`
-          };
-          
-          // created database entries for the other categories in invoice settings and invoice log
-          // Create the document in Firestore
-          try {
-            await setDoc(docRef, defaultData);
-            console.log(`✅ Created Firestore document for: ${id}`);
-          } catch (createError) {
-            console.error(`❌ Failed to create document for ${id}:`, createError);
-            // Still add to local data even if Firestore creation fails
-          }
-          
-          // Add to local data
-          categoryData.push({ id, ...defaultData });
+      const token = currentUser ? await currentUser.getIdToken() : null;
+      const response = await fetch('http://localhost:5140/api/pac/invoice-settings/categories', {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Role': userRole || '',
+          ...(token ? { Authorization: `Bearer ${token}` } : { Authorization: 'Bearer dev' })
         }
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errText}`);
       }
+      const data = await response.json();
+      return Array.isArray(data.categories) ? data.categories : [];
     } catch (error) {
-      console.error("Failure querying database for categories:", error);
+      console.error("Failure querying backend for categories:", error);
+      return [];
     }
-    return categoryData;
   };
 
   useEffect(() => {
@@ -90,31 +68,35 @@ const InvoiceSettings = () => {
   //broken code unflagged here?
 
   const editDoc = async (id, newAccount) => {
-    try{
-      if(isNaN(newAccount)){
+    try {
+      if (isNaN(newAccount)) {
         throw new Error("account number must be numeric");
       }
-      const ref = doc(invoiceCatRef, id);
-      
-      // Try to update first, if document doesn't exist, create it
-      try {
-        await updateDoc(ref, { bankAccountNum: newAccount });
-      } catch (updateError) {
-        // If update fails, try to create the document
-        if (updateError.code === 'not-found' || updateError.message.includes('not found')) {
-          await setDoc(ref, { 
-            bankAccountNum: newAccount,
-            name: id,
-            createdAt: new Date().toISOString()
-          });
-        } else {
-          throw updateError;
-        }
+      // Optimistic update: show new value immediately
+      const previousCategories = categories;
+      const optimisticCategories = categories.map(c =>
+        c.id === id ? { ...c, bankAccountNum: String(newAccount) } : c
+      );
+      setCategories(optimisticCategories);
+
+      const token = currentUser ? await currentUser.getIdToken() : null;
+      const response = await fetch(`http://localhost:5140/api/pac/invoice-settings/category/${encodeURIComponent(id)}` , {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'X-User-Role': userRole || '',
+          ...(token ? { Authorization: `Bearer ${token}` } : { Authorization: 'Bearer dev' })
+        },
+        body: JSON.stringify({ bankAccountNum: String(newAccount) })
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        // Revert optimistic update on error
+        setCategories(previousCategories);
+        throw new Error(err.detail || `HTTP ${response.status}`);
       }
-      
-      //document is now updated, now re-set the local array to hold the updated value:
-      const updatedData = await getCategories();
-      setCategories(updatedData);
+      // Optionally refresh from backend to keep in sync (will keep optimistic UI)
+      getCategories().then(setCategories).catch(() => {});
     } catch (error) {
       console.error("Error: ", error);
       alert("Failure changing bankAccountNum: " + error.message);
