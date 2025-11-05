@@ -194,7 +194,7 @@ const StoreManagement = () => {
 
   const handleConfirmSave = async () => {
     if (isAccountant) return;
-    const res = await fetch(`http://localhost:5140/api/pac/settings/storemanagment/update`, {
+    const res = await fetch(`http://localhost:5140/api/pac/settings/storemanagement/update`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(rows),
