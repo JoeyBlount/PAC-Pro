@@ -154,8 +154,8 @@ html {
 
 /* Row color distinction for locked/unlocked invoices */
 .locked-row {
-  background-color: #ffebee !important; /* Light red background for locked */
-  border-left: 4px solid #f44336; /* Red border on left */
+  background-color: #fff3e0 !important; /* Light amber background for locked */
+  border-left: 4px solid #ff9800; /* Amber border on left */
 }
 
 .unlocked-row {
@@ -254,7 +254,7 @@ html {
 
 /* Override row hover for locked/unlocked rows */
 .locked-row:hover {
-  background-color: #ffcdd2 !important; /* Slightly darker red on hover */
+  background-color: #ffe0b2 !important; /* Slightly darker amber on hover */
 }
 
 .unlocked-row:hover {
