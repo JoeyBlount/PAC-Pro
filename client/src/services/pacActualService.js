@@ -239,6 +239,7 @@ const calculatePacActual = (
     promo: sales.promo,
     managerMeal: sales.managerMeal,
     advertising: sales.advertising,
+    duesAndSubscriptions: sales.duesAndSubscriptions,
   });
 
   console.log("[PAC Actual] Cash value specifically:", sales.cash);
@@ -346,6 +347,9 @@ const calculatePacActual = (
     baseFood + employeeMeal + condiment + totalWaste + paper;
   const laborTotal =
     crewLaborDollars + managementLaborDollars + payrollTaxDollars + additionalLaborDollars;
+  // Dues and Subscriptions (dollar amount from generate input)
+  const duesAndSubscriptions = Number(sales.duesAndSubscriptions) || 0;
+
   const purchasesTotal =
     (Number(invoiceTotals.TRAVEL) || 0) +
     advertising + // Advertising (generate input % + invoice log totals)
@@ -357,6 +361,7 @@ const calculatePacActual = (
     (Number(invoiceTotals["M+R"]) || 0) +
     (Number(invoiceTotals["SML EQUIP"]) || 0) +
     (Number(invoiceTotals.UTILITIES) || 0) +
+    duesAndSubscriptions + // Dues and Subscriptions (dollar amount)
     (Number(invoiceTotals.OFFICE) || 0) +
     cashPlusMinus +
     (Number(invoiceTotals["CREW RELATIONS"]) || 0) +
@@ -512,6 +517,10 @@ const calculatePacActual = (
       training: {
         dollars: Number(invoiceTotals.TRAINING) || 0,
         percent: calculatePercentage(Number(invoiceTotals.TRAINING) || 0),
+      },
+      duesAndSubscriptions: {
+        dollars: duesAndSubscriptions,
+        percent: calculatePercentage(duesAndSubscriptions),
       },
       advertising: {
         dollars: advertising,

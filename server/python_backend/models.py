@@ -33,6 +33,7 @@ class PurchaseData(BaseModel):
     office: Decimal = Field(default=Decimal('0'), description="Office expenses")
     training: Decimal = Field(default=Decimal('0'), description="Training expenses")
     crew_relations: Decimal = Field(default=Decimal('0'), description="Crew relations expenses")
+    dues_and_subscriptions: Decimal = Field(default=Decimal('0'), description="Dues and subscriptions expenses")
 
 
 class PacInputData(BaseModel):
@@ -63,6 +64,7 @@ class PacInputData(BaseModel):
 
     # Settings / Budgets
     advertising_percent: Decimal = Field(description="Advertising percentage")
+    dues_and_subscriptions: Decimal = Field(default=Decimal('0'), description="Dues and subscriptions dollars amount")
 
 
 class ExpenseLine(BaseModel):
@@ -105,6 +107,7 @@ class ControllableExpenses(BaseModel):
     cash_adjustments: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
     crew_relations: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
     training: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
+    dues_and_subscriptions: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
     # Back-compat: keep legacy aggregated line so older code doesn't break
     misc_cr_tr_ds: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
 

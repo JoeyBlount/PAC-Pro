@@ -1002,6 +1002,18 @@ const PacTab = ({
               "default"
             )}</td>
           </tr>
+          <tr>
+            <td style="padding-left: 20px;">Dues and Subscriptions</td>
+            <td>${formatCurrency(
+      actualData.controllableExpenses.duesAndSubscriptions?.dollars || 0
+    )}</td>
+            <td>${formatPercentage(
+              actualData.controllableExpenses.duesAndSubscriptions?.percent || 0
+            )}</td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+          </tr>
           
           <!-- Purchases Total -->
           <tr class="print-section-header print-purchases-total">
@@ -1023,7 +1035,8 @@ const PacTab = ({
                 (actualData.controllableExpenses.cashAdjustments?.dollars ||
                   0) +
                 (actualData.controllableExpenses.crewRelations?.dollars || 0) +
-                (actualData.controllableExpenses.training?.dollars || 0)
+                (actualData.controllableExpenses.training?.dollars || 0) +
+                (actualData.controllableExpenses.duesAndSubscriptions?.dollars || 0)
             )}</td>
             <td style="font-weight: bold; background-color: #fce4ec;">${formatPercentage(
               (actualData.controllableExpenses.travel?.percent || 0) +
@@ -1041,7 +1054,8 @@ const PacTab = ({
                 (actualData.controllableExpenses.office?.percent || 0) +
                 (actualData.controllableExpenses.cashPlusMinus?.percent || 0) +
                 (actualData.controllableExpenses.crewRelations?.percent || 0) +
-                (actualData.controllableExpenses.training?.percent || 0)
+                (actualData.controllableExpenses.training?.percent || 0) +
+                (actualData.controllableExpenses.duesAndSubscriptions?.percent || 0)
             )}</td>
             <td style="font-weight: bold; background-color: #fce4ec;">${formatCurrency(
               getProjectedValueAsNumber("Travel") +
@@ -1460,6 +1474,10 @@ const PacTab = ({
             dollars: parseFloat(data.controllable_expenses.training.dollars),
             percent: parseFloat(data.controllable_expenses.training.percent),
           },
+          duesAndSubscriptions: {
+            dollars: parseFloat(data.controllable_expenses.dues_and_subscriptions?.dollars || 0),
+            percent: parseFloat(data.controllable_expenses.dues_and_subscriptions?.percent || 0),
+          },
         },
         totalControllableDollars: parseFloat(data.total_controllable_dollars),
         totalControllablePercent: parseFloat(data.total_controllable_percent),
@@ -1575,6 +1593,7 @@ const PacTab = ({
           cashPlusMinus: pu.cashPlusMinus || def,
           crewRelations: pu.crewRelations || def,
           training: pu.training || def,
+          duesAndSubscriptions: pu.duesAndSubscriptions || def,
           advertising: pu.advertising || def,
         },
         totalControllableDollars: tt.totalControllable?.dollars ?? 0,
@@ -1613,6 +1632,7 @@ const PacTab = ({
           cashPlusMinus: toObj(ce.cashPlusMinus),
           crewRelations: toObj(ce.crewRelations),
           training: toObj(ce.training),
+          duesAndSubscriptions: toObj(ce.duesAndSubscriptions),
           advertising: toObj(ce.advertising),
         },
         totalControllableDollars: Number(pacData.totalControllableDollars || 0),
@@ -3392,6 +3412,22 @@ const PacTab = ({
                 )}
               </TableCell>
             </TableRow>
+            <TableRow>
+              <TableCell sx={{ pl: 4 }}>Dues and Subscriptions</TableCell>
+              <TableCell align="right">
+                {formatCurrency(
+                  actualData.controllableExpenses.duesAndSubscriptions?.dollars || 0
+                )}
+              </TableCell>
+              <TableCell align="right">
+                {formatPercentage(
+                  actualData.controllableExpenses.duesAndSubscriptions?.percent || 0
+                )}
+              </TableCell>
+              <TableCell align="right">-</TableCell>
+              <TableCell align="right">-</TableCell>
+              <TableCell align="right">-</TableCell>
+            </TableRow>
 
             {/* Purchases Total */}
             <TableRow sx={{ backgroundColor: "#f3e5f5" }}>
@@ -3420,7 +3456,8 @@ const PacTab = ({
                       0) +
                     (actualData.controllableExpenses.crewRelations?.dollars ||
                       0) +
-                    (actualData.controllableExpenses.training?.dollars || 0)
+                    (actualData.controllableExpenses.training?.dollars || 0) +
+                    (actualData.controllableExpenses.duesAndSubscriptions?.dollars || 0)
                 )}
               </TableCell>
               <TableCell align="right" sx={{ fontWeight: "bold" }}>

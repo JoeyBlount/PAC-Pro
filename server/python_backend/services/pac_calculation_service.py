@@ -348,6 +348,13 @@ class PacCalculationService:
             percent=(training_dollars / S) * 100
         )
 
+        # Dues and Subscriptions (dollar amount from sales section)
+        dues_and_subscriptions_dollars = input_data.dues_and_subscriptions
+        expenses.dues_and_subscriptions = ExpenseLine(
+            dollars=dues_and_subscriptions_dollars,
+            percent=(dues_and_subscriptions_dollars / S) * 100 if S > 0 else Decimal('0')
+        )
+
         # Misc: CR/TR/D&S kept for backward compatibility but do not double count
         expenses.misc_cr_tr_ds = ExpenseLine(
             dollars=Decimal('0'),
@@ -390,6 +397,7 @@ class PacCalculationService:
             expenses.cash_adjustments.dollars +
             expenses.crew_relations.dollars +
             expenses.training.dollars +
+            expenses.dues_and_subscriptions.dollars +
             expenses.misc_cr_tr_ds.dollars
         )
     

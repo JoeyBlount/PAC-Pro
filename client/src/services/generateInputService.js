@@ -100,6 +100,11 @@ export const saveGenerateInput = async (
         allNetSales: getValue("sales", "allNetSales", "allNetSales"),
         managerMeal: getValue("sales", "managerMeal", "managerMeal"),
         advertising: getValue("sales", "advertising", "advertising"),
+        duesAndSubscriptions: getValue(
+          "sales",
+          "duesAndSubscriptions",
+          "duesAndSubscriptions"
+        ),
       },
 
       // Labor section - only update fields that are provided
