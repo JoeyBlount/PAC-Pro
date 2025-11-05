@@ -40,7 +40,7 @@ const InvoiceSettings = () => {
         headers: {
           'Content-Type': 'application/json',
           'X-User-Role': userRole || '',
-          ...(token ? { Authorization: `Bearer ${token}` } : { Authorization: 'Bearer dev' })
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         }
       });
       if (!response.ok) {
@@ -85,7 +85,7 @@ const InvoiceSettings = () => {
         headers: { 
           'Content-Type': 'application/json', 
           'X-User-Role': userRole || '',
-          ...(token ? { Authorization: `Bearer ${token}` } : { Authorization: 'Bearer dev' })
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
         body: JSON.stringify({ bankAccountNum: String(newAccount) })
       });
