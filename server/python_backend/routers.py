@@ -2,7 +2,7 @@
 FastAPI routers for PAC calculations
 """
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Security, Request, Query
@@ -1431,6 +1431,11 @@ async def get_all_locked_months(store_id: str) -> Dict[str, Any]:
         logger.error(f"Error getting locked months: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting locked months: {str(e)}")
 
+
+# ---------------
+# Announcements
+# ---------------
+
 class Announcement(BaseModel):
     id: Optional[str] = None
     title: str
@@ -1527,3 +1532,387 @@ async def delete_announcement(announcement_id: str):
         raise HTTPException(status_code=404, detail="Announcement not found")
     doc_ref.delete()
     return {"status": "deleted"}
+
+
+# --------------
+# Notifications
+# --------------
+class NotificationSetting(BaseModel):
+    type: str
+    enabled: bool
+    roles: List[str]
+
+class NotificationSettingUpdate(BaseModel):
+    enabled: bool
+    roles: List[str]
+
+class Notification(BaseModel):
+    id: str
+    read: bool
+    type: str
+    toEmail: str
+    title: str
+    message: str
+    invoiceId: Optional[str] = None
+    createdAt: Optional[datetime] = None
+
+@router.get("/settings/notifications/", response_model=List[NotificationSetting])
+async def getNotificationsSettings():
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    try:
+        db = firestore.client()
+        doc_ref = db.collection("settings").document("notifications")
+        doc = doc_ref.get()
+
+        result = []
+
+        if doc.exists:
+            data = doc.to_dict()
+            result = [
+                NotificationSetting(
+                    type = t,
+                    enabled = data[t].get("enabled", True),
+                    roles = data[t].get("roles", ["Admin"])
+                )
+                for t in data.keys()
+            ]
+
+        return result
+
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting notifications: {str(e)}")
+
+@router.post("/settings/notifications/")
+async def updateNotificationSettings(payload: Dict[str, NotificationSettingUpdate]):
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    try:
+        db = firestore.client()
+        doc_ref = db.collection("settings").document("notifications")
+        
+        input = {
+            key: {"enabled": val.enabled, "roles": val.roles}
+            for key, val in payload.items()
+        }
+
+        doc_ref.set(input)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting notifications: {str(e)}")
+    
+
+@router.get("/notifications", response_model=List[Notification])
+async def getNotifications(toEmail: str = Query(...)):
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    try:
+        db = firestore.client()
+        ref = (
+            db.collection("notifications")
+            .where("toEmail", "==", toEmail)
+            .order_by("createdAt", direction=firestore.Query.DESCENDING)
+        )
+
+        docs = ref.stream()
+        notifications = []
+        for doc in docs:
+            data = doc.to_dict()
+            notifications.append(Notification(id=doc.id, **data))
+
+        return notifications
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting notifications: {str(e)}")
+
+
+@router.post("/notifications/{notif_id}/read")
+async def mark_notification_as_read(notif_id: str):
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    try:
+        db = firestore.client()
+        collection = db.collection("notifications")
+        doc_ref = collection.document(notif_id)
+
+        if not doc_ref.get().exists:
+            raise HTTPException(status_code=404, detail="Notification not found")
+    
+        doc_ref.update({
+            "read": True,
+            "readAt": datetime.now()
+        })
+        
+        return {"success": True}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error marking notifications as read: {str(e)}")
+
+
+@router.post("/notifications/mark_all_read")
+async def mark_all_notifications_as_read(toEmail: str = Query(...)):
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    try:
+        db = firestore.client()
+        query = db.collection("notifications").where("toEmail", "==", toEmail)
+        batch = db.batch()
+        for doc in query.stream():
+            data = doc.to_dict()
+            if not data.get("read", False):
+                batch.update(
+                    doc.reference,
+                    {"read": True, "readAt": datetime.now()}
+                )
+        batch.commit()
+        return {"success": True}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error marking all notifications as read: {str(e)}")
+
+
+# ------------------
+# Store Management
+# ------------------
+
+class Store(BaseModel):
+    address: str
+    city: Optional[str] = None
+    entity: str
+    id: Optional[str] = None
+    name: Optional[str] = None
+    startMonth: str
+    state: Optional[str] = None
+    storeID: str
+    subName: str
+
+class DeletedStore(BaseModel):
+    id: Optional[str] = None
+    deletedRefId: Optional[str] = None
+    address: str
+    deletedAt: datetime
+    deletedByRole: Optional[str] = None
+    entity: str
+    expireAt: datetime
+    originalId: Optional[str] = None
+    startMonth: str
+    storeID: str
+    subName: str
+
+@router.get("/settings/storemanagement/getactive/", response_model=List[Store])
+async def getStoreManagementActiveStores():
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    try:
+        db = firestore.client()
+        doc_ref = db.collection("stores")
+
+        docs = doc_ref.stream()
+        stores = [{**doc.to_dict(), "id": doc.id} for doc in docs]
+        return stores
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting active stores: {str(e)}")
+
+@router.get("/settings/storemanagement/getdeleted/", response_model=List[DeletedStore])
+async def getStoreManagementDeletedStores():
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    try:
+        db = firestore.client()
+
+        now = datetime.now()
+        deleted_ref = db.collection("deletedStores")
+        query = deleted_ref.where("expireAt", ">", now)
+        docs = query.stream()
+        deleted_stores = []
+        for doc in docs:
+            data = doc.to_dict()
+            data["deletedRefId"] = doc.id
+            data["id"] = data.get("originalId")
+            deleted_stores.append(data)
+        return deleted_stores
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting deleted stores: {str(e)}")
+
+@router.post("/settings/storemanagement/add", response_model=Store)
+async def storeManagementAddNewStore(store: Store):
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    try:
+        db = firestore.client()
+        
+        store_data = store.dict()
+        for key, value in store_data.items():
+            if value is None:
+                store_data[key] = ""
+        
+        if not store_data.get("id"):
+            store_data["id"] = "store_" + store_data.get("storeID")
+
+        doc_ref = db.collection("stores").document(store_data["id"])
+        doc_ref.set(store_data)
+        return Store(**store_data)        
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error adding new store: {str(e)}")
+
+
+@router.put("/settings/storemanagment/update")
+async def storeManagementUpdateStores(stores: List[Store]):
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    try:
+        db = firestore.client()
+        batch = db.batch()
+        for s in stores:
+            if not s.id:
+                continue
+            ref = db.collection("stores").document(s.id)
+            batch.update(ref, s.dict(exclude_unset=True, exclude={"id"}))
+        batch.commit()
+        return {"message": "Stores updated successfully"}     
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating all store: {str(e)}")
+ 
+
+@router.delete("/settings/storemanagement/del/{store_id}")
+async def storeManagementDeleteStore(store_id: str, deletedByRole: Optional[str] = Query(None)):
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    try:
+        db = firestore.client()
+        ref = db.collection("stores").document(store_id)
+        doc = ref.get()
+
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Store not found")
+
+        store_data = doc.to_dict()
+        expire_at = datetime.now() + timedelta(days=1)
+
+        deleted_payload = {
+            "originalId": store_id,
+            "subName": store_data.get("subName", ""),
+            "address": store_data.get("address", ""),
+            "entity": store_data.get("entity", ""),
+            "storeID": store_data.get("storeID", ""),
+            "startMonth": store_data.get("startMonth", ""),
+            "deletedAt": datetime.now(),
+            "expireAt": expire_at,
+            "deletedByRole": deletedByRole or "",
+        }
+
+        deleted_ref = db.collection("deletedStores").add(deleted_payload)
+        ref.delete()
+
+        return {"message": "Store moved to deletedStores", "deletedRefId": deleted_ref[1].id}
+        
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting a store: {str(e)}")
+    
+@router.post("/settings/storemanagement/restore/{deleted_ref_id}")
+async def storeManagementRestoreStore(deleted_ref_id: str):
+    try:
+        import firebase_admin
+        from firebase_admin import firestore
+        if not firebase_admin._apps:
+            raise HTTPException(status_code=503, detail="Firebase not initialized")
+    except ModuleNotFoundError:
+        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+    
+    try:
+        db = firestore.client()
+        deleted_ref = db.collection("deletedStores").document(deleted_ref_id)
+        deleted_doc = deleted_ref.get()
+
+        if not deleted_doc.exists:
+            raise HTTPException(status_code=404, detail="Deleted store not found")
+
+        deleted_data = deleted_doc.to_dict()
+
+        target_id = deleted_data.get("originalId")
+        if not target_id:
+            raise HTTPException(status_code=400, detail="Missing originalId in deleted store document")
+
+        store_data = {
+            "subName": deleted_data.get("subName", ""),
+            "address": deleted_data.get("address", ""),
+            "entity": deleted_data.get("entity", ""),
+            "storeID": deleted_data.get("storeID", ""),
+            "startMonth": deleted_data.get("startMonth", ""),
+            "id": target_id,  
+        }
+
+        db.collection("stores").document(target_id).set(store_data)
+
+        deleted_ref.delete()
+
+        return {"message": "Store restored successfully", "restoredId": target_id}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error restoring a store: {str(e)}")
