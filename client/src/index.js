@@ -11,7 +11,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import PrivateRoute from "./routes/PrivateRoute"; // Assuming this is used with the Router/Routes structure
 import ProtectedRoute from './routes/ProtectedRoute';
 import Login from "./pages/login/login";
-import SignUpScreen from "./pages/login/signupscreen";
 import App from "./App"; // Often used with Router/Routes structure
 import Dashboard from "./pages/dashboard/dashboard";
 import InvoiceLogs from "./pages/invoiceLogs/invoiceLogs";
@@ -37,10 +36,6 @@ const router = createBrowserRouter([
   {
     path: "/",
     element: <Login />,
-  },
-  {
-    path: "signupscreen",
-    element: <SignUpScreen />,
   },
   {
     path: "/navi",

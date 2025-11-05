@@ -347,3 +347,37 @@ Troubleshooting on Windows:
 
 - Swagger UI: `http://localhost:5140/docs` (look for `/api/auth/microsoft/*` routes)
 - Microsoft Login: `GET /api/auth/microsoft/login` should redirect to Microsoft
+
+## Client (React) Setup and Troubleshooting
+
+If the React client fails to start with the error:
+
+> [eslint] Failed to load config "react-app" to extend from.
+
+Install the required ESLint config and peer plugins in the `client` workspace.
+
+Windows PowerShell:
+```powershell
+cd client; npm i -D eslint-config-react-app@^7 eslint@^8 eslint-plugin-react@^7 eslint-plugin-react-hooks@^4 eslint-plugin-jsx-a11y@^6 --no-audit --no-fund
+```
+
+macOS/Linux (bash/zsh):
+```bash
+cd client && npm i -D eslint-config-react-app@^7 eslint@^8 eslint-plugin-react@^7 eslint-plugin-react-hooks@^4 eslint-plugin-jsx-a11y@^6 --no-audit --no-fund
+```
+
+Then start the client:
+
+Windows PowerShell:
+```powershell
+cd client; npm start
+```
+
+macOS/Linux (bash/zsh):
+```bash
+cd client && npm start
+```
+
+Notes:
+- PowerShell uses `;` instead of `&&` to chain commands.
+- Ensure your frontend points to the backend on port `5140` for Microsoft login (e.g., `http://localhost:5140`).
