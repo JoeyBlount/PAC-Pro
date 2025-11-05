@@ -51,7 +51,36 @@ export const saveGenerateInput = async (
     // Create document ID: storeID_YYYYMM
     const docId = `${storeID}_${year}${String(monthNumber).padStart(2, "0")}`;
 
-    // Structure the data exactly as it appears on the frontend
+    // Get existing data to preserve non-zero values
+    const docRef = doc(db, "generate_input", docId);
+    const existingDoc = await getDoc(docRef);
+    const existingData = existingDoc.exists() ? existingDoc.data() : null;
+
+    // Helper function to get existing value or default to 0
+    const getExistingValue = (section, field) => {
+      if (
+        existingData &&
+        existingData[section] &&
+        existingData[section][field] !== undefined
+      ) {
+        return Number(existingData[section][field]) || 0;
+      }
+      return 0;
+    };
+
+    // Helper function to update value only if provided in inputData
+    const getValue = (section, field, inputKey) => {
+      if (
+        inputData[inputKey] !== undefined &&
+        inputData[inputKey] !== null &&
+        inputData[inputKey] !== ""
+      ) {
+        return Number(inputData[inputKey]) || 0;
+      }
+      return getExistingValue(section, field);
+    };
+
+    // Structure the data, preserving existing values for fields not provided
     const generateData = {
       storeID,
       year: Number(year),
@@ -59,50 +88,84 @@ export const saveGenerateInput = async (
       monthNumber,
       submittedBy: submittedBy || "Unknown User",
 
-      // Sales section
+      // Sales section - only update fields that are provided
       sales: {
-        productNetSales: Number(inputData.productNetSales) || 0,
-        cash: Number(inputData.cash) || 0,
-        promo: Number(inputData.promo) || 0,
-        allNetSales: Number(inputData.allNetSales) || 0,
-        managerMeal: Number(inputData.managerMeal) || 0,
-        advertising: Number(inputData.advertising) || 0,
+        productNetSales: getValue(
+          "sales",
+          "productNetSales",
+          "productNetSales"
+        ),
+        cash: getValue("sales", "cash", "cash"),
+        promo: getValue("sales", "promo", "promo"),
+        allNetSales: getValue("sales", "allNetSales", "allNetSales"),
+        managerMeal: getValue("sales", "managerMeal", "managerMeal"),
+        advertising: getValue("sales", "advertising", "advertising"),
+        duesAndSubscriptions: getValue(
+          "sales",
+          "duesAndSubscriptions",
+          "duesAndSubscriptions"
+        ),
       },
 
-      // Labor section
+      // Labor section - only update fields that are provided
       labor: {
-        crewLabor: Number(inputData.crewLabor) || 0,
-        totalLabor: Number(inputData.totalLabor) || 0,
-        payrollTax: Number(inputData.payrollTax) || 0,
+        crewLabor: getValue("labor", "crewLabor", "crewLabor"),
+        totalLabor: getValue("labor", "totalLabor", "totalLabor"),
+        payrollTax: getValue("labor", "payrollTax", "payrollTax"),
+        additionalLaborDollars: getValue(
+          "labor",
+          "additionalLaborDollars",
+          "additionalLaborDollars"
+        ),
       },
 
-      // Food section (renamed from waste to match frontend title)
+      // Food section - only update fields that are provided
       food: {
-        completeWaste: Number(inputData.completeWaste) || 0,
-        rawWaste: Number(inputData.rawWaste) || 0,
-        condiment: Number(inputData.condiment) || 0,
-        variance: Number(inputData.variance) || 0,
-        unexplained: Number(inputData.unexplained) || 0,
-        discounts: Number(inputData.discounts) || 0,
-        baseFood: Number(inputData.baseFood) || 0,
+        completeWaste: getValue("food", "completeWaste", "completeWaste"),
+        rawWaste: getValue("food", "rawWaste", "rawWaste"),
+        condiment: getValue("food", "condiment", "condiment"),
+        variance: getValue("food", "variance", "variance"),
+        unexplained: getValue("food", "unexplained", "unexplained"),
+        discounts: getValue("food", "discounts", "discounts"),
+        baseFood: getValue("food", "baseFood", "baseFood"),
       },
 
-      // Inventory - Starting
+      // Inventory - Starting - only update fields that are provided
       inventoryStarting: {
-        food: Number(inputData.startingFood) || 0,
-        condiment: Number(inputData.startingCondiment) || 0,
-        paper: Number(inputData.startingPaper) || 0,
-        nonProduct: Number(inputData.startingNonProduct) || 0,
-        opsSupplies: Number(inputData.startingOpsSupplies) || 0,
+        food: getValue("inventoryStarting", "food", "startingFood"),
+        condiment: getValue(
+          "inventoryStarting",
+          "condiment",
+          "startingCondiment"
+        ),
+        paper: getValue("inventoryStarting", "paper", "startingPaper"),
+        nonProduct: getValue(
+          "inventoryStarting",
+          "nonProduct",
+          "startingNonProduct"
+        ),
+        opsSupplies: getValue(
+          "inventoryStarting",
+          "opsSupplies",
+          "startingOpsSupplies"
+        ),
       },
 
-      // Inventory - Ending
+      // Inventory - Ending - only update fields that are provided
       inventoryEnding: {
-        food: Number(inputData.endingFood) || 0,
-        condiment: Number(inputData.endingCondiment) || 0,
-        paper: Number(inputData.endingPaper) || 0,
-        nonProduct: Number(inputData.endingNonProduct) || 0,
-        opsSupplies: Number(inputData.endingOpsSupplies) || 0,
+        food: getValue("inventoryEnding", "food", "endingFood"),
+        condiment: getValue("inventoryEnding", "condiment", "endingCondiment"),
+        paper: getValue("inventoryEnding", "paper", "endingPaper"),
+        nonProduct: getValue(
+          "inventoryEnding",
+          "nonProduct",
+          "endingNonProduct"
+        ),
+        opsSupplies: getValue(
+          "inventoryEnding",
+          "opsSupplies",
+          "endingOpsSupplies"
+        ),
       },
 
       // Timestamp
@@ -110,7 +173,6 @@ export const saveGenerateInput = async (
     };
 
     // Save to Firestore
-    const docRef = doc(db, "generate_input", docId);
     await setDoc(docRef, generateData, { merge: true });
 
     console.log(`Saved generate input data for ${storeID} - ${month} ${year}`);
