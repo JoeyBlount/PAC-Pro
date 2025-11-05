@@ -21,10 +21,10 @@ const Login = () => {
   const user = auth.currentUser;
   const db = getFirestore(); // Initialize Firestore
 
-  const handleMicrosoftLogin = async () => {
-    const BACKEND_BASE = "http://localhost:8000";
-    const redirect = encodeURIComponent(`${window.location.origin}/navi/dashboard`);
-    window.location.href = `${BACKEND_BASE}/api/auth/microsoft/login?redirect=${redirect}`;
+const handleMicrosoftLogin = async () => {
+  const BACKEND_BASE = "http://localhost:5140";
+  const redirect = encodeURIComponent(`${window.location.origin}/navi/dashboard`);
+  window.location.href = `${BACKEND_BASE}/api/auth/microsoft/login?redirect=${redirect}`;
   };
 
   // For debugging to see if user is actually logged out or not
