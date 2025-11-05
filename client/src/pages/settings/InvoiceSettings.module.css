@@ -9,7 +9,7 @@
   .headerCell {
     border: 1px solid #ccc;
     padding: 8px;
-    background-color: #f0f0f0;
+    /* background-color: #f0f0f0; */
     text-align: left;
   }
   

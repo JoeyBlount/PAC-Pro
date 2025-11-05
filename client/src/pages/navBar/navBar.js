@@ -16,6 +16,7 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
+  useTheme
 } from "@mui/material";
 import {
   ReceiptLong,
@@ -76,6 +77,8 @@ export function NavBar() {
   const [reportsHoverTimeout, setReportsHoverTimeout] = useState(null);
   const sideNavRef = React.useRef(null);
   const reportsRef = React.useRef(null);
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
 
   const [userData, setUserData] = useState(null);
   const [stores, setStores] = useState([]);
@@ -321,7 +324,17 @@ export function NavBar() {
   return (
     <>
       {/* TOP NAV BAR */}
-      <div className="topNavBar">
+     <div
+        className="topNavBar"
+        style={{
+          background: isDark
+            ? theme.palette.background.paper                // dark mode color
+            : 'linear-gradient(to right, #2196f3, #0d47a1)', // light mode gradient
+          color: theme.palette.text.primary,
+          borderBottom: `1px solid ${theme.palette.divider}`,
+          transition: 'background-color 0.3s ease, color 0.3s ease',
+        }}
+      >
         <div className="topNavLeft">
           <IconButton
             className="hamburgerButton"
@@ -470,6 +483,12 @@ export function NavBar() {
       <div
         ref={sideNavRef}
         className={`leftNavBar ${sideNavOpen ? "open" : ""}`}
+        style={{
+          backgroundColor: theme.palette.background.paper,
+          color: theme.palette.text.primary,
+          borderRight: `1px solid ${theme.palette.divider}`,
+          transition: 'background-color 0.3s ease, color 0.3s ease',
+        }}
       >
         <div className="sideNavContent">
           <div className="sideNavMain">

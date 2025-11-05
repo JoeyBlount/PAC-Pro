@@ -6,6 +6,7 @@ import MonthLockService from "../../services/monthLockService";
 import styles from "./submitInvoice.module.css";
 import { invoiceCatList } from "../settings/InvoiceSettings";
 // Frontend no longer uploads to Storage or writes to Firestore; backend handles it
+import { useTheme } from '@mui/material/styles';
 import {
   Alert,
   TextField,
@@ -29,6 +30,8 @@ const SubmitInvoice = () => {
   const [extras, setExtras] = useState([]);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [loadingUpload, setLoadingUpload] = useState(false);
+  const theme = useTheme();
+  
 
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -439,7 +442,7 @@ const SubmitInvoice = () => {
                 padding: "8px 12px",
                 border: "1px solid #ccc",
                 borderRadius: "4px",
-                backgroundColor: "#f5f5f5",
+                // backgroundColor: "#cca8a8ff",
               }}
             >
               {selectedStore || "No store selected"}
