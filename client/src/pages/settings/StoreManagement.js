@@ -272,7 +272,7 @@ const StoreManagement = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          backgroundColor: "#f5f5f5",
+          // backgroundColor: "#f5f5f5",
           padding: 2,
           borderRadius: 2,
           boxShadow: 1,

@@ -1,45 +1,36 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Outlet } from "react-router-dom";
 import { NavBar } from './pages/navBar/navBar';
-import { Box } from '@mui/material';
-
-// import PrivateRoute from "./routes/PrivateRoute"; // ✅ Import PrivateRoute
-// import InvoiceSheet from "./pages/invoiceLogs/InvoiceSheet";
-
-
-
-
-// // Define the routing configuration
-// const router = createBrowserRouter([
-//   { path: '/', element: <Login /> }, // Root login page
-//   { path: 'signupscreen', element: <SignUpScreen /> },
-//   {
-//     path: '/navi',
-//     element: <PrivateRoute element={<NavBar />} />, // Protected NavBar with child routes
-//     children: [
-//       { path: 'dashboard', element: <Dashboard /> },
-//       { path: 'invoiceLogs', element: <InvoiceLogs /> },
-//       { path: 'submitInvoice', element: <SubmitInvoice /> },
-//       { path: 'reports', element: <Reports /> },
-//       { path: 'settings', element: <Settings /> },
-//       { path: 'pac', element: <PAC /> },
-//       { path: 'account', element: <Account /> },
-//       { path: 'invoiceSheet', element: <InvoiceSheet /> },
-
-//       { path: '*', element: <h1>404 - Page Not Found</h1> } // Catch-all for invalid child routes
-//     ]
-//   },
-//   { path: '*', element: <h1>404 - Page Not Found</h1> } // Catch-all for invalid routes
-// ]);
+import { Box, CssBaseline } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 
 function App() {
+  const theme = useTheme();
+
+   useEffect(() => {
+    document.body.setAttribute('data-theme', theme.palette.mode);
+  }, [theme.palette.mode]);
+
   return (
-    <div>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        bgcolor: theme.palette.background.default,
+        color: theme.palette.text.primary,
+        transition: 'background-color 0.3s ease, color 0.3s ease',
+      }}
+    >
+      {/* Applies global baseline styles (syncs <body> with the theme) */}
+      <CssBaseline />
+      
+      {/* Navbar stays visible on top */}
       <NavBar />
-      <Box sx={{top: '40px', marginLeft: '80px', marginTop: '80px'}}>
+
+      {/* Main content area */}
+      <Box sx={{ top: '40px', marginLeft: '80px', marginTop: '80px' }}>
         <Outlet />
       </Box>
-    </div>
+    </Box>
   );
 }
 

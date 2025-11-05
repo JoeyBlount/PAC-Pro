@@ -25,6 +25,7 @@ import StoreManagement from "./pages/settings/StoreManagement";
 import Notifications from "./pages/settings/Notifications";
 import InvoiceSettings from "./pages/settings/InvoiceSettings";
 import DeadlineManagement from "./pages/settings/DeadlineManagement";
+import { ThemeContextProvider } from "./context/ThemeContext";
 // import InviteUser from './pages/InviteUser'; // Kept unique import
 // import NavigationLayout from './components/NavigationLayout'; // Kept unique import
 // import NotAllowed from './pages/NotAllowed'; // Kept unique import
@@ -72,9 +73,11 @@ const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
     <AuthProvider>
+      <ThemeContextProvider>
       <StoreProvider>
         <RouterProvider router={router} />
       </StoreProvider>
+      </ThemeContextProvider>
     </AuthProvider>
   </React.StrictMode>
 );

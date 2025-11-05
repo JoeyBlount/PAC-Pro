@@ -1,14 +1,64 @@
-.Header{
-    font-family: Verdana, sans-serif;
-    text-align: center;
-    font-size: 30px;
-    color: #000000;
-  }
+/* =====================================
+   THEME VARIABLES
+===================================== */
+body[data-theme='light'] {
+  --text-color: #000000;
+  --muted-text: #333333;
 
-  /* Section Containers */
+  /* Category backgrounds */
+  --bg-sales: #e0f0ff;
+  --bg-labor: #e0ffe0;
+  --bg-food: #ffe0e9;
+  --bg-starting: #fff9d6;
+  --bg-ending: #ffe6cc;
+
+  /* Headers / cells */
+  --bg-category-header: #f5f5f5;
+  --bg-positive: rgba(0, 255, 0, 0.1);
+  --bg-negative: rgba(255, 0, 0, 0.1);
+  --popup-bg: #ffffff;
+  --popup-border: #dddddd;
+  --button-blue: #1976d2;
+  --button-blue-hover: #1565c0;
+}
+
+body[data-theme='dark'] {
+  --text-color: #e0e0e0;
+  --muted-text: #cccccc;
+
+  /* Category backgrounds — darker and transparent */
+  --bg-sales: rgba(13, 71, 161, 0.25);        /* deep blue tint */
+  --bg-labor: rgba(27, 94, 32, 0.25);         /* dark green tint */
+  --bg-food: rgba(91, 26, 40, 0.3);           /* muted pink/red tint */
+  --bg-starting: rgba(123, 111, 9, 0.3);      /* dark gold tint */
+  --bg-ending: rgba(107, 43, 6, 0.3);         /* dark orange tint */
+
+  --bg-category-header: #2b2b2b;
+  --bg-positive: rgba(76, 175, 80, 0.25);
+  --bg-negative: rgba(244, 67, 54, 0.25);
+  --popup-bg: #1e1e1e;
+  --popup-border: #444;
+  --button-blue: #2196f3;
+  --button-blue-hover: #1e88e5;
+}
+
+/* =====================================
+   HEADER
+===================================== */
+.Header {
+  font-family: Verdana, sans-serif;
+  text-align: center;
+  font-size: 30px;
+  color: var(--text-color);
+}
+
+/* =====================================
+   SECTION CONTAINERS
+===================================== */
 .pac-section {
   padding: 8px;
   border-radius: 6px;
+  color: var(--text-color);
 }
 
 /* Section Headings */
@@ -17,28 +67,32 @@
   font-size: 18px;
 }
 
-/* Specific Section Colors */
+/* =====================================
+   SPECIFIC SECTION COLORS
+===================================== */
 .sales-section {
-  background-color: #ffe0e9;
+  background-color: var(--bg-sales);
 }
 
 .labor-section {
-  background-color: #e0ffe0;
+  background-color: var(--bg-labor);
 }
 
 .food-section {
-  background-color: #e0f0ff;
+  background-color: var(--bg-food);
 }
 
 .starting-inventory-section {
-  background-color: #fff9d6;
+  background-color: var(--bg-starting);
 }
 
 .ending-inventory-section {
-  background-color: #ffe6cc;
+  background-color: var(--bg-ending);
 }
 
-/* Labels and Buttons */
+/* =====================================
+   INPUT ROWS
+===================================== */
 .input-row {
   display: flex;
   align-items: center;
@@ -51,7 +105,7 @@
   width: 180px;
   font-size: 13px;
   font-weight: 500;
-  color: #333;
+  color: var(--muted-text);
   margin-right: 8px;
   text-align: right;
 }
@@ -66,53 +120,89 @@
   font-size: 12px;
 }
 
-/* P.A.C. Tab Styles */
+/* =====================================
+   PAC TAB STYLES
+===================================== */
 .category-header {
   font-weight: bold;
-  background-color: #f5f5f5;
+  background-color: var(--bg-category-header);
+  color: var(--text-color);
 }
 
 .pac-positive {
-  background-color: rgba(0, 255, 0, 0.1);
+  background-color: var(--bg-positive);
   font-weight: bold;
+  color: var(--text-color);
 }
 
 .pac-negative {
-  background-color: rgba(255, 0, 0, 0.1);
+  background-color: var(--bg-negative);
   font-weight: bold;
+  color: var(--text-color);
 }
 
+/* =====================================
+   HOVER POPUP
+===================================== */
 .hover-popup {
   position: absolute;
-  background: white;
+  background: var(--popup-bg);
   padding: 10px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--popup-border);
   border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
   z-index: 100;
   pointer-events: none;
+  color: var(--text-color);
 }
 
+/* =====================================
+   BUTTONS
+===================================== */
 .print-button {
-  background-color: #1976d2;
+  background-color: var(--button-blue);
   color: white;
   margin-bottom: 20px;
 }
 
 .print-button:hover {
-  background-color: #1565c0;
+  background-color: var(--button-blue-hover);
 }
 
-/* PAC Goal */
-
+/* =====================================
+   PAC GOAL
+===================================== */
 .pac-goal-container {
-  margin: 8px 0 16px 0;   /* space above/below */
-  text-align: center;     /* center it under the header */
+  margin: 8px 0 16px 0;
+  text-align: center;
 }
 
 .pac-goal-input .MuiInputBase-root {
   height: 36px;
   font-size: 14px;
+  background-color: var(--popup-bg);
+  color: var(--text-color);
+  border: 1px solid var(--popup-border);
+}
+/* Dark mode input fields */
+body[data-theme='dark'] input,
+body[data-theme='dark'] select,
+body[data-theme='dark'] textarea,
+body[data-theme='dark'] .MuiInputBase-root {
+  background-color: #2a2a2a !important;
+  color: #e0e0e0 !important;
+  border: 1px solid #444 !important;
 }
 
+body[data-theme='dark'] input:disabled,
+body[data-theme='dark'] select:disabled {
+  background-color: #1f1f1f !important;
+  color: #888 !important;
+}
 
+/* Dark mode fix for white divider line */
+body[data-theme='dark'] table,
+body[data-theme='dark'] th,
+body[data-theme='dark'] td {
+  border-color: #333 !important;
+}

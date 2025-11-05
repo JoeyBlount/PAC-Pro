@@ -44,6 +44,7 @@ import { getStorage, ref, getDownloadURL } from "firebase/storage";
 import { invoiceCatList } from "../settings/InvoiceSettings";
 import MonthLockService from "../../services/monthLockService";
 import { recomputeMonthlyTotals } from "../../services/invoiceTotalsService";
+import { useTheme } from "@mui/material/styles";
 
 // Map Invoice Log category IDs -> PAC "projections[].name"
 const PROJECTION_LOOKUP = {
@@ -77,6 +78,7 @@ const EXCLUDED_BUDGET_CATS = new Set([
 ]);
 
 const InvoiceLogs = () => {
+  const theme = useTheme();
   const location = useLocation();
   // const { currentUser, userRole } = useAuth();
   // console.log("Logged in user:", currentUser?.email);
@@ -1411,7 +1413,18 @@ const InvoiceLogs = () => {
   ];
 
   return (
-    <Container maxWidth={false} disableGutters sx={{ mt: 2, px: 2 }}>
+     <Container
+    maxWidth={false}
+    disableGutters
+    sx={{
+      mt: 2,
+      px: 2,
+      bgcolor: theme.palette.background.default, // 🌙 adapts to dark/light mode
+      color: theme.palette.text.primary,
+      transition: "background-color 0.3s ease, color 0.3s ease",
+      minHeight: "100vh",
+    }}
+  >
       <div className="topBar">
         <h1 className="Header">Invoice Log</h1>
         <div className="topBarControls">
@@ -1562,16 +1575,15 @@ const InvoiceLogs = () => {
       {showRecentlyDeleted && (
         <div
           style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            zIndex: 9999,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
+            background: theme.palette.background.paper,
+            color: theme.palette.text.primary,
+            padding: "30px",
+            borderRadius: "10px",
+            minWidth: "300px",
+            textAlign: "center",
+            position: "relative",
+            boxShadow: `0px 4px 10px ${theme.palette.mode === "dark" ? "#00000080" : "#00000020"}`,
+            border: `1px solid ${theme.palette.divider}`,
           }}
         >
           <div

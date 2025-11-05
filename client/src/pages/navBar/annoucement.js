@@ -1,15 +1,36 @@
-import { Box, Dialog, DialogTitle, DialogContent, DialogActions, Button, CircularProgress, Typography, IconButton, List, ListItem, ListItemText, TextField, MenuItem } from '@mui/material';
-import { Delete, ManageAccounts } from '@mui/icons-material';
-import { useEffect, useState } from 'react';
-import { ROLES } from '../../constants/roles';
+import {
+  Box,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  CircularProgress,
+  Typography,
+  IconButton,
+  List,
+  ListItem,
+  ListItemText,
+  TextField,
+  MenuItem
+} from "@mui/material";
+import { Delete, ManageAccounts } from "@mui/icons-material";
+import { useEffect, useState } from "react";
+import { ROLES } from "../../constants/roles";
+import { useTheme } from "@mui/material/styles";
 import { useAuth } from "../../context/AuthContext";
 
+/* ────────────────────────────────
+   MANAGE ANNOUNCEMENTS DIALOG
+──────────────────────────────── */
 const ManageAnnouncementsDialog = ({ open, onClose, refresh }) => {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [newRole, setNewRole] = useState("All");
+
+  const theme = useTheme();
 
   const fetchAnnouncements = async () => {
     setLoading(true);
@@ -43,7 +64,7 @@ const ManageAnnouncementsDialog = ({ open, onClose, refresh }) => {
       setNewMessage("");
       setNewRole("All");
       fetchAnnouncements();
-      refresh(); // reload viewer
+      refresh();
     } catch (err) {
       console.error("Failed to add announcement:", err);
     }
@@ -69,11 +90,49 @@ const ManageAnnouncementsDialog = ({ open, onClose, refresh }) => {
   roles.unshift("All");
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Manage Announcements</DialogTitle>
-      <DialogContent dividers>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{
+        sx: {
+          bgcolor: theme.palette.background.paper,
+          color: theme.palette.text.primary,
+          "& .MuiDialogTitle-root": {
+            borderBottom: `1px solid ${theme.palette.divider}`,
+            bgcolor: theme.palette.background.default,
+          },
+          "& .MuiDialogActions-root": {
+            borderTop: `1px solid ${theme.palette.divider}`,
+            bgcolor: theme.palette.background.default,
+          },
+        },
+      }}
+    >
+      <DialogTitle sx={{ fontWeight: "bold" }}>Manage Announcements</DialogTitle>
+
+      <DialogContent
+        dividers
+        sx={{
+          bgcolor: theme.palette.background.paper,
+          color: theme.palette.text.primary,
+          "& .MuiInputBase-root": {
+            bgcolor: theme.palette.background.default,
+            color: theme.palette.text.primary,
+          },
+          "& .MuiOutlinedInput-notchedOutline": {
+            borderColor: theme.palette.divider,
+          },
+          "& .MuiListItem-root": {
+            bgcolor: theme.palette.background.default,
+          },
+        }}
+      >
         {loading ? (
-          <CircularProgress />
+          <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+            <CircularProgress color="inherit" />
+          </Box>
         ) : (
           <List dense>
             {announcements.map((a) => (
@@ -124,6 +183,16 @@ const ManageAnnouncementsDialog = ({ open, onClose, refresh }) => {
             sx={{ mb: 2 }}
             value={newRole}
             onChange={(e) => setNewRole(e.target.value)}
+            SelectProps={{
+              MenuProps: {
+                PaperProps: {
+                  sx: {
+                    bgcolor: theme.palette.background.paper,
+                    color: theme.palette.text.primary,
+                  },
+                },
+              },
+            }}
           >
             {roles.map((r) => (
               <MenuItem key={r} value={r}>
@@ -131,11 +200,13 @@ const ManageAnnouncementsDialog = ({ open, onClose, refresh }) => {
               </MenuItem>
             ))}
           </TextField>
+
           <Button variant="contained" onClick={handleAdd}>
             Add
           </Button>
         </Box>
       </DialogContent>
+
       <DialogActions>
         <Button onClick={onClose}>Close</Button>
       </DialogActions>
@@ -143,19 +214,25 @@ const ManageAnnouncementsDialog = ({ open, onClose, refresh }) => {
   );
 };
 
+/* ────────────────────────────────
+   VIEW ANNOUNCEMENTS DIALOG
+──────────────────────────────── */
 const AnnouncementDialog = ({ open, onClose }) => {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [manageOpen, setManageOpen] = useState(false);
 
+  const theme = useTheme();
   const { userRole } = useAuth();
   const isAdmin = (userRole || "").toLowerCase() === ROLES.ADMIN.toLowerCase();
-  
+
   const fetchAnnouncements = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:5140/api/pac/announcements?role=${userRole}`);
+      const res = await fetch(
+        `http://localhost:5140/api/pac/announcements?role=${userRole}`
+      );
       const data = await res.json();
       setAnnouncements(data);
       setCurrentIndex(0);
@@ -167,7 +244,7 @@ const AnnouncementDialog = ({ open, onClose }) => {
   };
 
   useEffect(() => {
-   if (open) fetchAnnouncements();
+    if (open) fetchAnnouncements();
   }, [open]);
 
   const handleNext = () => {
@@ -184,10 +261,35 @@ const AnnouncementDialog = ({ open, onClose }) => {
 
   return (
     <>
-      <Dialog open={open} onClose={onClose} maxWidth="30%" fullWidth>
-        <DialogTitle sx={{ display: "flex", fontWeight: "bold", textAlign: "center", justifyContent: "space-between",
-            alignItems: "center",}}>
-
+      <Dialog
+        open={open}
+        onClose={onClose}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            bgcolor: theme.palette.background.paper,
+            color: theme.palette.text.primary,
+            transition: "background-color 0.3s ease, color 0.3s ease",
+            "& .MuiDialogTitle-root": {
+              borderBottom: `1px solid ${theme.palette.divider}`,
+              bgcolor: theme.palette.background.default,
+            },
+            "& .MuiDialogActions-root": {
+              borderTop: `1px solid ${theme.palette.divider}`,
+              bgcolor: theme.palette.background.default,
+            },
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            fontWeight: "bold",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
           {isAdmin && (
             <Button
               size="small"
@@ -197,20 +299,25 @@ const AnnouncementDialog = ({ open, onClose }) => {
               Manage
             </Button>
           )}
-          
+
           {loading
             ? "Loading announcements..."
             : announcements.length > 0
             ? `Announcement ${currentIndex + 1} of ${announcements.length}`
-            : "No annoucements"
-          }
-          <Box sx={{ width: 70 }} /> {/* spacer for layout balance */}
+            : "No announcements"}
+
+          <Box sx={{ width: 70 }} /> {/* Spacer */}
         </DialogTitle>
 
-        <DialogContent>
+        <DialogContent
+          sx={{
+            bgcolor: theme.palette.background.paper,
+            color: theme.palette.text.primary,
+          }}
+        >
           {loading ? (
             <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-              <CircularProgress />
+              <CircularProgress color="inherit" />
             </Box>
           ) : announcements.length > 0 ? (
             <Box sx={{ py: 2 }}>
@@ -232,20 +339,29 @@ const AnnouncementDialog = ({ open, onClose }) => {
           )}
         </DialogContent>
 
-        <DialogActions sx={{ justifyContent: "space-between", px: 3, pb: 2 }}>
+        <DialogActions
+          sx={{
+            bgcolor: theme.palette.background.default,
+            borderTop: `1px solid ${theme.palette.divider}`,
+          }}
+        >
           <Box>
             <Button
-            onClick={handlePrev}
-            disabled={currentIndex === 0 || loading || announcements.length === 0}
-            variant="outlined"
-            sx={{ mr: 2 }}
-          >
-            Previous
-          </Button>
-          <Button
+              onClick={handlePrev}
+              disabled={
+                currentIndex === 0 || loading || announcements.length === 0
+              }
+              variant="outlined"
+              sx={{ mr: 2 }}
+            >
+              Previous
+            </Button>
+            <Button
               onClick={handleNext}
               disabled={
-                loading || currentIndex === announcements.length - 1 || announcements.length === 0
+                loading ||
+                currentIndex === announcements.length - 1 ||
+                announcements.length === 0
               }
               variant="contained"
             >
@@ -260,7 +376,7 @@ const AnnouncementDialog = ({ open, onClose }) => {
         </DialogActions>
       </Dialog>
 
-      {/* Separate Management Dialog */}
+      {/* Manage Dialog */}
       <ManageAnnouncementsDialog
         open={manageOpen}
         onClose={() => setManageOpen(false)}
