@@ -47,6 +47,7 @@ class PacInputData(BaseModel):
     crew_labor_percent: Decimal = Field(description="Crew labor percentage")
     total_labor_percent: Decimal = Field(description="Total labor percentage")
     payroll_tax_rate: Decimal = Field(description="Payroll tax rate percentage")
+    additional_labor_dollars: Decimal = Field(default=Decimal('0'), description="Additional labor dollars amount")
 
     # Waste / Operations Data
     complete_waste_percent: Decimal = Field(description="Complete waste percentage")
@@ -89,6 +90,7 @@ class ControllableExpenses(BaseModel):
     crew_labor: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
     management_labor: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
     payroll_tax: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
+    additional_labor_dollars: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
     travel: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
     advertising: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
     advertising_other: ExpenseLine = Field(default_factory=lambda: ExpenseLine(dollars=Decimal('0'), percent=Decimal('0')))
