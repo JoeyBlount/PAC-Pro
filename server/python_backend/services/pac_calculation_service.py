@@ -241,6 +241,14 @@ class PacCalculationService:
             percent=payroll_tax_percent
         )
         
+        # Additional Labor Dollars (does NOT affect payroll tax calculation)
+        additional_labor_dollars = input_data.additional_labor_dollars
+        additional_labor_percent = (additional_labor_dollars / S) * 100 if S > 0 else Decimal('0')
+        expenses.additional_labor_dollars = ExpenseLine(
+            dollars=additional_labor_dollars,
+            percent=additional_labor_percent
+        )
+        
         # Travel
         travel_dollars = input_data.purchases.travel
         expenses.travel = ExpenseLine(
@@ -367,6 +375,7 @@ class PacCalculationService:
             expenses.crew_labor.dollars +
             expenses.management_labor.dollars +
             expenses.payroll_tax.dollars +
+            expenses.additional_labor_dollars.dollars +
             expenses.travel.dollars +
             expenses.advertising.dollars +
             expenses.advertising_other.dollars +

@@ -586,6 +586,18 @@ const PacTab = ({
               "default"
             )}</td>
           </tr>
+          <tr>
+            <td style="padding-left: 20px;">Additional Labor Dollars</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.additionalLaborDollars?.dollars || 0
+            )}</td>
+            <td>${formatPercentage(
+              actualData.controllableExpenses.additionalLaborDollars?.percent || 0
+            )}</td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+          </tr>
           
           <!-- Labor Total -->
           <tr class="print-section-header print-labor-total">
@@ -594,13 +606,15 @@ const PacTab = ({
               (actualData.controllableExpenses.crewLabor?.dollars || 0) +
                 (actualData.controllableExpenses.managementLabor?.dollars ||
                   0) +
-                (actualData.controllableExpenses.payrollTax?.dollars || 0)
+                (actualData.controllableExpenses.payrollTax?.dollars || 0) +
+                (actualData.controllableExpenses.additionalLaborDollars?.dollars || 0)
             )}</td>
             <td style="font-weight: bold; background-color: #e3f2fd;">${formatPercentage(
               (actualData.controllableExpenses.crewLabor?.percent || 0) +
                 (actualData.controllableExpenses.managementLabor?.percent ||
                   0) +
-                (actualData.controllableExpenses.payrollTax?.percent || 0)
+                (actualData.controllableExpenses.payrollTax?.percent || 0) +
+                (actualData.controllableExpenses.additionalLaborDollars?.percent || 0)
             )}</td>
             <td style="font-weight: bold; background-color: #e3f2fd;">${formatCurrency(
               getProjectedValueAsNumber("Crew Labor") +
@@ -1362,6 +1376,10 @@ const PacTab = ({
             dollars: parseFloat(data.controllable_expenses.payroll_tax.dollars),
             percent: parseFloat(data.controllable_expenses.payroll_tax.percent),
           },
+          additionalLaborDollars: {
+            dollars: parseFloat(data.controllable_expenses.additional_labor_dollars?.dollars || 0),
+            percent: parseFloat(data.controllable_expenses.additional_labor_dollars?.percent || 0),
+          },
           travel: {
             dollars: parseFloat(data.controllable_expenses.travel.dollars),
             percent: parseFloat(data.controllable_expenses.travel.percent),
@@ -1475,6 +1493,7 @@ const PacTab = ({
           crewLabor: { dollars: 0, percent: 0 },
           managementLabor: { dollars: 0, percent: 0 },
           payrollTax: { dollars: 0, percent: 0 },
+          additionalLaborDollars: { dollars: 0, percent: 0 },
           travel: { dollars: 0, percent: 0 },
           advertising: { dollars: 0, percent: 0 },
           advertisingOther: { dollars: 0, percent: 0 },
@@ -1542,6 +1561,7 @@ const PacTab = ({
           crewLabor: lb.crewLabor || def,
           managementLabor: lb.managementLabor || def,
           payrollTax: lb.payrollTax || def,
+          additionalLaborDollars: lb.additionalLaborDollars || def,
           travel: pu.travel || def,
           advOther: pu.advOther || def,
           promotion: pu.promotion || def,
@@ -1579,6 +1599,7 @@ const PacTab = ({
           crewLabor: toObj(ce.crewLabor),
           managementLabor: toObj(ce.managementLabor),
           payrollTax: toObj(ce.payrollTax),
+          additionalLaborDollars: toObj(ce.additionalLaborDollars),
           travel: toObj(ce.travel),
           advOther: toObj(ce.advOther),
           promotion: toObj(ce.promotion),
@@ -2102,6 +2123,19 @@ const PacTab = ({
         "Difference $":
           (pacData?.controllableExpenses?.payrollTax?.dollars ?? 0) -
           getProjectedValueAsNumber("Payroll Tax"),
+      },
+      {
+        Account: "Additional Labor Dollars",
+        "Actual $": pacData?.controllableExpenses?.additionalLaborDollars?.dollars ?? 0,
+        "Actual %":
+          pacData?.controllableExpenses?.additionalLaborDollars?.percent !== undefined
+            ? formatPercentage(
+                actualData.controllableExpenses.additionalLaborDollars?.percent || 0
+              )
+            : "-",
+        "Projected $": 0,
+        "Projected %": "-",
+        "Difference $": pacData?.controllableExpenses?.additionalLaborDollars?.dollars ?? 0,
       },
 
       // --- Other Expenses ---
@@ -2823,6 +2857,22 @@ const PacTab = ({
                 )}
               </TableCell>
             </TableRow>
+            <TableRow>
+              <TableCell sx={{ pl: 4 }}>Additional Labor Dollars</TableCell>
+              <TableCell align="right">
+                {formatCurrency(
+                  actualData.controllableExpenses.additionalLaborDollars?.dollars || 0
+                )}
+              </TableCell>
+              <TableCell align="right">
+                {formatPercentage(
+                  actualData.controllableExpenses.additionalLaborDollars?.percent || 0
+                )}
+              </TableCell>
+              <TableCell align="right">-</TableCell>
+              <TableCell align="right">-</TableCell>
+              <TableCell align="right">-</TableCell>
+            </TableRow>
 
             {/* Labor Total */}
             <TableRow sx={{ backgroundColor: "#fff3e0" }}>
@@ -2834,7 +2884,8 @@ const PacTab = ({
                   (actualData.controllableExpenses.crewLabor?.dollars || 0) +
                     (actualData.controllableExpenses.managementLabor?.dollars ||
                       0) +
-                    (actualData.controllableExpenses.payrollTax?.dollars || 0)
+                    (actualData.controllableExpenses.payrollTax?.dollars || 0) +
+                    (actualData.controllableExpenses.additionalLaborDollars?.dollars || 0)
                 )}
               </TableCell>
               <TableCell align="right" sx={{ fontWeight: "bold" }}>
@@ -2842,7 +2893,8 @@ const PacTab = ({
                   (actualData.controllableExpenses.crewLabor?.percent || 0) +
                     (actualData.controllableExpenses.managementLabor?.percent ||
                       0) +
-                    (actualData.controllableExpenses.payrollTax?.percent || 0)
+                    (actualData.controllableExpenses.payrollTax?.percent || 0) +
+                    (actualData.controllableExpenses.additionalLaborDollars?.percent || 0)
                 )}
               </TableCell>
               <TableCell align="right" sx={{ fontWeight: "bold" }}>
