@@ -284,6 +284,7 @@ const PAC = () => {
   const [allNetSales, setAllNetSales] = useState(0);
   const [managerMeal, setManagerMeal] = useState(0);
   const [advertising, setAdvertising] = useState(0);
+  const [duesAndSubscriptions, setDuesAndSubscriptions] = useState(0);
 
   const [crewLabor, setCrewLabor] = useState(0);
   const [totalLabor, setTotalLabor] = useState(0);
@@ -573,6 +574,9 @@ const PAC = () => {
           setAllNetSales(existingData.sales?.allNetSales || 0);
           setManagerMeal(existingData.sales?.managerMeal || 0);
           setAdvertising(existingData.sales?.advertising || 0);
+          setDuesAndSubscriptions(
+            existingData.sales?.duesAndSubscriptions || 0
+          );
 
           // Labor section
           setCrewLabor(existingData.labor?.crewLabor || 0);
@@ -640,6 +644,7 @@ const PAC = () => {
     setAllNetSales(0);
     setManagerMeal(0);
     setAdvertising(0);
+    setDuesAndSubscriptions(0);
 
     // Labor section
     setCrewLabor(0);
@@ -963,6 +968,7 @@ const PAC = () => {
       Number(promo) ||
       Number(allNetSales) ||
       Number(advertising) ||
+      Number(duesAndSubscriptions) ||
       Number(crewLabor) ||
       Number(totalLabor) ||
       Number(payrollTax) ||
@@ -1021,6 +1027,7 @@ const PAC = () => {
       addIfNonZero("allNetSales", allNetSales);
       addIfNonZero("managerMeal", managerMeal);
       addIfNonZero("advertising", advertising);
+      addIfNonZero("duesAndSubscriptions", duesAndSubscriptions);
       addIfNonZero("crewLabor", crewLabor);
       addIfNonZero("totalLabor", totalLabor);
       addIfNonZero("payrollTax", payrollTax);
@@ -1105,10 +1112,20 @@ const PAC = () => {
   const pacEqual = Math.abs(goalNumeric - projectedPacPercent) <= 0.01;
 
   const pacBelow = hasGoal && projectedPacPercent < goalNumeric - 1e-9;
+  const pacAbove = hasGoal && projectedPacPercent > goalNumeric + 1e-9;
   const pacMismatch = hasGoal && !pacEqual; // includes below OR above
 
   // ----- Projection helpers for rendering -----
   const getRow = (name) => projections.find((r) => r.name === name) || {};
+
+  // Calculate dollar amount needed to meet goal
+  const productSalesDollarForGoal =
+    Number(getRow("Product Sales").projectedDollar) || 0;
+  const currentPacDollar = Number(getRow("P.A.C.").projectedDollar) || 0;
+  const goalPacDollar = hasGoal
+    ? (productSalesDollarForGoal * goalNumeric) / 100
+    : 0;
+  const dollarAmountNeeded = Math.abs(goalPacDollar - currentPacDollar);
 
   // Helper function to get PAC actual values for a given expense name
   const getPacActualValue = (expenseName) => {
@@ -2024,8 +2041,12 @@ const PAC = () => {
                 }}
               >
                 {pacBelow
-                  ? "PAC Projections are below the goal, please update to submit."
-                  : "PAC Projections entered do not match goal, please update to submit."}
+                  ? `PAC Projections are below goal. Remove ${fmtUsd(
+                      dollarAmountNeeded
+                    )} dollars to meet goal.`
+                  : `PAC Projections are above goal. ${fmtUsd(
+                      dollarAmountNeeded
+                    )} over goal.`}
                 <Box component="span" sx={{ ml: 1, opacity: 0.8 }}>
                   Current: {fmtPercent(projectedPacPercent)} • Goal:{" "}
                   {fmtPercent(goalNumeric)}
@@ -2100,6 +2121,17 @@ const PAC = () => {
                   type="number"
                   value={advertising}
                   onChange={(e) => setAdvertising(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">
+                  Dues and Subscriptions ($)
+                </label>
+                <input
+                  type="number"
+                  value={duesAndSubscriptions}
+                  onChange={(e) => setDuesAndSubscriptions(e.target.value)}
                   disabled={inputsDisabled}
                 />
               </div>

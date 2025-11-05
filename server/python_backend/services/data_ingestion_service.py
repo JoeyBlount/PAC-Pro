@@ -135,22 +135,27 @@ class DataIngestionService:
         """
         data = await self._get_pac_data_from_firebase(entity_id, year_month)
         
-        # Also read from generate_input for additional labor dollars
+        # Also read from generate_input for additional labor dollars and dues and subscriptions
         try:
             doc_id = f"{entity_id}_{year_month}"
             generate_input_doc = self.db.collection('generate_input').document(doc_id).get()
             if generate_input_doc.exists:
                 generate_input_data = generate_input_doc.to_dict() or {}
                 labor_data = generate_input_data.get('labor', {})
+                sales_data = generate_input_data.get('sales', {})
                 # Always read additionalLaborDollars (default to 0 if not present)
                 data['additional_labor_dollars'] = float(labor_data.get('additionalLaborDollars', 0))
+                # Always read duesAndSubscriptions (default to 0 if not present)
+                data['dues_and_subscriptions'] = float(sales_data.get('duesAndSubscriptions', 0))
             else:
                 # No generate_input document exists, default to 0
                 data['additional_labor_dollars'] = 0.0
+                data['dues_and_subscriptions'] = 0.0
         except Exception as e:
-            # Non-fatal; proceed without additional labor dollars
-            print(f"Warning: Could not read additional labor dollars: {e}")
+            # Non-fatal; proceed without additional labor dollars and dues and subscriptions
+            print(f"Warning: Could not read additional labor dollars or dues and subscriptions: {e}")
             data['additional_labor_dollars'] = 0.0
+            data['dues_and_subscriptions'] = 0.0
 
         # --- Backward compatible derivation ---
         # Older documents may only contain `rows` without a structured `purchases` map.
@@ -246,6 +251,7 @@ class DataIngestionService:
             total_labor_percent=Decimal(str(data.get('total_labor_percent', 0))),
             payroll_tax_rate=Decimal(str(data.get('payroll_tax_rate', 0))),
             additional_labor_dollars=Decimal(str(data.get('additional_labor_dollars', 0))),
+            dues_and_subscriptions=Decimal(str(data.get('dues_and_subscriptions', 0))),
             complete_waste_percent=Decimal(str(data.get('complete_waste_percent', 0))),
             raw_waste_percent=Decimal(str(data.get('raw_waste_percent', 0))),
             condiment_percent=Decimal(str(data.get('condiment_percent', 0))),
