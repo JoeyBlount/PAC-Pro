@@ -37,8 +37,6 @@ import {
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 
-
-
 const expenseList = [
   "Product Sales",
   "All Net Sales",
@@ -271,7 +269,7 @@ const PAC = () => {
       // persist previous month rows into current draft so inputs reflect immediately
       try {
         localStorage.setItem(draftKey, JSON.stringify(data.rows));
-      } catch { }
+      } catch {}
       // Do NOT change PAC Goal when resetting to previous month
     } catch (e) {
       console.error("reset to previous month error", e);
@@ -286,10 +284,12 @@ const PAC = () => {
   const [allNetSales, setAllNetSales] = useState(0);
   const [managerMeal, setManagerMeal] = useState(0);
   const [advertising, setAdvertising] = useState(0);
+  const [duesAndSubscriptions, setDuesAndSubscriptions] = useState(0);
 
   const [crewLabor, setCrewLabor] = useState(0);
   const [totalLabor, setTotalLabor] = useState(0);
   const [payrollTax, setPayrollTax] = useState(0);
+  const [additionalLaborDollars, setAdditionalLaborDollars] = useState(0);
 
   const [completeWaste, setCompleteWaste] = useState(0);
   const [rawWaste, setRawWaste] = useState(0);
@@ -323,8 +323,9 @@ const PAC = () => {
         const userDoc = await getDoc(userRef);
         if (userDoc.exists()) {
           const userData = userDoc.data();
-          return `${userData.firstName || ""} ${userData.lastName || ""
-            }`.trim();
+          return `${userData.firstName || ""} ${
+            userData.lastName || ""
+          }`.trim();
         }
       }
       return auth.currentUser?.displayName || "Unknown User";
@@ -408,7 +409,7 @@ const PAC = () => {
         } else {
           setLastUpdatedTimestamp(null);
         }
-      } catch { }
+      } catch {}
     } catch (error) {
       console.error("Error fetching month lock status:", error);
     }
@@ -475,7 +476,6 @@ const PAC = () => {
             },
           }),
         });
-
       } else {
         alert(result.message);
       }
@@ -549,63 +549,131 @@ const PAC = () => {
         if (m) return `store_${String(parseInt(m[1], 10)).padStart(3, "0")}`;
         return String(val).toLowerCase();
       };
-      const existingData = await getGenerateInput(
-        norm(selectedStore),
-        year,
-        month
-      );
 
-      if (existingData) {
-        console.log(
-          "Autofilling Generate tab with existing data:",
-          existingData
+      const isLocked = isMonthLocked();
+
+      // If month is locked, load previously submitted data
+      // If month is unlocked, set all fields to 0
+      if (isLocked) {
+        const existingData = await getGenerateInput(
+          norm(selectedStore),
+          year,
+          month
         );
 
-        // Sales section
-        setProductNetSales(existingData.sales?.productNetSales || 0);
-        setCash(existingData.sales?.cash || 0);
-        setPromo(existingData.sales?.promo || 0);
-        setAllNetSales(existingData.sales?.allNetSales || 0);
-        setManagerMeal(existingData.sales?.managerMeal || 0);
-        setAdvertising(existingData.sales?.advertising || 0);
+        if (existingData) {
+          console.log(
+            "Month is locked - loading previously submitted data:",
+            existingData
+          );
 
-        // Labor section
-        setCrewLabor(existingData.labor?.crewLabor || 0);
-        setTotalLabor(existingData.labor?.totalLabor || 0);
-        setPayrollTax(existingData.labor?.payrollTax || 0);
+          // Sales section
+          setProductNetSales(existingData.sales?.productNetSales || 0);
+          setCash(existingData.sales?.cash || 0);
+          setPromo(existingData.sales?.promo || 0);
+          setAllNetSales(existingData.sales?.allNetSales || 0);
+          setManagerMeal(existingData.sales?.managerMeal || 0);
+          setAdvertising(existingData.sales?.advertising || 0);
+          setDuesAndSubscriptions(
+            existingData.sales?.duesAndSubscriptions || 0
+          );
 
-        // Food section
-        setCompleteWaste(existingData.food?.completeWaste || 0);
-        setRawWaste(existingData.food?.rawWaste || 0);
-        setCondiment(existingData.food?.condiment || 0);
-        setVariance(existingData.food?.variance || 0);
-        setUnexplained(existingData.food?.unexplained || 0);
-        setDiscounts(existingData.food?.discounts || 0);
-        setBaseFood(existingData.food?.baseFood || 0);
+          // Labor section
+          setCrewLabor(existingData.labor?.crewLabor || 0);
+          setTotalLabor(existingData.labor?.totalLabor || 0);
+          setPayrollTax(existingData.labor?.payrollTax || 0);
+          setAdditionalLaborDollars(
+            existingData.labor?.additionalLaborDollars || 0
+          );
 
-        // Inventory - Starting
-        setStartingFood(existingData.inventoryStarting?.food || 0);
-        setStartingCondiment(existingData.inventoryStarting?.condiment || 0);
-        setStartingPaper(existingData.inventoryStarting?.paper || 0);
-        setStartingNonProduct(existingData.inventoryStarting?.nonProduct || 0);
-        setStartingOpsSupplies(
-          existingData.inventoryStarting?.opsSupplies || 0
-        );
+          // Food section
+          setCompleteWaste(existingData.food?.completeWaste || 0);
+          setRawWaste(existingData.food?.rawWaste || 0);
+          setCondiment(existingData.food?.condiment || 0);
+          setVariance(existingData.food?.variance || 0);
+          setUnexplained(existingData.food?.unexplained || 0);
+          setDiscounts(existingData.food?.discounts || 0);
+          setBaseFood(existingData.food?.baseFood || 0);
 
-        // Inventory - Ending
-        setEndingFood(existingData.inventoryEnding?.food || 0);
-        setEndingCondiment(existingData.inventoryEnding?.condiment || 0);
-        setEndingPaper(existingData.inventoryEnding?.paper || 0);
-        setEndingNonProduct(existingData.inventoryEnding?.nonProduct || 0);
-        setEndingOpsSupplies(existingData.inventoryEnding?.opsSupplies || 0);
+          // Inventory - Starting
+          setStartingFood(existingData.inventoryStarting?.food || 0);
+          setStartingCondiment(existingData.inventoryStarting?.condiment || 0);
+          setStartingPaper(existingData.inventoryStarting?.paper || 0);
+          setStartingNonProduct(
+            existingData.inventoryStarting?.nonProduct || 0
+          );
+          setStartingOpsSupplies(
+            existingData.inventoryStarting?.opsSupplies || 0
+          );
 
-        console.log("Generate tab autofilled successfully");
+          // Inventory - Ending
+          setEndingFood(existingData.inventoryEnding?.food || 0);
+          setEndingCondiment(existingData.inventoryEnding?.condiment || 0);
+          setEndingPaper(existingData.inventoryEnding?.paper || 0);
+          setEndingNonProduct(existingData.inventoryEnding?.nonProduct || 0);
+          setEndingOpsSupplies(existingData.inventoryEnding?.opsSupplies || 0);
+
+          console.log("Generate tab autofilled with locked month data");
+        } else {
+          // Locked but no data - set to 0
+          console.log(
+            "Month is locked but no existing data found - setting to 0"
+          );
+          resetGenerateFields();
+        }
       } else {
-        console.log("No existing generate data found for autofill");
+        // Month is unlocked - set all fields to 0
+        console.log("Month is unlocked - resetting all fields to 0");
+        resetGenerateFields();
       }
     } catch (error) {
       console.error("Error loading existing generate data:", error);
+      // On error, reset to 0 if unlocked
+      if (!isMonthLocked()) {
+        resetGenerateFields();
+      }
     }
+  };
+
+  // Helper function to reset all generate fields to 0
+  const resetGenerateFields = () => {
+    // Sales section
+    setProductNetSales(0);
+    setCash(0);
+    setPromo(0);
+    setAllNetSales(0);
+    setManagerMeal(0);
+    setAdvertising(0);
+    setDuesAndSubscriptions(0);
+
+    // Labor section
+    setCrewLabor(0);
+    setTotalLabor(0);
+    setPayrollTax(0);
+    setAdditionalLaborDollars(0);
+
+    // Food section
+    setCompleteWaste(0);
+    setRawWaste(0);
+    setCondiment(0);
+    setVariance(0);
+    setUnexplained(0);
+    setDiscounts(0);
+    setBaseFood(0);
+
+    // Inventory - Starting
+    setStartingFood(0);
+    setStartingCondiment(0);
+    setStartingPaper(0);
+    setStartingNonProduct(0);
+    setStartingOpsSupplies(0);
+
+    // Inventory - Ending
+    setEndingFood(0);
+    setEndingCondiment(0);
+    setEndingPaper(0);
+    setEndingNonProduct(0);
+    setEndingOpsSupplies(0);
   };
 
   // Fetch month lock status when month, year, or store changes
@@ -614,12 +682,12 @@ const PAC = () => {
     fetchLockedMonths();
   }, [month, year, selectedStore]);
 
-  // Load existing generate data when switching to Generate tab
+  // Load existing generate data when switching to Generate tab or lock status changes
   useEffect(() => {
     if (tabIndex === 1) {
       loadExistingGenerateData();
     }
-  }, [tabIndex, selectedStore, month, year]);
+  }, [tabIndex, selectedStore, month, year, monthLockStatus]);
 
   // Fetch PAC actual data when actualMonth/actualYear/store changes
   useEffect(() => {
@@ -892,34 +960,39 @@ const PAC = () => {
       return;
     }
 
-    if (
-      !productNetSales ||
-      !cash ||
-      !promo ||
-      !allNetSales ||
-      !advertising ||
-      !crewLabor ||
-      !totalLabor ||
-      !payrollTax ||
-      !completeWaste ||
-      !rawWaste ||
-      !condiment ||
-      !variance ||
-      !unexplained ||
-      !discounts ||
-      !baseFood ||
-      !startingFood ||
-      !startingCondiment ||
-      !startingPaper ||
-      !startingNonProduct ||
-      !startingOpsSupplies ||
-      !endingFood ||
-      !endingCondiment ||
-      !endingPaper ||
-      !endingNonProduct ||
-      !endingOpsSupplies
-    ) {
-      alert("You must fill out all fields before submitting.");
+    // Allow partial submissions - convert empty strings/undefined to 0
+    // At least one field should have a value (not all zero)
+    const hasAnyValue =
+      Number(productNetSales) ||
+      Number(cash) ||
+      Number(promo) ||
+      Number(allNetSales) ||
+      Number(advertising) ||
+      Number(duesAndSubscriptions) ||
+      Number(crewLabor) ||
+      Number(totalLabor) ||
+      Number(payrollTax) ||
+      Number(additionalLaborDollars) ||
+      Number(completeWaste) ||
+      Number(rawWaste) ||
+      Number(condiment) ||
+      Number(variance) ||
+      Number(unexplained) ||
+      Number(discounts) ||
+      Number(baseFood) ||
+      Number(startingFood) ||
+      Number(startingCondiment) ||
+      Number(startingPaper) ||
+      Number(startingNonProduct) ||
+      Number(startingOpsSupplies) ||
+      Number(endingFood) ||
+      Number(endingCondiment) ||
+      Number(endingPaper) ||
+      Number(endingNonProduct) ||
+      Number(endingOpsSupplies);
+
+    if (!hasAnyValue) {
+      alert("Please enter at least one field before submitting.");
       return;
     }
 
@@ -932,39 +1005,56 @@ const PAC = () => {
       // Get user's full name
       const submittedBy = await getUserFullName();
 
-      // Save generate input data
+      // Save generate input data - only include non-zero fields to preserve existing values
+      // This ensures that empty/zero fields don't overwrite previously submitted data
+      const inputData = {};
+
+      // Helper to only add non-zero values (preserves existing values for 0/empty fields)
+      const addIfNonZero = (key, value) => {
+        // Check if value is provided and non-zero
+        if (value !== undefined && value !== null && value !== "") {
+          const numValue = Number(value);
+          // Only include if it's a valid number and non-zero
+          if (!isNaN(numValue) && numValue !== 0) {
+            inputData[key] = numValue;
+          }
+        }
+      };
+
+      addIfNonZero("productNetSales", productNetSales);
+      addIfNonZero("cash", cash);
+      addIfNonZero("promo", promo);
+      addIfNonZero("allNetSales", allNetSales);
+      addIfNonZero("managerMeal", managerMeal);
+      addIfNonZero("advertising", advertising);
+      addIfNonZero("duesAndSubscriptions", duesAndSubscriptions);
+      addIfNonZero("crewLabor", crewLabor);
+      addIfNonZero("totalLabor", totalLabor);
+      addIfNonZero("payrollTax", payrollTax);
+      addIfNonZero("additionalLaborDollars", additionalLaborDollars);
+      addIfNonZero("completeWaste", completeWaste);
+      addIfNonZero("rawWaste", rawWaste);
+      addIfNonZero("condiment", condiment);
+      addIfNonZero("variance", variance);
+      addIfNonZero("unexplained", unexplained);
+      addIfNonZero("discounts", discounts);
+      addIfNonZero("baseFood", baseFood);
+      addIfNonZero("startingFood", startingFood);
+      addIfNonZero("startingCondiment", startingCondiment);
+      addIfNonZero("startingPaper", startingPaper);
+      addIfNonZero("startingNonProduct", startingNonProduct);
+      addIfNonZero("startingOpsSupplies", startingOpsSupplies);
+      addIfNonZero("endingFood", endingFood);
+      addIfNonZero("endingCondiment", endingCondiment);
+      addIfNonZero("endingPaper", endingPaper);
+      addIfNonZero("endingNonProduct", endingNonProduct);
+      addIfNonZero("endingOpsSupplies", endingOpsSupplies);
+
       await saveGenerateInput(
         selectedStore,
         year,
         month,
-        {
-          productNetSales,
-          cash,
-          promo,
-          allNetSales,
-          managerMeal,
-          advertising,
-          crewLabor,
-          totalLabor,
-          payrollTax,
-          completeWaste,
-          rawWaste,
-          condiment,
-          variance,
-          unexplained,
-          discounts,
-          baseFood,
-          startingFood,
-          startingCondiment,
-          startingPaper,
-          startingNonProduct,
-          startingOpsSupplies,
-          endingFood,
-          endingCondiment,
-          endingPaper,
-          endingNonProduct,
-          endingOpsSupplies,
-        },
+        inputData,
         submittedBy
       );
 
@@ -1022,10 +1112,20 @@ const PAC = () => {
   const pacEqual = Math.abs(goalNumeric - projectedPacPercent) <= 0.01;
 
   const pacBelow = hasGoal && projectedPacPercent < goalNumeric - 1e-9;
+  const pacAbove = hasGoal && projectedPacPercent > goalNumeric + 1e-9;
   const pacMismatch = hasGoal && !pacEqual; // includes below OR above
 
   // ----- Projection helpers for rendering -----
   const getRow = (name) => projections.find((r) => r.name === name) || {};
+
+  // Calculate dollar amount needed to meet goal
+  const productSalesDollarForGoal =
+    Number(getRow("Product Sales").projectedDollar) || 0;
+  const currentPacDollar = Number(getRow("P.A.C.").projectedDollar) || 0;
+  const goalPacDollar = hasGoal
+    ? (productSalesDollarForGoal * goalNumeric) / 100
+    : 0;
+  const dollarAmountNeeded = Math.abs(goalPacDollar - currentPacDollar);
 
   // Helper function to get PAC actual values for a given expense name
   const getPacActualValue = (expenseName) => {
@@ -1528,7 +1628,7 @@ const PAC = () => {
 
                         <TableCell align="center">
                           {hasUserInputAmountField.includes(expense.name) &&
-                            !isPac ? (
+                          !isPac ? (
                             <TextField
                               type="number"
                               size="small"
@@ -1941,8 +2041,12 @@ const PAC = () => {
                 }}
               >
                 {pacBelow
-                  ? "PAC Projections are below the goal, please update to submit."
-                  : "PAC Projections entered do not match goal, please update to submit."}
+                  ? `PAC Projections are below goal. Remove ${fmtUsd(
+                      dollarAmountNeeded
+                    )} dollars to meet goal.`
+                  : `PAC Projections are above goal. ${fmtUsd(
+                      dollarAmountNeeded
+                    )} over goal.`}
                 <Box component="span" sx={{ ml: 1, opacity: 0.8 }}>
                   Current: {fmtPercent(projectedPacPercent)} • Goal:{" "}
                   {fmtPercent(goalNumeric)}
@@ -2020,6 +2124,17 @@ const PAC = () => {
                   disabled={inputsDisabled}
                 />
               </div>
+              <div className="input-row">
+                <label className="input-label">
+                  Dues and Subscriptions ($)
+                </label>
+                <input
+                  type="number"
+                  value={duesAndSubscriptions}
+                  onChange={(e) => setDuesAndSubscriptions(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
             </div>
 
             {/* Labor */}
@@ -2049,6 +2164,17 @@ const PAC = () => {
                   type="number"
                   value={payrollTax}
                   onChange={(e) => setPayrollTax(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">
+                  Additional Labor Dollars ($)
+                </label>
+                <input
+                  type="number"
+                  value={additionalLaborDollars}
+                  onChange={(e) => setAdditionalLaborDollars(e.target.value)}
                   disabled={inputsDisabled}
                 />
               </div>
@@ -2292,8 +2418,9 @@ const PAC = () => {
               {isMonthLocked() && (
                 <Chip
                   icon={<LockIcon />}
-                  label={`Month Locked by ${monthLockStatus?.locked_by || "Unknown"
-                    }`}
+                  label={`Month Locked by ${
+                    monthLockStatus?.locked_by || "Unknown"
+                  }`}
                   color="warning"
                   variant="outlined"
                 />

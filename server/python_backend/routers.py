@@ -837,6 +837,7 @@ async def get_pac_projections(
                     "crew_labor": as_expense("Crew Labor"),
                     "management_labor": as_expense("Management Labor"),
                     "payroll_tax": as_expense("Payroll Tax"),
+                    "additional_labor_dollars": {"dollars": 0.0, "percent": 0.0},  # Will be populated from generate_input
                     "travel": as_expense("Travel"),
                     "advertising": as_expense("Advertising"),
                     "advertising_other": as_expense("Adv Other", "Advertising Other"),
@@ -876,6 +877,7 @@ async def get_pac_projections(
                     crew_labor_percent=Decimal(str(d.get("crew_labor_percent", 0))),
                     total_labor_percent=Decimal(str(d.get("total_labor_percent", 0))),
                     payroll_tax_rate=Decimal(str(d.get("payroll_tax_rate", 0))),
+                    additional_labor_dollars=Decimal(str(d.get("additional_labor_dollars", 0))),
                     complete_waste_percent=Decimal(str(d.get("complete_waste_percent", 0))),
                     raw_waste_percent=Decimal(str(d.get("raw_waste_percent", 0))),
                     condiment_percent=Decimal(str(d.get("condiment_percent", 0))),
