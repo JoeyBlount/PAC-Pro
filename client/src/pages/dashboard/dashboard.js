@@ -6,8 +6,7 @@ import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, BarElement,
 import EventIcon from '@mui/icons-material/Event';
 import { useNavigate } from 'react-router-dom';
 import './dashboard.css';
-import { auth, db } from "../../config/firebase-config";
-import { collection, query, orderBy, getDocs, where } from "firebase/firestore";
+import { auth } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext"; // Save for future
 import { useAuth } from "../../context/AuthContext";
 
@@ -574,36 +573,27 @@ const formatDate = (dateString) => {
 const DeadlinesWidget = () => {
   const [deadlines, setDeadlines] = useState([]);
   const [loadingDeadlines, setLoadingDeadlines] = useState(true);
+  const { currentUser } = useAuth();
 
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchDeadlines = async () => {
       try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayStr = today.toISOString().split('T')[0];
-
-        const deadlinesQuery = query(
-          collection(db, 'deadlines'),
-          where('dueDate', '>=', todayStr),
-          orderBy('dueDate', 'asc')
-        );
-        const snapshot = await getDocs(deadlinesQuery);
-        const deadlinesList = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
-        // Only show upcoming deadlines (next 30 days)
-        const thirtyDaysFromNow = new Date();
-        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-        const filtered = deadlinesList.filter(d => {
-          const dueDate = new Date(d.dueDate);
-          return dueDate <= thirtyDaysFromNow;
+        const token = currentUser ? await currentUser.getIdToken() : null;
+        const response = await fetch('http://localhost:5140/api/pac/deadlines/upcoming?days_ahead=30&limit=5', {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : { Authorization: 'Bearer dev' })
+          }
         });
-        
-        setDeadlines(filtered.slice(0, 5)); // Show max 5 deadlines
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        setDeadlines(data);
       } catch (error) {
         console.error('Error fetching deadlines:', error);
       } finally {
@@ -612,7 +602,7 @@ const DeadlinesWidget = () => {
     };
 
     fetchDeadlines();
-  }, []);
+  }, [currentUser]);
 
   if (loadingDeadlines) {
     return <Skeleton variant="rectangular" animation="wave" height={'100%'} />;

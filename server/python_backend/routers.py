@@ -21,6 +21,7 @@ from services.invoice_submit import InvoiceSubmitService
 from services.user_management_service import UserManagementService
 from services.navBar_service import NavBarService
 from services.invoice_settings_service import InvoiceSettingsService
+from services.deadlines_service import DeadlinesService
 import logging
 
 from pydantic import BaseModel
@@ -180,6 +181,13 @@ def get_invoice_settings_service() -> InvoiceSettingsService:
     Get the invoice settings service instance.
     """
     return InvoiceSettingsService()
+
+
+def get_deadlines_service() -> DeadlinesService:
+    """
+    Get the deadlines service instance.
+    """
+    return DeadlinesService()
 
 
 # ---- Invoice Settings Routes ----
@@ -1529,3 +1537,130 @@ async def delete_announcement(announcement_id: str):
         raise HTTPException(status_code=404, detail="Announcement not found")
     doc_ref.delete()
     return {"status": "deleted"}
+
+
+# ---- Deadline Models ----
+class DeadlineIn(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    dueDate: str
+    type: str = "pac"  # pac, invoice, report
+    recurring: bool = False
+    dayOfMonth: Optional[int] = None
+
+
+class DeadlineOut(BaseModel):
+    id: str
+    title: str
+    description: str
+    dueDate: str
+    type: str
+    recurring: bool
+    dayOfMonth: Optional[int] = None
+    createdAt: Optional[str] = None
+    updatedAt: Optional[str] = None
+
+
+# ---- Deadline Routes ----
+@router.get("/deadlines", response_model=List[DeadlineOut])
+async def get_all_deadlines(
+    svc: DeadlinesService = Depends(get_deadlines_service),
+    _auth: Dict[str, Any] = Depends(require_auth),
+) -> List[DeadlineOut]:
+    """
+    Get all deadlines ordered by due date.
+    """
+    if not svc.is_available():
+        raise HTTPException(status_code=503, detail="Deadlines service not available - Firebase not initialized")
+    try:
+        deadlines = await svc.get_all_deadlines()
+        return [DeadlineOut(**d) for d in deadlines]
+    except Exception as e:
+        logger.error(f"Error fetching deadlines: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch deadlines: {str(e)}")
+
+
+@router.get("/deadlines/upcoming", response_model=List[DeadlineOut])
+async def get_upcoming_deadlines(
+    days_ahead: int = Query(30, ge=1, le=365, description="Number of days to look ahead"),
+    limit: int = Query(5, ge=1, le=50, description="Maximum number of deadlines to return"),
+    svc: DeadlinesService = Depends(get_deadlines_service),
+    _auth: Dict[str, Any] = Depends(require_auth),
+) -> List[DeadlineOut]:
+    """
+    Get upcoming deadlines within the next N days.
+    """
+    if not svc.is_available():
+        raise HTTPException(status_code=503, detail="Deadlines service not available - Firebase not initialized")
+    try:
+        deadlines = await svc.get_upcoming_deadlines(days_ahead=days_ahead, limit=limit)
+        return [DeadlineOut(**d) for d in deadlines]
+    except Exception as e:
+        logger.error(f"Error fetching upcoming deadlines: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch upcoming deadlines: {str(e)}")
+
+
+@router.post("/deadlines", response_model=DeadlineOut)
+async def create_deadline(
+    deadline: DeadlineIn,
+    svc: DeadlinesService = Depends(get_deadlines_service),
+    _auth: Dict[str, Any] = Depends(require_roles(["Admin"])),
+) -> DeadlineOut:
+    """
+    Create a new deadline. Admin only.
+    """
+    if not svc.is_available():
+        raise HTTPException(status_code=503, detail="Deadlines service not available - Firebase not initialized")
+    try:
+        deadline_data = deadline.dict()
+        result = await svc.create_deadline(deadline_data)
+        return DeadlineOut(**result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating deadline: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create deadline: {str(e)}")
+
+
+@router.put("/deadlines/{deadline_id}", response_model=DeadlineOut)
+async def update_deadline(
+    deadline_id: str,
+    deadline: DeadlineIn,
+    svc: DeadlinesService = Depends(get_deadlines_service),
+    _auth: Dict[str, Any] = Depends(require_roles(["Admin"])),
+) -> DeadlineOut:
+    """
+    Update an existing deadline. Admin only.
+    """
+    if not svc.is_available():
+        raise HTTPException(status_code=503, detail="Deadlines service not available - Firebase not initialized")
+    try:
+        deadline_data = deadline.dict()
+        result = await svc.update_deadline(deadline_id, deadline_data)
+        return DeadlineOut(**result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating deadline: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update deadline: {str(e)}")
+
+
+@router.delete("/deadlines/{deadline_id}")
+async def delete_deadline(
+    deadline_id: str,
+    svc: DeadlinesService = Depends(get_deadlines_service),
+    _auth: Dict[str, Any] = Depends(require_roles(["Admin"])),
+) -> Dict[str, Any]:
+    """
+    Delete a deadline. Admin only.
+    """
+    if not svc.is_available():
+        raise HTTPException(status_code=503, detail="Deadlines service not available - Firebase not initialized")
+    try:
+        await svc.delete_deadline(deadline_id)
+        return {"success": True, "message": "Deadline deleted successfully"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error deleting deadline: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete deadline: {str(e)}")
