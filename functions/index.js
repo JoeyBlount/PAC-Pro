@@ -305,3 +305,60 @@ exports.dailyNotificationDigest = onSchedule("0 7 * * *", async (event) => {
 
   return null;
 });
+
+exports.sendUserInvite = onRequest(async (req, res) => {
+  if (req.method !== "POST") {
+    return res.status(405).send("Method Not Allowed");
+  }
+
+  try {
+    const { email, firstName, role, invitedBy } = req.body || {};
+
+    if (!email || !role) {
+      return res.status(400).json({ success: false, error: "Missing required fields." });
+    }
+
+    const inviteToken = Math.random().toString(36).substring(2, 15);
+    const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+
+    // Create or update user document
+    await db.collection("users").doc(email).set(
+      {
+        email,
+        firstName,
+        role,
+        invitedBy: invitedBy || "system",
+        acceptState: false,
+        inviteToken,
+        inviteExpiresAt: expiresAt,
+        createdAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    const inviteLink = `https://pacpro.web.app/invite?email=${encodeURIComponent(email)}&token=${inviteToken}`;
+
+    // Configure email transport
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.GMAIL_EMAIL || "noreply.pacpro@gmail.com",
+        pass: process.env.GMAIL_PASS || "your_app_password_here",
+      },
+    });
+
+    const mailOptions = {
+      from: `"PAC-Pro" <${process.env.GMAIL_EMAIL || "noreply.pacpro@gmail.com"}>`,
+      to: email,
+      subject: "PAC-Pro Invitation",
+      text: `Hi ${firstName || ""},\n\nYou've been invited to join PAC-Pro as a ${role}.\nClick the link below to accept your invite:\n\n${inviteLink}\n\nThis link expires in 24 hours.\n\n— The PAC-Pro Team`,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    return res.json({ success: true, message: `Invite sent to ${email}` });
+  } catch (err) {
+    console.error("Invite send failed:", err);
+    return res.status(500).json({ success: false, error: err.message || err });
+  }
+});
