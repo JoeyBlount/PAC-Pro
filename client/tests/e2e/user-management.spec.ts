@@ -127,7 +127,6 @@ test.describe('User Management – add(Accountant) → promote(Admin) → delete
       await expect(cardByEmail(email)).toHaveCount(0, { timeout: 20_000 });
 
     } catch (err) {
-      // Helpful failure artifact like your deadline test
       const shotPath = path.join(testInfo.outputDir, 'user-mgmt-failure.png');
       await page.screenshot({ path: shotPath, fullPage: true });
       throw new Error(`UserManagement e2e failed. Screenshot: ${shotPath}\n${(err as Error).stack || err}`);
