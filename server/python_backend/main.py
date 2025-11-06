@@ -95,6 +95,13 @@ try:
 except Exception as e:
     print(f"Warning: Failed to include Microsoft auth router: {e}")
 
+# Auth (Google) router
+try:
+    from auth.gmail import router as google_router
+    app.include_router(google_router)  # /api/auth/...
+except Exception as e:
+    print(f"Warning: Failed to include Google auth router: {e}")
+
 # =======================================================================
 # Account page backend
 # =======================================================================
