@@ -11,15 +11,15 @@ const NotAllowed = () => {
   const getMessage = () => {
     switch (userRole) {
       case ROLES.GENERAL_MANAGER:
-        return "As a General Manager, you do not have access to settings.";
+        return "As a General Manager, you do not have access to settings. Please contact an Admin for assistance.";
       case ROLES.SUPERVISOR:
-        return "As a Supervisor, you do not have access to settings.";
+        return "As a Supervisor, you do not have access to settings. Please contact an Admin for assistance.";
       case ROLES.OFFICE_MANAGER:
-        return "As an Office Manager, you do not have access to settings.";
+        return "As an Office Manager, you do not have access to settings. Please contact an Admin for assistance.";
       case ROLES.ACCOUNTANT:
-        return "As an Accountant, you do not have access to settings.";
+        return "As an Accountant, you do not have access to settings. Please contact an Admin for assistance.";
       default:
-        return "You do not have permission to access this page.";
+        return "You do not have permission to access this page. Please contact an Admin for assistance.";
     }
   };
 
