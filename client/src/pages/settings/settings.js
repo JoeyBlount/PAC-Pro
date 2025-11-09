@@ -62,19 +62,6 @@ const Settings = () => {
       allowedRoles: [ROLES.ADMIN, ROLES.ACCOUNTANT],
       readOnlyRoles: [ROLES.ACCOUNTANT]
     },
-    {
-      title: 'Dark Mode',
-      description: 'Toggle Website Dark Mode On/Off',
-      icon: <DarkModeIcon sx={{ fontSize: 40 }} />,
-      action: (
-        <Switch
-          checked={mode === 'dark'}
-          onChange={toggleMode}
-          color="default"
-        />
-      ),
-      allowedRoles: [ROLES.ADMIN, ROLES.ACCOUNTANT, ROLES.GENERAL_MANAGER, ROLES.OFFICE_MANAGER, ROLES.SUPERVISOR],
-    }
   ];
 
   const handleClick = (item) => {
