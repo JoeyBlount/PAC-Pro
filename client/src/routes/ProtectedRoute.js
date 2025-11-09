@@ -29,7 +29,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     if (!allowedRoles.includes(userRole)) {
         // Show NotAllowed page for General Manager and Supervisor trying to access settings
         if (location.pathname.includes('/settings') && 
-            [ROLES.GENERAL_MANAGER, ROLES.SUPERVISOR].includes(userRole)) {
+            [ROLES.GENERAL_MANAGER, ROLES.SUPERVISOR,ROLES.OFFICE_MANAGER,ROLES.ACCOUNTANT].includes(userRole)) {
             return <NotAllowed />;
         }
         // For other roles, redirect to dashboard
@@ -47,20 +47,20 @@ export const AdminRoute = ({ children }) => (
 );
 
 export const AdminOrOmRoute = ({ children }) => (
-    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.OFFICE_MANAGER]}>{children}</ProtectedRoute>
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>{children}</ProtectedRoute>
 );
 
 export const SettingsViewRoute = ({ children }) => (
     // Admin and Accountant can view settings
-    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.ACCOUNTANT]}>{children}</ProtectedRoute>
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>{children}</ProtectedRoute>
 );
 
 export const StoreManagementRoute = ({ children }) => (
-    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.ACCOUNTANT]}>{children}</ProtectedRoute>
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>{children}</ProtectedRoute>
 );
 
 export const UserManagementRoute = ({ children }) => (
-    <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.ACCOUNTANT]}>{children}</ProtectedRoute>
+    <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>{children}</ProtectedRoute>
 );
 
 export const ViewOnlyRoute = ({ children }) => (
