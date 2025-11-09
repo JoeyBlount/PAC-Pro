@@ -103,7 +103,7 @@ const Login = () => {
 
         <Box sx={{padding: '10px'}}/>
         
-        <Typography variant="h4" fontWeight="bold">
+        <Typography variant="h4" fontWeight="bold" color="black">
           Sign In
         </Typography>
 
