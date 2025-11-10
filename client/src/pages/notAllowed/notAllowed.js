@@ -1,4 +1,3 @@
-import React from 'react';
 import { Container, Box, Typography, Button } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -7,17 +6,20 @@ import { ROLES } from '../../constants/roles';
 const NotAllowed = () => {
   const navigate = useNavigate();
   const { userRole } = useAuth();
+  console.log("User Role:", userRole);
 
   const getMessage = () => {
     switch (userRole) {
       case ROLES.GENERAL_MANAGER:
-        return "As a General Manager, you do not have access to settings. Please focus on your managerial tasks.";
+        return "As a General Manager, you do not have access to settings. Please contact an Admin for assistance.";
       case ROLES.SUPERVISOR:
-        return "As a Supervisor, you do not have access to settings. Please focus on your supervisory duties.";
+        return "As a Supervisor, you do not have access to settings. Please contact an Admin for assistance.";
       case ROLES.OFFICE_MANAGER:
-        return "As an Office Manager, you do not have access to settings. Please focus on your office management duties.";
+        return "As an Office Manager, you do not have access to settings. Please contact an Admin for assistance.";
+      case ROLES.ACCOUNTANT:
+        return "As an Accountant, you do not have access to settings. Please contact an Admin for assistance.";
       default:
-        return "You do not have permission to access this page.";
+        return "You do not have permission to access this page. Please contact an Admin for assistance.";
     }
   };
 
@@ -45,9 +47,9 @@ const NotAllowed = () => {
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           {getMessage()}
         </Typography>
-        <Button 
-          variant="contained" 
-          color="primary" 
+        <Button
+          variant="contained"
+          color="primary"
           onClick={() => navigate('/navi/dashboard')}
           fullWidth
         >

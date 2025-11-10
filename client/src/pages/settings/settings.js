@@ -3,7 +3,6 @@ import { Container, Typography, Box, Grid, Card, CardContent, CardActionArea } f
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
-import SettingsIcon from '@mui/icons-material/Settings';
 import PeopleIcon from '@mui/icons-material/People';
 import StoreIcon from '@mui/icons-material/Store';
 import NotificationsIcon from '@mui/icons-material/Notifications';
@@ -15,8 +14,6 @@ const Settings = () => {
   const navigate = useNavigate();
   const { userRole } = useAuth();
 
-  const isAdmin = userRole === ROLES.ADMIN;
-  const isAccountant = userRole === ROLES.ACCOUNTANT;
 
   const settingsItems = [
     {
@@ -24,40 +21,35 @@ const Settings = () => {
       description: 'Manage users and their roles',
       icon: <PeopleIcon sx={{ fontSize: 40 }} />,
       path: '/navi/settings/user-management',
-      allowedRoles: [ROLES.ADMIN, ROLES.ACCOUNTANT],
-      readOnlyRoles: [ROLES.ACCOUNTANT]
+      allowedRoles: [ROLES.ADMIN]
     },
     {
       title: 'Store Management',
       description: 'Manage store locations and settings',
       icon: <StoreIcon sx={{ fontSize: 40 }} />,
       path: '/navi/settings/store-management',
-      allowedRoles: [ROLES.ADMIN, ROLES.ACCOUNTANT],
-      readOnlyRoles: [ROLES.ACCOUNTANT]
+      allowedRoles: [ROLES.ADMIN]
     },
     {
       title: 'Deadline Management',
       description: 'Manage submission deadlines and due dates',
       icon: <EventIcon sx={{ fontSize: 40 }} />,
       path: '/navi/settings/deadline-management',
-      allowedRoles: [ROLES.ADMIN, ROLES.ACCOUNTANT],
-      readOnlyRoles: [ROLES.ACCOUNTANT]
+      allowedRoles: [ROLES.ADMIN]
     },
     {
       title: 'Notifications',
       description: 'Configure system notifications',
       icon: <NotificationsIcon sx={{ fontSize: 40 }} />,
       path: '/navi/settings/notifications',
-      allowedRoles: [ROLES.ADMIN, ROLES.ACCOUNTANT],
-      readOnlyRoles: [ROLES.ACCOUNTANT]
+      allowedRoles: [ROLES.ADMIN]
     },
     {
       title: 'Invoice Settings',
       description: 'Configure invoice categories and settings',
       icon: <ReceiptIcon sx={{ fontSize: 40 }} />,
       path: '/navi/settings/invoice-settings',
-      allowedRoles: [ROLES.ADMIN, ROLES.ACCOUNTANT],
-      readOnlyRoles: [ROLES.ACCOUNTANT]
+      allowedRoles: [ROLES.ADMIN]
     }
   ];
 
@@ -71,11 +63,6 @@ const Settings = () => {
     <Container maxWidth="lg" sx={{ mt: 4 }}>
       <Typography variant="h4" gutterBottom>
         Settings
-      </Typography>
-      <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-        {isAdmin ? 'Full access to all settings' :
-         isAccountant ? 'View-only access to all settings' :
-         'No access to settings'}
       </Typography>
       
       <Grid container spacing={3} sx={{ mt: 2 }}>
