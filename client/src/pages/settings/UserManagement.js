@@ -196,6 +196,41 @@ const UserManagement = () => {
 
         const result = await response.json();
         console.log("User added successfully:", result);
+                // After the "User added successfully" line:
+       // Replace the invite email section in handleAddUserSubmit (around line 197)
+
+// After user is added successfully:
+try {
+  console.log("📧 Triggering invite email...");
+  
+  const inviteResponse = await fetch(
+    "https://us-central1-pacpro-ef499.cloudfunctions.net/sendUserInvite",
+    {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ 
+        email: newUser.email,
+        firstName: newUser.firstName,
+        role: newUser.role
+      }),
+    }
+  );
+
+  if (inviteResponse.ok) {
+    const inviteData = await inviteResponse.json();
+    console.log("✅ Invite email sent:", inviteData);
+    alert(`User added successfully! Invitation email sent to ${newUser.email}`);
+  } else {
+    const errorData = await inviteResponse.json();
+    console.error("⚠️ Invite email failed:", errorData);
+    alert(`User added, but failed to send invite email: ${errorData.error || 'Unknown error'}`);
+  }
+} catch (inviteErr) {
+  console.error("⚠️ Failed to send invite:", inviteErr);
+  alert(`User added, but failed to send invite email: ${inviteErr.message}`);
+}
         
         fetchUsers(); // Refresh the user list
         setAddDialogOpen(false);
