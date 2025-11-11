@@ -2,7 +2,7 @@
 FastAPI routers for PAC calculations
 """
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Security, Request, Query
@@ -21,6 +21,11 @@ from services.invoice_submit import InvoiceSubmitService
 from services.user_management_service import UserManagementService
 from services.navBar_service import NavBarService
 from services.invoice_settings_service import InvoiceSettingsService
+from services.notification_service import NotificationService
+from services.store_management_service import StoreManagementService
+from services.announcement_service import AnnouncementService
+from services.dashboard_service import DashboardInfoService
+
 import logging
 
 from pydantic import BaseModel
@@ -901,224 +906,52 @@ async def get_pac_projections(
 
 
 # ---- Dashboard Routes -----
+dashboard_info_service = DashboardInfoService()
+
+
+def is_valid_year_month(value: str) -> bool:
+    """Simple validation for YYYYMM format"""
+    return len(value) == 6 and value.isdigit()
+
+
 @router.get("/info/sales/{entity_id}/{year_month}")
 async def get_chart_years_sales(entity_id: str, year_month: str):
+    """Fetch total sales for an entity across a period"""
     if not entity_id or not year_month:
-        raise HTTPException(
-            status_code=400, detail="Entity ID and year_month are required"
-        )
+        raise HTTPException(status_code=400, detail="Entity ID and year_month are required")
     if not is_valid_year_month(year_month):
-        raise HTTPException(
-            status_code=400, detail="Invalid year_month format. Use YYYYMM (e.g., 202501)"
-        )
+        raise HTTPException(status_code=400, detail="Invalid year_month format. Use YYYYMM (e.g., 202501)")
     try:
-        import firebase_admin
-        from firebase_admin import firestore
-        if not firebase_admin._apps:
-            raise HTTPException(status_code=503, detail="Firebase not initialized")
-    except ModuleNotFoundError:
-        raise HTTPException(status_code=503, detail="Firebase not installed/available")
-    
-    endDate = year_month
-
-    # Calculate Start Date
-    startYear = int(year_month[:4]) - 1
-    startMonth = int(year_month[4:]) + 1
-    
-    if startMonth < 0:
-        r = -(startMonth)
-        startMonth = 12 - r
-        startYear -= 1
-
-    startDate = f"{startYear}{startMonth:02d}"
-
-    try:
-        db = firestore.client()
-        doc_ref = db.collection("pac_actual")
-        docs = doc_ref.stream()
-
-        totalSales = []
-
-        for doc in docs:
-            doc_id = doc.id
-            storeID = doc_id[:9]
-            yyyymm = doc_id[-6:]
-            if storeID == entity_id and startDate <= yyyymm <= endDate:
-                result = doc.to_dict()
-                amt = result.get("sales", {}).get("allNetSales", {}).get("dollars")
-                totalSales.append({"key": yyyymm, "netsales": amt})
-        return {"totalsales": totalSales}
-        
+        return await dashboard_info_service.fetch_sales(entity_id, year_month)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting sales info: {str(e)}")
-    
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/info/budget/{entity_id}/{year_month}")
 async def get_chart_budget_and_spending(entity_id: str, year_month: str):
+    """Fetch budget vs. spending data for a store"""
     if not entity_id or not year_month:
-        raise HTTPException(
-            status_code=400, detail="Entity ID and year_month are required"
-        )
+        raise HTTPException(status_code=400, detail="Entity ID and year_month are required")
     if not is_valid_year_month(year_month):
-        raise HTTPException(
-            status_code=400, detail="Invalid year_month format. Use YYYYMM (e.g., 202501)"
-        )
+        raise HTTPException(status_code=400, detail="Invalid year_month format. Use YYYYMM (e.g., 202501)")
     try:
-        import firebase_admin
-        from firebase_admin import firestore
-        if not firebase_admin._apps:
-            raise HTTPException(status_code=503, detail="Firebase not initialized")
-    except ModuleNotFoundError:
-        raise HTTPException(status_code=503, detail="Firebase not installed/available")
-    
-    try:
-        db = firestore.client()
-        doc_id = f"{entity_id}_{year_month}"
-
-        budgetSpending = []
-
-        ## Spending cacluation.
-
-        foodpaperspending = 0
-        laborspending = 0
-        purchasespending = 0
-
-        doc_ref = db.collection("pac_actual").document(doc_id)
-        doc = doc_ref.get()
-
-        if doc.exists:
-            result = doc.to_dict()
-            if "foodAndPaper" in result:
-                foodpaperspending = result.get("foodAndPaper", {}).get("total", {}).get("dollars")
-            if "labor" in result:
-                laborspending = result.get("labor", {}).get("total", {}).get("dollars")
-            if "purchases" in result:
-                purchasespending = result.get("purchases", {}).get("total", {}).get("dollars")
-
-        ## Budget cacluation 
-
-        foodpaperbudget = 0
-        laborbudget = 0
-        purchasebudget = 0        
-
-        foodpaper = ["Base Food", "Employee Meal", "Condiment", "Total Waste", "Paper" ]
-        labor = ["Crew Labor", "Management Labor", "Payroll Tax"]
-        purchase = ["Advertising", "Travel", "Adv Other", "Promotion", "Outside Services", "Linen", "OP. Supply", "Maint. & Repair", "Small Equipment", "Utilities", "Office", "Cash +/-", "Crew Relations", "Training"]
-
-        doc_ref = db.collection("pac-projections").document(doc_id)
-        doc = doc_ref.get()
-
-        if doc.exists:
-            result = doc.to_dict()
-            rows = result.get("rows", {})
-
-            values = [row['projectedDollar'] for row in rows if row['name'] in foodpaper]
-            foodpaperbudget = sum(values)
-
-            values = [row['projectedDollar'] for row in rows if row['name'] in labor]
-            laborbudget = sum(values)
-
-            values = [row['projectedDollar'] for row in rows if row['name'] in purchase]
-            purchasebudget = sum(values)
-                
-
-        budgetSpending.append(
-            {"key": year_month, 
-             "foodpaperbudget": foodpaperbudget, "foodpaperspending": foodpaperspending, 
-             "laborbudget": laborbudget, "laborspending": laborspending,
-             "purchasebudget": purchasebudget, "purchasespending": purchasespending})
-
-        return {"budgetspending": budgetSpending}
-        
+        return await dashboard_info_service.fetch_budget_and_spending(entity_id, year_month)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting sales info: {str(e)}")
-    
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/info/pac/{entity_id}/{year_month}")
 async def get_chart_PAC_and_projection(entity_id: str, year_month: str):
+    """Fetch PAC actuals and projections for a store"""
     if not entity_id or not year_month:
-        raise HTTPException(
-            status_code=400, detail="Entity ID and year_month are required"
-        )
+        raise HTTPException(status_code=400, detail="Entity ID and year_month are required")
     if not is_valid_year_month(year_month):
-        raise HTTPException(
-            status_code=400, detail="Invalid year_month format. Use YYYYMM (e.g., 202501)"
-        )
+        raise HTTPException(status_code=400, detail="Invalid year_month format. Use YYYYMM (e.g., 202501)")
     try:
-        import firebase_admin
-        from firebase_admin import firestore
-        if not firebase_admin._apps:
-            raise HTTPException(status_code=503, detail="Firebase not initialized")
-    except ModuleNotFoundError:
-        raise HTTPException(status_code=503, detail="Firebase not installed/available")
-    
-    endDate = year_month
-
-    # Calculate Start Date
-    startYear = int(year_month[:4])
-    startMonth = int(year_month[4:]) - 2
-
-    if startMonth < 0:
-        r = -(startMonth)
-        startMonth = 12 - r
-        startYear -= 1
-
-    startDate = f"{startYear}{startMonth:02d}"
-
-    try:
-        db = firestore.client()
-        doc_ref = db.collection("pac_actual")
-        docs = doc_ref.stream()
-
-        pacAndProjections = []
-        pac = {}
-        projections = {}
-
-        for doc in docs:
-            doc_id = doc.id
-            storeID = doc_id[:9]
-            yyyymm = doc_id[-6:]
-
-            if storeID == entity_id and startDate <= yyyymm <= endDate:
-                result = doc.to_dict()
-                pac[yyyymm] = 0                
-                if "totals" in result:
-                    pac[yyyymm] = result.get("totals", {}).get("pac", {}).get("dollars")
-
-        doc_ref = db.collection("pac-projections")
-        docs = doc_ref.stream()
-
-        for doc in docs:
-            doc_id = doc.id
-            storeID = doc_id[:9]
-            yyyymm = doc_id[-6:]
-            if storeID == entity_id and startDate <= yyyymm <= endDate:
-                result = doc.to_dict()
-                projections[yyyymm] = 0
-                rows = result.get("rows", [])
-                projections[yyyymm] = next((row['projectedDollar'] for row in rows if row['name'] == 'P.A.C.'), 0)
-
-        pap = {}
-
-        for key in set(pac) | set(projections):
-            if key in pac and key in projections:
-                pap[key] = [pac[key], projections[key]]
-            elif key in pac:
-                pap[key] = [pac[key], 0]
-            else:
-                pap[key] = [0, projections[key]]
-
-        for x in pap:
-            p = pap[x][0]
-            pr = pap[x][1]
-
-            pacAndProjections.append({"key": x, "pac": p, "projections": pr })
-
-        # pacAndProjections.append({"key": yyyymm, "pac": pac, "projections": projections }) # output json
-        return {"pacprojections": pacAndProjections}
-        
+        return await dashboard_info_service.fetch_pac_and_projections(entity_id, year_month)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting sales info: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # ----------------------------------
@@ -1433,99 +1266,181 @@ async def get_all_locked_months(store_id: str) -> Dict[str, Any]:
         logger.error(f"Error getting locked months: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting locked months: {str(e)}")
 
+
+# ---------------
+# Announcements
+# ---------------
+
+announcement_service = AnnouncementService()
+
+
 class Announcement(BaseModel):
     id: Optional[str] = None
     title: str
     message: str
     visible_to: str
 
+
 @router.get("/announcements", response_model=List[Announcement])
-async def getAnnouncements(role: Optional[str] = Query("All")):    
+async def get_announcements(role: Optional[str] = Query("All")):
+    """Fetch announcements filtered by role"""
     try:
-        import firebase_admin
-        from firebase_admin import firestore
-        if not firebase_admin._apps:
-            raise HTTPException(status_code=503, detail="Firebase not initialized")
-    except ModuleNotFoundError:
-        raise HTTPException(status_code=503, detail="Firebase not installed/available")
-
-    try:
-        db = firestore.client()
-        collection = db.collection("announcements")
-        docs = collection.stream()
-
-        results = []
-
-        for doc in docs:
-           data = doc.to_dict()
-           if data.get("visible_to") == "All" or data.get("visible_to") == role:
-               data["id"] = doc.id
-               results.append(data)
-
+        results = await announcement_service.fetch_announcements(role)
         return results
-        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting sales info: {str(e)}")
-    
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/announcements/all/", response_model=List[Announcement])
-async def getAllAnnouncements():    
+async def get_all_announcements():
+    """Fetch all announcements"""
     try:
-        import firebase_admin
-        from firebase_admin import firestore
-        if not firebase_admin._apps:
-            raise HTTPException(status_code=503, detail="Firebase not initialized")
-    except ModuleNotFoundError:
-        raise HTTPException(status_code=503, detail="Firebase not installed/available")
-
-    try:
-        db = firestore.client()
-        collection = db.collection("announcements")
-        docs = collection.stream()
-
-        results = []
-
-        for doc in docs:
-           data = doc.to_dict()
-           data["id"] = doc.id
-           results.append(data)
-
+        results = await announcement_service.fetch_all_announcements()
         return results
-        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting sales info: {str(e)}")
-    
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/announcements", response_model=Announcement)
 async def add_announcement(announcement: Announcement):
+    """Add a new announcement"""
     try:
-        import firebase_admin
-        from firebase_admin import firestore
-        if not firebase_admin._apps:
-            raise HTTPException(status_code=503, detail="Firebase not initialized")
-    except ModuleNotFoundError:
-        raise HTTPException(status_code=503, detail="Firebase not installed/available")
-
-    db = firestore.client()
-    collection = db.collection("announcements")
-    doc_ref = collection.document()
-    doc_ref.set(announcement.dict(exclude_unset=True))
-    announcement.id = doc_ref.id
-    return announcement
+        data = await announcement_service.add_announcement(announcement.dict(exclude_unset=True))
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/announcements/{announcement_id}")
 async def delete_announcement(announcement_id: str):
+    """Delete an announcement"""
     try:
-        import firebase_admin
-        from firebase_admin import firestore
-        if not firebase_admin._apps:
-            raise HTTPException(status_code=503, detail="Firebase not initialized")
-    except ModuleNotFoundError:
-        raise HTTPException(status_code=503, detail="Firebase not installed/available")
+        await announcement_service.delete_announcement(announcement_id)
+        return {"status": "deleted"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    db = firestore.client()
-    collection = db.collection("announcements")
-    doc_ref = collection.document(announcement_id)
-    if not doc_ref.get().exists:
-        raise HTTPException(status_code=404, detail="Announcement not found")
-    doc_ref.delete()
-    return {"status": "deleted"}
+
+# --------------
+# Notifications
+# --------------
+
+notification_service = NotificationService()
+
+@router.get("/settings/notifications/")
+async def get_notification_settings():
+    """Get notification settings"""
+    try:
+        return await notification_service.fetch_notification_settings()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/settings/notifications/")
+async def update_notification_settings(payload: Dict[str, Dict]):
+    """Update notification settings"""
+    try:
+        await notification_service.update_notification_settings(payload)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/notifications")
+async def get_notifications(toEmail: str = Query(...)):
+    """Fetch notifications for a user"""
+    try:
+        return await notification_service.fetch_notifications(toEmail)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/notifications/{notif_id}/read")
+async def mark_notification_as_read(notif_id: str):
+    """Mark a notification as read"""
+    try:
+        await notification_service.mark_notification_as_read(notif_id)
+        return {"success": True}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/notifications/mark_all_read")
+async def mark_all_notifications_as_read(toEmail: str = Query(...)):
+    """Mark all notifications for a user as read"""
+    try:
+        await notification_service.mark_all_as_read(toEmail)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+# ------------------
+# Store Management
+# ------------------
+
+store_service = StoreManagementService()
+
+@router.get("/settings/storemanagement/getactive/")
+async def get_active_stores():
+    """Fetch all active stores"""
+    try:
+        return await store_service.fetch_active_stores()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/settings/storemanagement/getdeleted/")
+async def get_deleted_stores():
+    """Fetch all deleted (soft-deleted) stores"""
+    try:
+        return await store_service.fetch_deleted_stores()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/settings/storemanagement/add")
+async def add_new_store(store: Dict):
+    """Add a new store"""
+    try:
+        return await store_service.add_store(store)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/settings/storemanagement/update")
+async def update_stores(stores: List[Dict]):
+    """Batch update multiple stores"""
+    try:
+        await store_service.update_stores(stores)
+        return {"message": "Stores updated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/settings/storemanagement/del/{store_id}")
+async def delete_store(store_id: str, deletedByRole: Optional[str] = Query(None)):
+    """Soft delete a store"""
+    try:
+        result = await store_service.delete_store(store_id, deletedByRole)
+        return {"message": "Store moved to deletedStores", **result}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/settings/storemanagement/restore/{deleted_ref_id}")
+async def restore_store(deleted_ref_id: str):
+    """Restore a previously deleted store"""
+    try:
+        result = await store_service.restore_store(deleted_ref_id)
+        return {"message": "Store restored successfully", **result}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
