@@ -1,6 +1,17 @@
 // -------------------------
 // ✅ Imports & Initialization
 // -------------------------
+// Load .env from parent directory (project root)
+// At the top of functions/index.js
+const path = require("path");
+
+// Try loading from functions folder first, then parent
+require("dotenv").config({ path: path.join(__dirname, ".env") });
+if (!process.env.GMAIL_EMAIL) {
+  require("dotenv").config({ path: path.join(__dirname, "../.env") });
+}
+
+const cors = require("cors");
 const { onDocumentCreated, onDocumentDeleted, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onRequest } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
@@ -8,8 +19,54 @@ const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const nodemailer = require("nodemailer");
 
+// -------------------------
+// 🔥 Initialize Firebase Admin
+// -------------------------
 initializeApp();
 const db = getFirestore();
+
+// -------------------------
+// 🧠 Confirm .env loaded
+// -------------------------
+console.log("✅ Gmail env loaded:", {
+  email: process.env.GMAIL_EMAIL || "Missing ❌",
+  pass: process.env.GMAIL_PASS ? "Loaded ✅" : "Missing ❌",
+});
+
+// -------------------------
+// 🌐 CORS Configuration
+// -------------------------
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://localhost:5173",
+  "https://pacpro-ef499.web.app",
+  "https://pacpro-ef499.firebaseapp.com",
+];
+
+const corsHandler = cors({
+  origin: function (origin, callback) {
+    console.log("🔍 Checking origin:", origin);
+    
+    if (!origin) {
+      console.log("✅ No origin - allowing");
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.includes(origin)) {
+      console.log("✅ Origin allowed:", origin);
+      return callback(null, true);
+    }
+    
+    console.error("❌ Origin blocked:", origin);
+    return callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
+  },
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+});
 
 // -------------------------
 // 🔔 Notify when a new invoice is submitted
@@ -18,14 +75,9 @@ exports.notifyInvoiceSubmitted = onDocumentCreated("invoices/{invoiceId}", async
   const invoice = event.data.data();
   const context = event.params;
 
-  // Get submitter info
   let submitterName = invoice.user_email;
   try {
-    const userQuery = await db
-      .collection("users")
-      .where("email", "==", invoice.user_email)
-      .limit(1)
-      .get();
+    const userQuery = await db.collection("users").where("email", "==", invoice.user_email).limit(1).get();
     if (!userQuery.empty) {
       const u = userQuery.docs[0].data();
       submitterName =
@@ -37,16 +89,12 @@ exports.notifyInvoiceSubmitted = onDocumentCreated("invoices/{invoiceId}", async
     console.error("Error fetching submitter info:", err);
   }
 
-  // Find all supervisors (admins)
-  const supervisors = await db
-    .collection("users")
-    .where("role", "in", ["Admin", "admin"])
-    .get();
+  const supervisors = await db.collection("users").where("role", "in", ["Admin", "admin"]).get();
 
   const batch = db.batch();
   supervisors.forEach((doc) => {
     const data = doc.data();
-    if (data.email === invoice.user_email) return; // skip sender
+    if (data.email === invoice.user_email) return;
 
     const notifRef = db.collection("notifications").doc();
     batch.set(notifRef, {
@@ -71,13 +119,9 @@ exports.notifyInvoiceSubmitted = onDocumentCreated("invoices/{invoiceId}", async
 exports.notifyInvoiceDeleted = onDocumentDeleted("invoices/{invoiceId}", async (event) => {
   const invoice = event.data.data();
   const context = event.params;
-
   const submitterName = invoice.user_email || "A user";
 
-  const supervisors = await db
-    .collection("users")
-    .where("role", "in", ["Admin", "admin"])
-    .get();
+  const supervisors = await db.collection("users").where("role", "in", ["Admin", "admin"]).get();
 
   const batch = db.batch();
   supervisors.forEach((doc) => {
@@ -103,8 +147,8 @@ exports.notifyInvoiceDeleted = onDocumentDeleted("invoices/{invoiceId}", async (
 // -------------------------
 exports.notifyNewUser = onDocumentCreated("users/{userId}", async (event) => {
   const user = event.data.data();
-
   const notifRef = db.collection("notifications").doc();
+
   await notifRef.set({
     toEmail: user.email,
     type: "welcome",
@@ -118,7 +162,7 @@ exports.notifyNewUser = onDocumentCreated("users/{userId}", async (event) => {
 });
 
 // -------------------------
-// 📊 Monthly Aggregation Logic
+// 📊 Monthly Aggregation
 // -------------------------
 const CATEGORY_IDS = [
   "FOOD",
@@ -161,22 +205,16 @@ async function recomputeMonthlyTotals(storeID, targetMonth, targetYear) {
     const cats = d.categories || {};
     CATEGORY_IDS.forEach((id) => {
       const val = cats[id];
-      if (Array.isArray(val)) {
-        totals[id] += val.reduce((s, n) => s + (Number(n) || 0), 0);
-      } else if (typeof val === "number") {
-        totals[id] += val;
-      }
+      if (Array.isArray(val)) totals[id] += val.reduce((s, n) => s + (Number(n) || 0), 0);
+      else if (typeof val === "number") totals[id] += val;
     });
   });
 
   const docId = `${storeID}_${targetYear}${pad2(targetMonth)}`;
-  await db
-    .collection("invoice_log_totals")
-    .doc(docId)
-    .set(
-      { totals, updatedAt: FieldValue.serverTimestamp() },
-      { merge: true }
-    );
+  await db.collection("invoice_log_totals").doc(docId).set(
+    { totals, updatedAt: FieldValue.serverTimestamp() },
+    { merge: true }
+  );
 }
 
 // -------------------------
@@ -186,12 +224,8 @@ exports.onInvoiceWrite = onDocumentWritten("invoices/{invoiceId}", async (event)
   const before = event.data.before ? event.data.before.data() : null;
   const after = event.data.after ? event.data.after.data() : null;
 
-  if (before) {
-    await recomputeMonthlyTotals(before.storeID, before.targetMonth, before.targetYear);
-  }
-  if (after) {
-    await recomputeMonthlyTotals(after.storeID, after.targetMonth, after.targetYear);
-  }
+  if (before) await recomputeMonthlyTotals(before.storeID, before.targetMonth, before.targetYear);
+  if (after) await recomputeMonthlyTotals(after.storeID, after.targetMonth, after.targetYear);
 });
 
 // -------------------------
@@ -199,18 +233,13 @@ exports.onInvoiceWrite = onDocumentWritten("invoices/{invoiceId}", async (event)
 // -------------------------
 exports.recomputeInvoiceTotals = onRequest(async (req, res) => {
   try {
-    if (req.method !== "POST") {
-      return res.status(405).send("Method Not Allowed");
-    }
+    if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
 
     const { storeID } = req.body || {};
-
-    // Fetch invoices (optionally scoped to store)
     let q = db.collection("invoices");
     if (storeID) q = q.where("storeID", "==", storeID);
     const snap = await q.get();
 
-    // Collect unique (storeID, targetMonth, targetYear)
     const keySet = new Set();
     snap.forEach((doc) => {
       const d = doc.data() || {};
@@ -235,13 +264,10 @@ exports.recomputeInvoiceTotals = onRequest(async (req, res) => {
 // -------------------------
 // 📧 Daily Notification Digest
 // -------------------------
-exports.dailyNotificationDigest = onSchedule("0 7 * * *", async (event) => {
+exports.dailyNotificationDigest = onSchedule("0 7 * * *", async () => {
   const transporter = nodemailer.createTransport({
     service: "gmail",
-    auth: {
-      user: process.env.GMAIL_EMAIL || "noreply.pacpro@gmail.com",
-      pass: process.env.GMAIL_PASS || "your_app_password_here",
-    },
+    auth: { user: process.env.GMAIL_EMAIL, pass: process.env.GMAIL_PASS },
   });
 
   const now = Timestamp.now();
@@ -249,10 +275,11 @@ exports.dailyNotificationDigest = onSchedule("0 7 * * *", async (event) => {
   yesterday.setDate(yesterday.getDate() - 1);
   const since = Timestamp.fromDate(yesterday);
 
+  console.log("📬 Fetching notifications created since:", since.toDate());
+
   const snapshot = await db
     .collection("notifications")
     .where("createdAt", ">", since)
-    .where("emailed", "==", false)
     .get()
     .catch((err) => {
       console.error("Error fetching notifications:", err);
@@ -264,7 +291,6 @@ exports.dailyNotificationDigest = onSchedule("0 7 * * *", async (event) => {
     return null;
   }
 
-  // Group by recipient
   const grouped = {};
   snapshot.forEach((doc) => {
     const n = doc.data();
@@ -273,14 +299,13 @@ exports.dailyNotificationDigest = onSchedule("0 7 * * *", async (event) => {
     grouped[n.toEmail].push({ id: doc.id, ...n });
   });
 
-  // Send emails
   for (const [email, notifs] of Object.entries(grouped)) {
     const lines = notifs.map((n) => `• ${n.title || n.type}\n  ${n.message || ""}`);
     const mailOptions = {
-      from: `"PAC-Pro Notifications" <${process.env.GMAIL_EMAIL || "noreply.pacpro@gmail.com"}>`,
+      from: `"PAC-Pro Notifications" <${process.env.GMAIL_EMAIL}>`,
       to: email,
       subject: "Your Daily PAC-Pro Activity Summary",
-      text: `Hello,\n\nHere’s your summary for ${new Date().toLocaleDateString()}:\n\n${lines.join(
+      text: `Hello,\n\nHere's your summary for ${new Date().toLocaleDateString()}:\n\n${lines.join(
         "\n\n"
       )}\n\n— PAC-Pro System`,
     };
@@ -288,20 +313,119 @@ exports.dailyNotificationDigest = onSchedule("0 7 * * *", async (event) => {
     try {
       await transporter.sendMail(mailOptions);
       console.log(`✅ Sent digest to ${email}`);
-
-      const batch = db.batch();
-      notifs.forEach((n) => {
-        const ref = db.collection("notifications").doc(n.id);
-        batch.update(ref, {
-          emailed: true,
-          emailedAt: FieldValue.serverTimestamp(),
-        });
-      });
-      await batch.commit();
     } catch (error) {
       console.error(`❌ Failed to send to ${email}:`, error);
     }
   }
 
   return null;
+});
+
+// -------------------------
+// 📩 Send User Invite (with CORS)
+// -------------------------
+exports.sendUserInvite = onRequest({ cors: true }, async (req, res) => {
+  try {
+    console.log("📨 sendUserInvite called, method:", req.method);
+
+    // Handle preflight OPTIONS request
+    if (req.method === "OPTIONS") {
+      console.log("✅ Handling OPTIONS preflight");
+      return res.status(204).send("");
+    }
+
+    const { email, firstName, role } = req.body;
+
+    if (!email) {
+      console.error("❌ No email provided in request body");
+      return res.status(400).json({
+        success: false,
+        error: "Email is required",
+      });
+    }
+
+    console.log("📧 Processing invite for:", email, "| Name:", firstName, "| Role:", role);
+
+    // ✅ Get environment variables
+    const emailUser = process.env.GMAIL_EMAIL;
+    const emailPass = process.env.GMAIL_PASS;
+
+    console.log("🔑 Email config check:", {
+      email: emailUser ? "✅ Set" : "❌ Missing",
+      pass: emailPass ? "✅ Set" : "❌ Missing",
+    });
+
+    if (!emailUser || !emailPass) {
+      console.error("❌ Gmail credentials not configured!");
+      return res.status(500).json({
+        success: false,
+        error: "Email service not configured. Please contact administrator.",
+      });
+    }
+
+    // ✅ Create Nodemailer transporter
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: emailUser,
+        pass: emailPass,
+      },
+    });
+
+    // ✅ Email content
+    const mailOptions = {
+      from: `"PAC-Pro System" <${emailUser}>`,
+      to: email,
+      subject: "Welcome to PAC-Pro - Your Account Has Been Created",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Welcome to PAC-Pro! 🎉</h2>
+          <p>Hi ${firstName || "there"},</p>
+          <p>Your account has been created with the role: <strong>${role || "User"}</strong></p>
+          <p>To get started:</p>
+          <ol>
+            <li>Visit <a href="https://pacpro-ef499.web.app">PAC-Pro Portal</a></li>
+            <li>Click "Sign Up" or "Create Account"</li>
+            <li>Use this email address: <strong>${email}</strong></li>
+            <li>Create your password</li>
+          </ol>
+          <p>If you have any questions, please contact your administrator.</p>
+          <p>Best regards,<br/>The PAC-Pro Team</p>
+        </div>
+      `,
+      text: `
+Welcome to PAC-Pro!
+
+Hi ${firstName || "there"},
+
+Your account has been created with the role: ${role || "User"}
+
+To get started:
+1. Visit https://pacpro-ef499.web.app
+2. Use this email address: ${email}
+
+If you have any questions, please contact your administrator.
+
+Best regards,
+The PAC-Pro Team
+      `,
+    };
+
+    // ✅ Send email
+    console.log("📮 Attempting to send email...");
+    await transporter.sendMail(mailOptions);
+
+    console.log(`✅ SUCCESS! Invite email sent to ${email}`);
+
+    return res.status(200).json({
+      success: true,
+      message: `Invite sent to ${email}`,
+    });
+  } catch (error) {
+    console.error("❌ ERROR in sendUserInvite:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Failed to send invite",
+    });
+  }
 });
