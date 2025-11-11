@@ -225,6 +225,13 @@ const calculatePacActual = (
     invoiceTotals,
   });
 
+  console.log("[PAC Actual] Labor data details:", {
+    crewLabor: labor.crewLabor,
+    totalLabor: labor.totalLabor,
+    payrollTax: labor.payrollTax,
+    additionalLaborDollars: labor.additionalLaborDollars,
+  });
+
   console.log("[PAC Actual] Sales data details:", {
     productNetSales: sales.productNetSales,
     allNetSales: sales.allNetSales,
@@ -232,6 +239,7 @@ const calculatePacActual = (
     promo: sales.promo,
     managerMeal: sales.managerMeal,
     advertising: sales.advertising,
+    duesAndSubscriptions: sales.duesAndSubscriptions,
   });
 
   console.log("[PAC Actual] Cash value specifically:", sales.cash);
@@ -331,12 +339,17 @@ const calculatePacActual = (
     ((crewLaborDollars + managementLaborDollars) *
       (Number(labor.payrollTax) || 0)) /
     100;
+  // Additional Labor Dollars (does NOT affect payroll tax calculation)
+  const additionalLaborDollars = Number(labor.additionalLaborDollars) || 0;
 
   // Calculate totals
   const foodAndPaperTotal =
     baseFood + employeeMeal + condiment + totalWaste + paper;
   const laborTotal =
-    crewLaborDollars + managementLaborDollars + payrollTaxDollars;
+    crewLaborDollars + managementLaborDollars + payrollTaxDollars + additionalLaborDollars;
+  // Dues and Subscriptions (dollar amount from generate input)
+  const duesAndSubscriptions = Number(sales.duesAndSubscriptions) || 0;
+
   const purchasesTotal =
     (Number(invoiceTotals.TRAVEL) || 0) +
     advertising + // Advertising (generate input % + invoice log totals)
@@ -348,6 +361,7 @@ const calculatePacActual = (
     (Number(invoiceTotals["M+R"]) || 0) +
     (Number(invoiceTotals["SML EQUIP"]) || 0) +
     (Number(invoiceTotals.UTILITIES) || 0) +
+    duesAndSubscriptions + // Dues and Subscriptions (dollar amount)
     (Number(invoiceTotals.OFFICE) || 0) +
     cashPlusMinus +
     (Number(invoiceTotals["CREW RELATIONS"]) || 0) +
@@ -439,6 +453,10 @@ const calculatePacActual = (
         dollars: payrollTaxDollars,
         percent: calculatePercentage(payrollTaxDollars),
       },
+      additionalLaborDollars: {
+        dollars: additionalLaborDollars,
+        percent: calculatePercentage(additionalLaborDollars),
+      },
       total: {
         dollars: laborTotal,
         percent: calculatePercentage(laborTotal),
@@ -499,6 +517,10 @@ const calculatePacActual = (
       training: {
         dollars: Number(invoiceTotals.TRAINING) || 0,
         percent: calculatePercentage(Number(invoiceTotals.TRAINING) || 0),
+      },
+      duesAndSubscriptions: {
+        dollars: duesAndSubscriptions,
+        percent: calculatePercentage(duesAndSubscriptions),
       },
       advertising: {
         dollars: advertising,

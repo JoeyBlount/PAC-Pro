@@ -72,7 +72,6 @@ const Account = () => {
     }
   };
 
-  const handleAssignClick = (event) => setAnchorEl(event.currentTarget);
   const handleClose = () => setAnchorEl(null);
   const handleSnackbarClose = () => setSnackbar((s) => ({ ...s, open: false }));
 
@@ -191,14 +190,6 @@ const Account = () => {
           </Table>
         </TableContainer>
       )}
-
-      {/* ASSIGNED STORES HEADER + ASSIGN BUTTON */}
-      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: 1 }}>
-        <Typography sx={headerTypographyStyle}>Assigned Stores</Typography>
-        <Button variant="contained" sx={{ marginLeft: 2, backgroundColor: "#1976d2" }} onClick={handleAssignClick}>
-          Assign
-        </Button>
-      </Box>
 
       {/* Store Dropdown Menu */}
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleClose}>

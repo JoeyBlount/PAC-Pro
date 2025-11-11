@@ -587,6 +587,18 @@ const PacTab = ({
               "default"
             )}</td>
           </tr>
+          <tr>
+            <td style="padding-left: 20px;">Additional Labor Dollars</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.additionalLaborDollars?.dollars || 0
+            )}</td>
+            <td>${formatPercentage(
+              actualData.controllableExpenses.additionalLaborDollars?.percent || 0
+            )}</td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+          </tr>
           
           <!-- Labor Total -->
           <tr class="print-section-header print-labor-total">
@@ -595,13 +607,15 @@ const PacTab = ({
               (actualData.controllableExpenses.crewLabor?.dollars || 0) +
                 (actualData.controllableExpenses.managementLabor?.dollars ||
                   0) +
-                (actualData.controllableExpenses.payrollTax?.dollars || 0)
+                (actualData.controllableExpenses.payrollTax?.dollars || 0) +
+                (actualData.controllableExpenses.additionalLaborDollars?.dollars || 0)
             )}</td>
             <td style="font-weight: bold; background-color: #e3f2fd;">${formatPercentage(
               (actualData.controllableExpenses.crewLabor?.percent || 0) +
                 (actualData.controllableExpenses.managementLabor?.percent ||
                   0) +
-                (actualData.controllableExpenses.payrollTax?.percent || 0)
+                (actualData.controllableExpenses.payrollTax?.percent || 0) +
+                (actualData.controllableExpenses.additionalLaborDollars?.percent || 0)
             )}</td>
             <td style="font-weight: bold; background-color: #e3f2fd;">${formatCurrency(
               getProjectedValueAsNumber("Crew Labor") +
@@ -989,6 +1003,18 @@ const PacTab = ({
               "default"
             )}</td>
           </tr>
+          <tr>
+            <td style="padding-left: 20px;">Dues and Subscriptions</td>
+            <td>${formatCurrency(
+      actualData.controllableExpenses.duesAndSubscriptions?.dollars || 0
+    )}</td>
+            <td>${formatPercentage(
+              actualData.controllableExpenses.duesAndSubscriptions?.percent || 0
+            )}</td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+          </tr>
           
           <!-- Purchases Total -->
           <tr class="print-section-header print-purchases-total">
@@ -1010,7 +1036,8 @@ const PacTab = ({
                 (actualData.controllableExpenses.cashAdjustments?.dollars ||
                   0) +
                 (actualData.controllableExpenses.crewRelations?.dollars || 0) +
-                (actualData.controllableExpenses.training?.dollars || 0)
+                (actualData.controllableExpenses.training?.dollars || 0) +
+                (actualData.controllableExpenses.duesAndSubscriptions?.dollars || 0)
             )}</td>
             <td style="font-weight: bold; background-color: #fce4ec;">${formatPercentage(
               (actualData.controllableExpenses.travel?.percent || 0) +
@@ -1028,7 +1055,8 @@ const PacTab = ({
                 (actualData.controllableExpenses.office?.percent || 0) +
                 (actualData.controllableExpenses.cashPlusMinus?.percent || 0) +
                 (actualData.controllableExpenses.crewRelations?.percent || 0) +
-                (actualData.controllableExpenses.training?.percent || 0)
+                (actualData.controllableExpenses.training?.percent || 0) +
+                (actualData.controllableExpenses.duesAndSubscriptions?.percent || 0)
             )}</td>
             <td style="font-weight: bold; background-color: #fce4ec;">${formatCurrency(
               getProjectedValueAsNumber("Travel") +
@@ -1363,6 +1391,10 @@ const PacTab = ({
             dollars: parseFloat(data.controllable_expenses.payroll_tax.dollars),
             percent: parseFloat(data.controllable_expenses.payroll_tax.percent),
           },
+          additionalLaborDollars: {
+            dollars: parseFloat(data.controllable_expenses.additional_labor_dollars?.dollars || 0),
+            percent: parseFloat(data.controllable_expenses.additional_labor_dollars?.percent || 0),
+          },
           travel: {
             dollars: parseFloat(data.controllable_expenses.travel.dollars),
             percent: parseFloat(data.controllable_expenses.travel.percent),
@@ -1443,6 +1475,10 @@ const PacTab = ({
             dollars: parseFloat(data.controllable_expenses.training.dollars),
             percent: parseFloat(data.controllable_expenses.training.percent),
           },
+          duesAndSubscriptions: {
+            dollars: parseFloat(data.controllable_expenses.dues_and_subscriptions?.dollars || 0),
+            percent: parseFloat(data.controllable_expenses.dues_and_subscriptions?.percent || 0),
+          },
         },
         totalControllableDollars: parseFloat(data.total_controllable_dollars),
         totalControllablePercent: parseFloat(data.total_controllable_percent),
@@ -1476,6 +1512,7 @@ const PacTab = ({
           crewLabor: { dollars: 0, percent: 0 },
           managementLabor: { dollars: 0, percent: 0 },
           payrollTax: { dollars: 0, percent: 0 },
+          additionalLaborDollars: { dollars: 0, percent: 0 },
           travel: { dollars: 0, percent: 0 },
           advertising: { dollars: 0, percent: 0 },
           advertisingOther: { dollars: 0, percent: 0 },
@@ -1543,6 +1580,7 @@ const PacTab = ({
           crewLabor: lb.crewLabor || def,
           managementLabor: lb.managementLabor || def,
           payrollTax: lb.payrollTax || def,
+          additionalLaborDollars: lb.additionalLaborDollars || def,
           travel: pu.travel || def,
           advOther: pu.advOther || def,
           promotion: pu.promotion || def,
@@ -1556,6 +1594,7 @@ const PacTab = ({
           cashPlusMinus: pu.cashPlusMinus || def,
           crewRelations: pu.crewRelations || def,
           training: pu.training || def,
+          duesAndSubscriptions: pu.duesAndSubscriptions || def,
           advertising: pu.advertising || def,
         },
         totalControllableDollars: tt.totalControllable?.dollars ?? 0,
@@ -1580,6 +1619,7 @@ const PacTab = ({
           crewLabor: toObj(ce.crewLabor),
           managementLabor: toObj(ce.managementLabor),
           payrollTax: toObj(ce.payrollTax),
+          additionalLaborDollars: toObj(ce.additionalLaborDollars),
           travel: toObj(ce.travel),
           advOther: toObj(ce.advOther),
           promotion: toObj(ce.promotion),
@@ -1593,6 +1633,7 @@ const PacTab = ({
           cashPlusMinus: toObj(ce.cashPlusMinus),
           crewRelations: toObj(ce.crewRelations),
           training: toObj(ce.training),
+          duesAndSubscriptions: toObj(ce.duesAndSubscriptions),
           advertising: toObj(ce.advertising),
         },
         totalControllableDollars: Number(pacData.totalControllableDollars || 0),
@@ -2103,6 +2144,19 @@ const PacTab = ({
         "Difference $":
           (pacData?.controllableExpenses?.payrollTax?.dollars ?? 0) -
           getProjectedValueAsNumber("Payroll Tax"),
+      },
+      {
+        Account: "Additional Labor Dollars",
+        "Actual $": pacData?.controllableExpenses?.additionalLaborDollars?.dollars ?? 0,
+        "Actual %":
+          pacData?.controllableExpenses?.additionalLaborDollars?.percent !== undefined
+            ? formatPercentage(
+                actualData.controllableExpenses.additionalLaborDollars?.percent || 0
+              )
+            : "-",
+        "Projected $": 0,
+        "Projected %": "-",
+        "Difference $": pacData?.controllableExpenses?.additionalLaborDollars?.dollars ?? 0,
       },
 
       // --- Other Expenses ---

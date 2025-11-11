@@ -22,27 +22,13 @@ import {
   Select,
   MenuItem,
   Alert,
+  CircularProgress,
 } from "@mui/material";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import CancelIcon from "@mui/icons-material/Cancel";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import { useAuth } from "../../context/AuthContext";
 import { ROLES } from "../../constants/roles";
-
-import { db } from "../../config/firebase-config";
-import {
-  collection,
-  getDocs,
-  addDoc,
-  deleteDoc,
-  updateDoc,
-  doc,
-  setDoc,
-  serverTimestamp,
-  Timestamp,
-  query,
-  where,
-} from "firebase/firestore";
 
 const months = [
   "January", "February", "March", "April", "May", "June",
@@ -72,33 +58,33 @@ const StoreManagement = () => {
   const [confirmChangesDialog, setConfirmChangesDialog] = useState(false);
   const [deletedRows, setDeletedRows] = useState([]);
 
-  // Firestore collections
-  const storeCollection = collection(db, "stores");
-  const deletedStoreCollection = collection(db, "deletedStores");
+  const [loadingStores, setLoadingStores] = useState(false);
 
   // Fetch active stores
   const fetchStores = async () => {
-    const snapshot = await getDocs(storeCollection);
-    const data = snapshot.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-    }));
-    setRows(data);
+    setLoadingStores(true);
+    try {
+      const res = await fetch(`http://localhost:5140/api/pac/settings/storemanagement/getactive/`);
+      const data = await res.json();
+      setRows(data);
+    } catch (err) {
+      console.error("Error loading active stores:", err);
+    } finally {
+      setLoadingStores(false);
+    }
   };
 
   // Fetch deleted stores that haven't expired
   const fetchDeletedStores = async () => {
-    const q = query(deletedStoreCollection, where("expireAt", ">", new Date()));
-    const snapshot = await getDocs(q);
-    const data = snapshot.docs.map((d) => {
-      const payload = d.data();
-      return {
-        ...payload,
-        id: payload.originalId || null,
-        deletedRefId: d.id,
-      };
-    });
-    setDeletedRows(data);
+    try {
+      const res = await fetch(`http://localhost:5140/api/pac/settings/storemanagement/getdeleted/`);
+      const data = await res.json();
+      setDeletedRows(data);
+    } catch (err) {
+      console.error("Error loading deleted stores:", err);
+    } finally {
+      
+    }
   };
 
   // Initial load
@@ -133,7 +119,12 @@ const StoreManagement = () => {
     if (isAccountant) return;
     const { subName, address, storeID, entity, startMonth } = newStore;
     if (subName && address && storeID && entity && startMonth) {
-      await addDoc(storeCollection, newStore);
+      const res = await fetch(`http://localhost:5140/api/pac/settings/storemanagement/add`, {
+        method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newStore)
+      });
+      if (!res.ok) throw new Error("Failed to add store");
       handleClose();
       fetchStores();
     }
@@ -144,51 +135,25 @@ const StoreManagement = () => {
     if (isAccountant) return;
     const store = rows[index];
 
-    const expireAt = Timestamp.fromDate(new Date(Date.now() + 24 * 60 * 60 * 1000)); // 1 day
+    const res = await fetch(`http://localhost:5140/api/pac/settings/storemanagement/del/${store.id}?deletedByRole=${encodeURIComponent(userRole || "User")}`, {
+        method: "DELETE"
+      });
+    if (!res.ok) throw new Error("Failed to delete store");
 
-    const deletedPayload = {
-      originalId: store.id,
-      subName: store.subName,
-      address: store.address,
-      entity: store.entity,
-      storeID: store.storeID,
-      startMonth: store.startMonth,
-      deletedAt: serverTimestamp(),
-      expireAt, 
-      deletedByRole: userRole || null,
-    };
-
-    const deletedRef = await addDoc(deletedStoreCollection, deletedPayload);
-    await deleteDoc(doc(db, "stores", store.id));
-
-    const updatedRows = [...rows];
-    updatedRows.splice(index, 1);
-    setRows(updatedRows);
-
-    setDeletedRows((prev) => [
-      ...prev,
-      { ...deletedPayload, id: store.id, deletedRefId: deletedRef.id },
-    ]);
-
+    const updated = [...rows];
+    updated.splice(index, 1);
+    setRows(updated);
+    await fetchDeletedStores();
     setHasChanges(true);
   };
 
   // Restore store from deletedStores
   const handleRestore = async (row) => {
     if (isAccountant) return;
-    const targetId = row.originalId || row.id;
-
-    await setDoc(doc(db, "stores", targetId), {
-      subName: row.subName,
-      address: row.address,
-      entity: row.entity,
-      storeID: row.storeID,
-      startMonth: row.startMonth,
-    });
-
-    if (row.deletedRefId) {
-      await deleteDoc(doc(db, "deletedStores", row.deletedRefId));
-    }
+    const res = await fetch(`http://localhost:5140/api/pac/settings/storemanagement/restore/${row.deletedRefId}`, {
+        method: "POST"
+      });
+    if (!res.ok) throw new Error("Failed to restore store");
 
     await fetchStores();
     await fetchDeletedStores();
@@ -229,15 +194,12 @@ const StoreManagement = () => {
 
   const handleConfirmSave = async () => {
     if (isAccountant) return;
-    for (const row of rows) {
-      await updateDoc(doc(db, "stores", row.id), {
-        subName: row.subName,
-        address: row.address,
-        entity: row.entity,
-        storeID: row.storeID,
-        startMonth: row.startMonth,
-      });
-    }
+    const res = await fetch(`http://localhost:5140/api/pac/settings/storemanagement/update`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(rows),
+    });
+    if (!res.ok) throw new Error("Failed to update stores");
     setModifyMode(false);
     setEditingCell({ row: null, field: null });
     setHasChanges(false);
@@ -337,50 +299,58 @@ const StoreManagement = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {visibleRows.map((row, rowIndex) => (
-              <TableRow key={row.id || rowIndex}>
-                {["subName", "address", "storeID", "entity", "startMonth"].map((field) => (
-                  <TableCell
-                    key={field}
-                    onClick={() => handleCellClick(rowIndex, field)}
-                    sx={{
-                      cursor:
-                        !isAccountant &&
-                        modifyMode &&
-                        !["storeID", "startMonth"].includes(field)
-                          ? "pointer"
-                          : "default",
-                      color:
-                        !isAccountant &&
-                        modifyMode &&
-                        ["storeID", "startMonth"].includes(field)
-                          ? "text.disabled"
-                          : "text.primary",
-                    }}
-                  >
-                    {editingCell.row === rowIndex && editingCell.field === field ? (
-                      <TextField
-                        value={row[field]}
-                        onChange={(e) => handleEditChange(e, rowIndex)}
-                        onBlur={handleEditBlur}
-                        size="small"
-                        autoFocus
-                        disabled={isAccountant}
-                      />
-                    ) : (
-                      row[field]
-                    )}
-                  </TableCell>
-                ))}
-                {modifyMode && !isAccountant && (
-                  <TableCell>
-                    <IconButton onClick={() => handleDelete(rowIndex)}>
-                      <CancelIcon sx={{ color: "red" }} />
-                    </IconButton>
-                  </TableCell>
-                )}
+            {loadingStores ? (
+              <TableRow>
+                <TableCell colSpan={modifyMode && !isAccountant ? 6 : 5} align="center">
+                  <CircularProgress size={24} />
+                </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              visibleRows.map((row, rowIndex) => (
+                <TableRow key={row.id || rowIndex}>
+                  {["subName", "address", "storeID", "entity", "startMonth"].map((field) => (
+                    <TableCell
+                      key={field}
+                      onClick={() => handleCellClick(rowIndex, field)}
+                      sx={{
+                        cursor:
+                          !isAccountant &&
+                          modifyMode &&
+                          !["storeID", "startMonth"].includes(field)
+                            ? "pointer"
+                            : "default",
+                        color:
+                          !isAccountant &&
+                          modifyMode &&
+                          ["storeID", "startMonth"].includes(field)
+                            ? "text.disabled"
+                            : "text.primary",
+                      }}
+                    >
+                      {editingCell.row === rowIndex && editingCell.field === field ? (
+                        <TextField
+                          value={row[field]}
+                          onChange={(e) => handleEditChange(e, rowIndex)}
+                          onBlur={handleEditBlur}
+                          size="small"
+                          autoFocus
+                          disabled={isAccountant}
+                        />
+                      ) : (
+                        row[field]
+                      )}
+                    </TableCell>
+                  ))}
+                  {modifyMode && !isAccountant && (
+                    <TableCell>
+                      <IconButton onClick={() => handleDelete(rowIndex)}>
+                        <CancelIcon sx={{ color: "red" }} />
+                      </IconButton>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </TableContainer>

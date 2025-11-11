@@ -7,7 +7,6 @@ import MicrosoftIcon from "@mui/icons-material/Microsoft";
 //import { auth } from "../../config/firebaseConfigEmail";
 import { auth, googleAuthProvider } from "../../config/firebase-config";
 import { signInWithPopup } from "firebase/auth";
-import { getFirestore, doc, getDoc } from "firebase/firestore"; // Firebase Firestore functions
 import backgroundImage from "./bg.webp";
 import logo from "./logo.png";
 
@@ -18,45 +17,40 @@ const Login = () => {
   }, []); // Used to change the title.
 
   const navigate = useNavigate(); // Hook for navigation
-  const user = auth.currentUser;
-  const db = getFirestore(); // Initialize Firestore
 
+  // Function to handle Microsoft login
   const handleMicrosoftLogin = async () => {
     const BACKEND_BASE = "http://localhost:8000";
     const redirect = encodeURIComponent(`${window.location.origin}/navi/dashboard`);
     window.location.href = `${BACKEND_BASE}/api/auth/microsoft/login?redirect=${redirect}`;
   };
 
-  // For debugging to see if user is actually logged out or not
-
-  // For debugging to see if the user is logged out or not
-  if (user) {
-    console.log(user.displayName);
-  } else {
-    console.log("No one logged in, looks like sign out works");
-  }
-
   // Function to handle Google login
   const handleGoogleLogin = async () => {
     try {
       console.log("Attempting to sign in with Google...");
       const result = await signInWithPopup(auth, googleAuthProvider);
-      const userEmail = result.user.email; // Get the email from Google sign-in result
+      const idToken = await result.user.getIdToken();
 
-      // Check if the email exists in the database (Firestore in this case)
-      const db = getFirestore(); // Initialize Firestore
-      const userRef = doc(db, "users", userEmail); // Assuming 'users' collection where emails are stored
-      const userDoc = await getDoc(userRef); // Get the document
+      const resp = await fetch("http://localhost:5140/api/auth/google/verify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({}),
+      });
 
-      if (userDoc.exists()) {
-        console.log("User exists in the database:", userEmail);
-        navigate("/navi/dashboard"); // Navigate to dashboard if email is in DB
+      if (!resp.ok) throw new Error("Auth backend error");
+      const data = await resp.json();
+
+      if (data.allowed) {
+        // Optional if you still use it elsewhere:
+        localStorage.setItem("user", JSON.stringify(result.user));
+        navigate("/navi/dashboard");
       } else {
-        console.log("Email not found in the database:", userEmail);
-        navigate("/not-allowed"); // Navigate to 'not allowed' page if email is not in DB
+        navigate("/not-allowed");
       }
-      console.log("Google login result: ", result);
-      localStorage.setItem("user", JSON.stringify(result.user));
     } catch (error) {
       console.error("Google Login Error:", error);
     }
@@ -79,7 +73,7 @@ const Login = () => {
         backgroundPosition: 'center',
         backgroundColor: "#1976d2"
       }}
-    >      
+    >
       {/*Login box*/}
       <Container
         maxWidth="xs"
@@ -96,8 +90,8 @@ const Login = () => {
             maxWidth: "100%",
           }}
         >
-          <img src={logo} 
-            style={{ maxWidth: '100%', height: 'auto' }}  
+          <img src={logo}
+            style={{ maxWidth: '100%', height: 'auto' }}
           />
         </Box>
 
@@ -107,7 +101,7 @@ const Login = () => {
           Sign In
         </Typography>
 
-        <Box sx={{padding: '10px'}}/>
+        <Box sx={{ padding: '10px' }} />
 
         <Button
           variant="contained"
@@ -125,7 +119,7 @@ const Login = () => {
           Login with Google
         </Button>
 
-        <Box sx={{padding: '10px'}}/>
+        <Box sx={{ padding: '10px' }} />
 
         <Button
           variant="contained"

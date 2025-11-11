@@ -41,17 +41,6 @@ import {
 
 } from "@mui/icons-material";
 import { StoreContext } from "../../context/storeContext";
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  orderBy,
-  doc,
-  updateDoc,
-  writeBatch,
-} from "firebase/firestore";
-import { db } from "../../config/firebase-config";
 import AnnoucementDialog from "./annoucement";
 
 // Helper to format timestamps into "x minutes ago"
@@ -83,9 +72,6 @@ export function NavBar() {
   const [userData, setUserData] = useState(null);
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
-    // Notifications state (from main)
-  const [notifications, setNotifications] = useState([]);
-  const [anchorEl, setAnchorEl] = useState(null);
 
   // reports config for dropdown - PAC Actual report and Invoice Log
   const reportsList = [
@@ -146,28 +132,6 @@ export function NavBar() {
 
     fetchData();
   }, [selectedStore, setSelectedStore]);
-
-  // Notifications listener
-  useEffect(() => {
-    if (!auth.currentUser) return;
-    console.log("Current user email:", auth.currentUser?.email);
-
-    const q = query(
-      collection(db, "notifications"),
-      where("toEmail", "==", auth.currentUser.email),
-      orderBy("createdAt", "desc")
-    );
-
-    const unsub = onSnapshot(q, (snapshot) => {
-      const notifs = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setNotifications(notifs);
-    });
-
-    return () => unsub();
-  }, []);
 
   // Helpers
   const handleStoreChange = (event) => {
@@ -267,7 +231,6 @@ export function NavBar() {
   }
 
   // Sign out logic
-
   async function handleSignOut() {
     try {
       await signOut(auth);
@@ -278,31 +241,61 @@ export function NavBar() {
     }
   }
 
+  // Notifications Related
+  const [notifications, setNotifications] = useState([]);
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [loadingNotifications, setLoadingNotificaitons] = useState([]);
+
+
+  // Notifications listener
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    // console.log("Current user email:", auth.currentUser?.email);
+    setLoadingNotificaitons(true);
+
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch(`http://localhost:5140/api/pac/notifications?toEmail=${encodeURIComponent(auth.currentUser.email)}`);
+        const data = await res.json();
+        setNotifications(data);
+      } catch (err) {
+        console.error("Error loading notification settings:", err);
+      } finally {
+        setLoadingNotificaitons(false);
+      }
+    }
+
+    fetchNotifications();
+  }, []);
+
   // Mark single notification as read
-  async function markAsRead(notifId) {
+  const markAsRead = async(notifId) => {
     try {
-      const notifRef = doc(db, "notifications", notifId);
-      await updateDoc(notifRef, { read: true, readAt: new Date() });
+      const res = await fetch(`http://localhost:5140/api/pac/notifications/${notifId}/read`, 
+        { method: "POST" });
+      if (res.ok) {
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === notifId ? { ...n, read: true } : n))
+        );
+      }
     } catch (err) {
       console.error("Error marking notification as read:", err);
     }
-  }
+  };
 
   // Mark all notifications as read
-  async function markAllAsRead() {
+  const markAllAsRead = async () => {
     try {
-      const batch = writeBatch(db);
-      notifications.forEach((n) => {
-        if (!n.read) {
-          const notifRef = doc(db, "notifications", n.id);
-          batch.update(notifRef, { read: true, readAt: new Date() });
-        }
-      });
-      await batch.commit();
+      const res = await fetch(
+        `http://localhost:5140/api/pac/notifications/mark_all_read?toEmail=${encodeURIComponent(auth.currentUser.email)}`,
+        { method: "POST" });
+      if (res.ok) {
+        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      }
     } catch (err) {
       console.error("Error marking all notifications as read:", err);
     }
-  }
+  };
 
   // Notification dropdown
   const open = Boolean(anchorEl);
@@ -400,6 +393,10 @@ export function NavBar() {
               style: { maxHeight: 400, width: "340px" },
             }}
           >
+            { loadingNotifications && (
+              <MenuItem disabled>Loading Notifications</MenuItem>
+            )}
+
             {notifications.length === 0 && (
               <MenuItem disabled>No notifications</MenuItem>
             )}
