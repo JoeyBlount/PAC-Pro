@@ -8,7 +8,7 @@ import { auth } from "../../config/firebase-config";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useThemeMode } from '../../context/ThemeContext';
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = "http://localhost:5140";
 
 // Auth-aware fetch helper
 async function api(path, { method = "GET", body } = {}) {
