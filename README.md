@@ -329,6 +329,7 @@ AZURE_CLIENT_ID=your-app-client-id
 AZURE_CLIENT_SECRET=your-client-secret-value
 AZURE_REDIRECT_URI=http://localhost:5140/api/auth/microsoft/callback
 FRONTEND_BASE_URL=http://localhost:3000
+GOOGLE_APPLICATION_CREDENTIALS=server/python_backend/config/firebase-service-account.json
 ```
 Notes:
 - Client secret must be the Secret Value (not the Secret ID)

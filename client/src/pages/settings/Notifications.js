@@ -13,10 +13,8 @@ import {
   Snackbar,
   Alert,
   Paper,
-  Grid,
+  Stack,
 } from "@mui/material";
-import { db } from "../../config/firebase-config";
-import { doc, getDoc, setDoc } from "firebase/firestore";
 
 const rolesList = ["Admin", "Supervisor", "Office Manager", "General Manager", "Accountant"];
 
@@ -38,27 +36,9 @@ export default function Notifications() {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const ref = doc(db, "settings", "notifications");
-        const snap = await getDoc(ref);
-
-        if (snap.exists()) {
-          const data = snap.data();
-          const formatted = notificationTypes.map((type) => ({
-            type,
-            enabled: data[type]?.enabled ?? true,
-            roles: data[type]?.roles ?? ["Admin"],
-          }));
-          setSettings(formatted);
-        } else {
-          // No doc yet — initialize with defaults
-          setSettings(
-            notificationTypes.map((type) => ({
-              type,
-              enabled: true,
-              roles: ["Admin"],
-            }))
-          );
-        }
+        const res = await fetch(`http://localhost:5140/api/pac/settings/notifications/`);
+        const data = await res.json();
+        setSettings(data);
       } catch (err) {
         console.error("Error loading notification settings:", err);
       } finally {
@@ -66,6 +46,7 @@ export default function Notifications() {
       }
     };
 
+    setLoading(true);
     fetchSettings();
   }, []);
 
@@ -88,15 +69,21 @@ export default function Notifications() {
   // Save to Firestore
   const handleUpdate = async () => {
     try {
-      const ref = doc(db, "settings", "notifications");
       const formattedData = {};
       settings.forEach((s) => {
         formattedData[s.type] = {
           enabled: s.enabled,
-          roles: s.roles,
+          roles: s.roles
         };
       });
-      await setDoc(ref, formattedData);
+
+      const res = await fetch(`http://localhost:5140/api/pac/settings/notifications/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formattedData)
+      });
+      
+      if (!res.ok) throw new Error("Failed to save settings");
       setSuccess(true);
     } catch (err) {
       console.error("Error saving notification settings:", err);
@@ -113,55 +100,47 @@ export default function Notifications() {
         {loading ? (
           <Typography>Loading...</Typography>
         ) : (
-          <Grid container spacing={2}>
+          <Stack spacing={2}>
             {settings.map((setting, index) => (
-              <Grid
+              <Stack
                 key={setting.type}
-                container
-                item
-                xs={12}
+                direction="row"
                 alignItems="center"
                 spacing={2}
-                sx={{ mb: 2 }}
+                sx={{ p: 1, border: "1px solid #e0e0e0", borderRadius: 2 }}
               >
-                <Grid item xs={4}>
-                  <Typography>{setting.type}</Typography>
-                </Grid>
+                <Typography sx={{ width: "30%" }}>{setting.type}</Typography>
 
-                <Grid item xs={5}>
-                  <FormControl fullWidth>
-                    <InputLabel>Roles</InputLabel>
-                    <Select
-                      multiple
-                      value={setting.roles}
-                      onChange={(e) => handleRoleChange(index, e)}
-                      input={<OutlinedInput label="Roles" />}
-                      renderValue={(selected) => (
-                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                          {selected.map((role) => (
-                            <Chip key={role} label={role} />
-                          ))}
-                        </Box>
-                      )}
-                    >
-                      {rolesList.map((role) => (
-                        <MenuItem key={role} value={role}>
-                          {role}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
+                <FormControl sx={{ width: "50%" }}>
+                  <InputLabel>Roles</InputLabel>
+                  <Select
+                    multiple
+                    value={setting.roles}
+                    onChange={(e) => handleRoleChange(index, e)}
+                    input={<OutlinedInput label="Roles" />}
+                    renderValue={(selected) => (
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                        {selected.map((role) => (
+                          <Chip key={role} label={role} />
+                        ))}
+                      </Box>
+                    )}
+                  >
+                    {rolesList.map((role) => (
+                      <MenuItem key={role} value={role}>
+                        {role}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
 
-                <Grid item xs={3}>
-                  <Switch
-                    checked={setting.enabled}
-                    onChange={() => handleToggle(index)}
-                  />
-                </Grid>
-              </Grid>
+                <Switch
+                  checked={setting.enabled}
+                  onChange={() => handleToggle(index)}
+                />
+              </Stack>
             ))}
-          </Grid>
+          </Stack>
         )}
       </Paper>
 
