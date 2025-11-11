@@ -1,78 +1,44 @@
-import { test, expect } from "@playwright/test";
+// Script to create all invoice categories in Firestore
+// Run this script once to set up all the required categories
 
-test.describe("Settings - Notifications Page", () => {
-  test.beforeEach(async ({ page }) => {
-    // 1️⃣ Navigate to the page (replace URL with your real route)
-    await page.goto("http://localhost:3000/settings/notifications");
+import { db } from "../config/firebase-config";
+import { collection, doc, setDoc } from "firebase/firestore";
 
-    // Wait for settings to load
-    await expect(page.getByText("Notification Settings")).toBeVisible();
-    await expect(page.getByText("Loading...")).toBeHidden({ timeout: 5000 });
-  });
+// All categories from invoice log, organized in PAC page order
+const invoiceCategories = [
+  "FOOD", "CONDIMENT", "PAPER", "NONPRODUCT", // First 4 as requested
+  "TRAVEL", "ADV-OTHER", "PROMO", "OUTSIDE SVC", 
+  "LINEN", "OP. SUPPLY", "M+R", "SML EQUIP", 
+  "UTILITIES", "OFFICE", "TRAINING", "CREW RELATIONS"
+];
 
-  test("Modify which roles get a specific notification", async ({ page }) => {
-    // Find the first notification row (e.g. Generate Submission)
-    const firstNotificationRow = page.locator("text=Generate Submission").first();
+const setupInvoiceCategories = async () => {
+  console.log("Setting up invoice categories...");
+  
+  try {
+    const invoiceCatRef = collection(db, "invoiceCategories");
+    
+    for (const categoryId of invoiceCategories) {
+      const docRef = doc(invoiceCatRef, categoryId);
+      
+      // Create document with default values
+      await setDoc(docRef, {
+        bankAccountNum: "0000", // Default account number
+        name: categoryId,
+        createdAt: new Date().toISOString(),
+        description: `Account settings for ${categoryId} category`
+      });
+      
+      console.log(`✅ Created category: ${categoryId}`);
+    }
+    
+    console.log("🎉 All invoice categories have been created successfully!");
+    console.log("You can now use the Invoice Settings page to edit account numbers.");
+    
+  } catch (error) {
+    console.error("❌ Error setting up categories:", error);
+  }
+};
 
-    // Open the role selector next to it
-    const select = firstNotificationRow
-      .locator("xpath=ancestor::div[contains(@class, 'MuiGrid-container')]")
-      .locator("label:has-text('Roles')")
-      .locator("xpath=ancestor::div[contains(@class, 'MuiFormControl-root')]")
-      .locator("div[role='button']");
-
-    await select.click();
-
-    // Select a new role (e.g. "Supervisor")
-    await page.locator("li.MuiMenuItem-root:has-text('Supervisor')").click();
-
-    // Click outside to close the dropdown
-    await page.keyboard.press("Escape");
-
-    // Click "Update Settings"
-    await page.getByRole("button", { name: "Update Settings" }).click();
-
-    // Verify success Snackbar
-    const snackbar = page.getByText("Settings updated successfully!");
-    await expect(snackbar).toBeVisible();
-
-    // Optional: Verify change persisted after reload
-    await page.reload();
-    await expect(page.getByText("Generate Submission")).toBeVisible();
-    const chip = page.locator("text=Generate Submission")
-      .locator("xpath=ancestor::div[contains(@class, 'MuiGrid-container')]")
-      .locator("span.MuiChip-label:has-text('Supervisor')");
-    await expect(chip).toBeVisible();
-  });
-
-  test("Toggle a notification type on/off", async ({ page }) => {
-    // Find the switch for "Invoice Submission"
-    const switchLocator = page.locator("text=Invoice Submission")
-      .locator("xpath=ancestor::div[contains(@class, 'MuiGrid-container')]")
-      .locator("input[type='checkbox']");
-
-    // Check initial state
-    const initialState = await switchLocator.isChecked();
-
-    // Toggle it
-    await switchLocator.click();
-
-    // Expect it changed
-    await expect(switchLocator).toHaveJSProperty("checked", !initialState);
-
-    // Save
-    await page.getByRole("button", { name: "Update Settings" }).click();
-
-    // Verify success Snackbar
-    await expect(page.getByText("Settings updated successfully!")).toBeVisible();
-
-    // Optional: Reload and confirm state persisted
-    await page.reload();
-    const afterReload = await page
-      .locator("text=Invoice Submission")
-      .locator("xpath=ancestor::div[contains(@class, 'MuiGrid-container')]")
-      .locator("input[type='checkbox']")
-      .isChecked();
-    expect(afterReload).toBe(!initialState);
-  });
-});
+// Run the setup
+setupInvoiceCategories();
