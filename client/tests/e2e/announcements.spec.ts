@@ -1,26 +1,19 @@
-import { test, expect, chromium } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import path from 'path';
+test.use({ storageState: './auth.json' });
+test.use({ headless: true, channel: 'chrome' });
 
 test.describe('Announcement Management',  () => {
-  test('Should be able to add and remove announcements', async ({}, testInfo) => {
+  test('Should be able to add and remove announcements', async ({ page }, testInfo) => {
     test.setTimeout(60000);
-      
-    const context = await chromium.launchPersistentContext('./.pw-announcements-test-profile', {
-      channel: 'chrome',
-      headless: false,
-      ignoreDefaultArgs: ['--enable-automation'],
-      args: ['--disable-blink-features=AutomationControlled'],
-    });
-
-    const page = await context.newPage();
 
     await page.goto('http://localhost:3000');
-    await expect(page.getByText('Sign In')).toBeVisible();
-
-    // Google login (manual in headed mode)
-    await page.pause(); // complete login manually
-
+    const googleBtn = page.getByRole('button', { name: /^Login with Google$/i });
+    if (await googleBtn.isVisible().catch(() => false)) {
+      await googleBtn.click();
+    }
     // Land on dashboard
-    await page.waitForURL(/.*dashboard.*/);
+    await page.waitForURL(/\/navi\/dashboard.*/);
 
     await page.evaluate(async () => {
       // Try modular (v9) first
@@ -32,37 +25,72 @@ test.describe('Announcement Management',  () => {
       }
     });
 
-    // Open announcement dialog
-    await page.getByRole('button').nth(1).click();
+    try {
+      // Open announcement management (prefer direct Manage button; fallback to prior flow)
+      const manageBtn = page.getByRole('button', { name: /^Manage$/i });
+      if (await manageBtn.isVisible().catch(() => false)) {
+        await manageBtn.click();
+      } else {
+        const possibleOpenBtn = page.getByRole('button').nth(1);
+        if (await possibleOpenBtn.isVisible().catch(() => false)) {
+          await possibleOpenBtn.click();
+        }
+        await page.getByRole('button', { name: /^Manage$/i }).click();
+      }
 
-    // Open announcement management
-    await page.getByRole('button', { name: 'Manage' }).click();
-    
+      // Scope to the Manage Announcements dialog
+      const dialog = page.getByRole('dialog', { name: /Manage Announcements/i });
+      await expect(dialog).toBeVisible({ timeout: 10000 });
 
-    // Add new announcement
-    await page.getByRole('textbox', { name: 'Title' }).click();
-    await page.getByRole('textbox', { name: 'Title' }).fill('New Announcement Title');
-    await page.getByRole('textbox', { name: 'Message' }).click();
-    await page.getByRole('textbox', { name: 'Message' }).fill('New Announcement Message');
-    await page.getByRole('combobox', { name: 'Visible To All' }).click();
-    await page.getByRole('option', { name: 'Admin' }).click();
-    await page.getByRole('button', { name: 'Add' }).click();
+      // Add new announcement with a unique title to avoid collisions
+      const unique = Date.now();
+      const title = `Playwright Announcement ${unique}`;
+      const message = `Automated message ${unique}`;
+      await dialog.getByRole('textbox', { name: /Title/i }).fill(title);
+      await dialog.getByRole('textbox', { name: /Message/i }).fill(message);
 
-    const listItem = page.locator('li', { hasText: 'New Announcement Title (Admin)' });
+      const audience = dialog.getByRole('combobox').first();
+      if (await audience.isVisible().catch(() => false)) {
+        await audience.click();
+        await page.getByRole('option', { name: /^Admin$/i }).click();
+      }
+      await dialog.getByRole('button', { name: /^Add$/i }).click();
 
-    // Check if announcement was added
-    await expect(listItem).toBeVisible();
-    
-    // Delete new announcement
-    const button = page.locator('li', { hasText: 'New Announcement Title (Admin)' }).getByRole('button');
-    await expect(button).toBeVisible(); // waits for button to appear
-    await button.click();
-    
-    // Check if announcement was deleted
-    await expect(listItem).not.toBeVisible();
+      // Helper to escape regex special chars
+      const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-    // Close out dialog
-    await page.getByRole('button', { name: 'Close' }).click();
-    await page.getByRole('button', { name: 'Close' }).click();
+      // Wait until the new announcement appears in the list (avoid exact-equality to allow extra text lines)
+      const listItem = dialog.locator('li').filter({ hasText: new RegExp(`${esc(title)}\\s*\\(Admin\\)`, 'i') }).first();
+      await expect
+        .poll(async () => await listItem.count(), { timeout: 10000 })
+        .toBeGreaterThan(0);
+      
+      // Delete new announcement
+      const deleteBtn = listItem.getByRole('button').first();
+      await expect(deleteBtn).toBeVisible({ timeout: 10000 });
+      await deleteBtn.click();
+      
+      // Check if announcement was deleted
+      await expect(listItem).toHaveCount(0, { timeout: 10000 });
+
+      // Close out dialog
+      const closeBtn = dialog.getByRole('button', { name: /^Close$/i }).first();
+      if (await closeBtn.isVisible().catch(() => false)) {
+        await closeBtn.click();
+        await expect(dialog).toBeHidden({ timeout: 10000 }).catch(() => {});
+      }
+    } catch (err) {
+      const shotPath = path.join(testInfo.outputDir, 'announcements-failure.png');
+      await page.screenshot({ path: shotPath, fullPage: true }).catch(() => {});
+      throw new Error(`Announcements e2e failed. Screenshot: ${shotPath}\n${(err as Error).stack || err}`);
+    }
+  });
+
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.status !== testInfo.expectedStatus) {
+      const safeTitle = testInfo.title.replace(/[^a-z0-9-_]/gi, '_').toLowerCase();
+      const filePath = path.join(testInfo.outputDir, `${safeTitle}-${testInfo.status || 'failed'}.png`);
+      await page.screenshot({ path: filePath, fullPage: true }).catch(() => {});
+    }
   });
 });

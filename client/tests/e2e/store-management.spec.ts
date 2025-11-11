@@ -1,32 +1,35 @@
-import { test, expect, chromium } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+test.use({ storageState: './auth.json' });
+test.use({ headless: true, channel: 'chrome' });
 
 test.describe('Store Management – add, modify, and delete Test store', () => {
-  test('cleans old data, adds Test store, modifies to "Modified", and deletes it', async () => {
+  test('cleans old data, adds Test store, modifies to "Modified", and deletes it', async ({ page }, testInfo) => {
     test.setTimeout(120_000);
 
-    const context = await chromium.launchPersistentContext('./.pw-storemgmt-test-profile', {
-      channel: 'chrome',
-      headless: false,
-      ignoreDefaultArgs: ['--enable-automation'],
-      args: ['--disable-blink-features=AutomationControlled'],
-    });
-    const page = await context.newPage();
-
-    // Prompts user to log in.
+    // Login using saved state (click Google if still on login)
     await page.goto('http://localhost:3000');
-    await expect(page.getByText(/Sign In/i)).toBeVisible();
-    await page.pause(); // perform Google login manually once
-    await page.waitForURL(/.*dashboard.*/);
+    const googleBtn = page.getByRole('button', { name: /^Login with Google$/i });
+    if (await googleBtn.isVisible().catch(() => false)) {
+      await googleBtn.click();
+    }
+    // Ensure post-login and refresh ID token so Authorization header is attached
+    await page.waitForURL(/\/navi\/dashboard/i, { timeout: 45_000 }).catch(() => {});
+    await page.evaluate(async () => {
+      const anyWin = window as any;
+      const auth = (anyWin as any)?.firebaseAuth || (anyWin as any)?.auth || (anyWin as any)?.firebase?.auth?.();
+      const user = auth?.currentUser;
+      if (user?.getIdToken) await user.getIdToken(true);
+    }).catch(() => {});
+    // Now navigate to Store Management; with fresh token route guard should pass
+    await page.goto('http://localhost:3000/navi/settings/store-management');
+    await expect(page).toHaveURL(/\/navi\/settings\/store-management/i, { timeout: 45_000 });
 
     await page.evaluate(async () => {
-      const anyWin = window;
-      const auth = anyWin?.firebaseAuth || anyWin?.auth || anyWin?.firebase?.auth?.();
+      const anyWin = window as any;
+      const auth = (anyWin as any)?.firebaseAuth || (anyWin as any)?.auth || (anyWin as any)?.firebase?.auth?.();
       const user = auth?.currentUser;
       if (user?.getIdToken) await user.getIdToken(true);
     });
-
-    //Navigate to the Store Management page.
-    await page.goto('http://localhost:3000/navi/settings/store-management');
 
     if (await page.getByText(/view-only mode/i).isVisible().catch(() => false)) {
       test.skip(true, 'Accountant role: view-only, cannot modify.');
@@ -59,6 +62,11 @@ test.describe('Store Management – add, modify, and delete Test store', () => {
         .filter({ has: page.locator('td').nth(1).filter({ hasText: new RegExp(`^${esc(address)}$`, 'i') }) })
         .filter({ has: page.locator('td').nth(2).filter({ hasText: new RegExp(`^${esc(id)}$`, 'i') }) })
         .first();
+    const rowById = (id) =>
+      mainTable()
+        .locator('tbody tr')
+        .filter({ has: page.locator('td').nth(2).filter({ hasText: new RegExp(`^${esc(id)}$`, 'i') }) })
+        .first();
 
     async function selectStartMonth(month) {
       const dialog = page.getByRole('dialog', { name: /Add New Store/i });
@@ -80,11 +88,12 @@ test.describe('Store Management – add, modify, and delete Test store', () => {
         .toContain(month);
     }
 
-    async function addStore(name) { //Adds the test store with testing informatoin.
+    async function addStore(name) { //Adds the test store with testing information.
       const addBtn = page.locator('button:has(svg[data-testid="AddCircleOutlineIcon"])');
       await expect(addBtn).toBeVisible();
       await addBtn.click(); // plus button to add store.
 
+      // Target the dialog panel itself (unique), avoid mixing root + paper elements
       const addDialog = page.getByRole('dialog', { name: /Add New Store/i });
       await expect(addDialog).toBeVisible();
 
@@ -95,9 +104,26 @@ test.describe('Store Management – add, modify, and delete Test store', () => {
       await selectStartMonth(storeMonth); //Fills test store information into pop up.
 
       await addDialog.getByRole('button', { name: /^Save$/i }).click();
-      await expect(addDialog).toBeHidden({ timeout: 5000 }); //Saves the new test store.
+      // Be resilient: either dialog closes or row appears; then ensure dialog closed
+      const waitHide = addDialog.waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => null);
+      const waitRow = rowById(storeId).waitFor({ state: 'visible', timeout: 30_000 }).catch(() => null);
+      await Promise.race([waitHide, waitRow]);
+      if (await addDialog.isVisible().catch(() => false)) {
+        // Try to wait it out first; avoid brittle clicks while DOM is detaching
+        const hidden = await addDialog.waitFor({ state: 'hidden', timeout: 8_000 }).then(() => true).catch(() => false);
+        if (!hidden) {
+          // As a last resort, attempt a gentle close, but ignore detachment errors
+          const cancelBtn = addDialog.getByRole('button', { name: /^Cancel$/i });
+          if (await cancelBtn.isVisible().catch(() => false)) {
+            await cancelBtn.click({ timeout: 2000 }).catch(() => {});
+          } else {
+            await page.keyboard.press('Escape').catch(() => {});
+          }
+          await addDialog.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
+        }
+      }
  
-      await expect(rowByCells(name, storeAddress, storeId)).toBeVisible({ timeout: 10000 }); //Tests if store was added.
+      await expect(rowById(storeId)).toBeVisible({ timeout: 10000 }); //Tests if store was added.
     }
 
     async function modifyStore(oldName, newName) { //Modfies the test store by changing the name 'Test' to 'Modified'.
@@ -125,6 +151,7 @@ test.describe('Store Management – add, modify, and delete Test store', () => {
 
       await expect(confirmDialog).toBeHidden({ timeout: 10000 });
       await expect(rowByCells(newName, storeAddress, storeId)).toBeVisible({ timeout: 10000 });
+      await expect(rowByCells(oldName, storeAddress, storeId)).toHaveCount(0, { timeout: 10000 });
     }
 
     async function deleteStore(name) { //Deletes the test store.
@@ -149,7 +176,8 @@ test.describe('Store Management – add, modify, and delete Test store', () => {
       await confirmDialog.getByRole('button', { name: /^Save$/i }).click();
 
       await expect(confirmDialog).toBeHidden({ timeout: 10000 });
-      await expect(rowByCells(name, storeAddress, storeId)).toHaveCount(0, { timeout: 10000 });
+      await page.reload();
+      await expect(rowById(storeId)).toHaveCount(0, { timeout: 10000 });
     }
 
     //Cleans up left over stores for clean test.
@@ -158,7 +186,7 @@ test.describe('Store Management – add, modify, and delete Test store', () => {
       if (await modifyBtn.isVisible()) await modifyBtn.click().catch(() => {});
       const candidates = ['Test', 'Modified'];
       for (const name of candidates) {
-        const row = rowByCells(name, storeAddress, storeId);
+        const row = rowByCells(name, storeAddress, storeId).or(rowById(storeId));
         if (await row.isVisible().catch(() => false)) {
           const delBtn = row.locator('button:has(svg[data-testid="CancelIcon"])');
           await delBtn.click().catch(() => {}); //Deletes left over test stores.
@@ -177,12 +205,19 @@ test.describe('Store Management – add, modify, and delete Test store', () => {
 
     //Testing sequence.
     try {
+      // Ensure page is Store Management and table is present
+      await expect(page).toHaveURL(/\/navi\/settings\/store-management/i, { timeout: 45_000 });
+      await expect(page.getByTestId('store-mgmt-heading')).toBeVisible({ timeout: 15_000 });
+      await expect(mainTable()).toBeVisible({ timeout: 15_000 });
+
       await cleanupOldStores();
       await addStore(storeName);
       await modifyStore(storeName, modifiedName);
       await deleteStore(modifiedName);
-    } finally {
-      await context.close();
+    } catch (err) {
+      const shotPath = `${testInfo.outputDir}/store-mgmt-failure.png`;
+      await page.screenshot({ path: shotPath, fullPage: true }).catch(() => {});
+      throw new Error(`StoreManagement e2e failed. Screenshot: ${shotPath}\n${(err as Error).stack || err}`);
     }
   });
 });

@@ -1,18 +1,11 @@
-import { test, expect, chromium, BrowserContext, Page } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import path from 'path';
+test.use({ storageState: './auth.json' });
+test.use({ headless: true, channel: 'chrome' });
 
 test.describe('Deadline Management – add, modify, delete', () => {
-  test('adds "Test", renames to "Modified", then deletes it', async ({}, testInfo) => {
+  test('adds "Test", renames to "Modified", then deletes it', async ({ page }, testInfo) => {
     test.setTimeout(150_000);
-
-   
-    const context: BrowserContext = await chromium.launchPersistentContext('./.pw-deadlines-test-profile', {
-      channel: 'chrome',
-      headless: false,
-      ignoreDefaultArgs: ['--enable-automation'],
-      args: ['--disable-blink-features=AutomationControlled'],
-    });
-    const page: Page = await context.newPage();
 
     page.on('dialog', async (dialog) => {
       if (dialog.type() === 'confirm') await dialog.accept();
@@ -20,17 +13,23 @@ test.describe('Deadline Management – add, modify, delete', () => {
     });
 
     try {
-      //Prompts user to log in with email.
+      // Login using saved state (click Google if still on login)
       await page.goto('http://localhost:3000');
-      const needsLogin = await page.getByText(/Sign In/i).isVisible().catch(() => false);
-      if (needsLogin) await page.pause(); // perform Google login once; persisted in profile
-      await page.waitForURL(/.*dashboard.*/, { timeout: 20000 }).catch(() => {});
+      const googleBtn = page.getByRole('button', { name: /^Login with Google$/i });
+      if (await googleBtn.isVisible().catch(() => false)) {
+        await googleBtn.click();
+      }
+      await page.waitForURL(/\/navi\/dashboard/i, { timeout: 45_000 }).catch(() => {});
 
       await page.evaluate(async () => {
         const w: any = window as any;
         const auth = w?.firebaseAuth || w?.auth || w?.firebase?.auth?.();
         const user = auth?.currentUser;
-        if (user?.getIdToken) await user.getIdToken(true);
+        try {
+          if (user?.getIdToken) await user.getIdToken(true);
+        } catch (e) {
+          console.warn('ID token refresh failed, continuing:', e);
+        }
       }).catch(() => {});
 
       //Navigate to the Deadline management settings page.
@@ -42,6 +41,7 @@ test.describe('Deadline Management – add, modify, delete', () => {
       }
 
       //Checks if on correct page.
+      await expect(page).toHaveURL(/\/navi\/settings\/deadline-management/i, { timeout: 20000 });
       await expect(page.getByRole('heading', { name: /Deadline Management/i })).toBeVisible({ timeout: 10000 });
 
       //Admin role.
@@ -57,9 +57,10 @@ test.describe('Deadline Management – add, modify, delete', () => {
         throw new Error(`Cannot add/modify/delete (likely non-admin or button hidden). Screenshot: ${shotPath}`);
       }
 
-      //Test deadline.
-      const title = 'Test';
-      const newTitle = 'Modified'; //Modified name.
+      //Test data (unique per run to avoid collisions).
+      const uid = Date.now();
+      const title = `Test-${uid}`;
+      const newTitle = `Modified-${uid}`; //Modified name.
       const typeLabel = 'PAC';
       const description = 'Testing';
       const dueDate = new Date().toISOString().slice(0, 10); //Current date
@@ -87,8 +88,7 @@ test.describe('Deadline Management – add, modify, delete', () => {
         await expect(mainTable().locator('tbody')).toBeVisible({ timeout: 10000 });
       }
 
-      async function openSelectInDialog(labelText: string) { 
-        const dialog = page.getByRole('dialog');
+      async function openSelectInDialog(dialog: ReturnType<Page['locator']>, labelText: string) { 
         const form = dialog.locator(`.MuiFormControl-root:has-text("${labelText}")`).first();
         const trigger = form.getByRole('button').first().or(form.locator('[aria-haspopup="listbox"]').first());
         await trigger.click();
@@ -101,6 +101,19 @@ test.describe('Deadline Management – add, modify, delete', () => {
         await expect(page.locator('[role="listbox"]')).toBeHidden({ timeout: 5000 });
       }
 
+      // Pre-clean: if either target title exists from prior runs, delete them
+      await waitForLoadedTable();
+      for (const t of [title, newTitle]) {
+        const existing = rowByTitle(t);
+        if (await existing.isVisible().catch(() => false)) {
+          const delBtn = existing.locator('button').filter({ has: page.locator('svg[data-testid="DeleteIcon"]') }).first();
+          if (await delBtn.isVisible().catch(() => false)) {
+            await delBtn.click();
+            await expect(rowByTitle(t)).toHaveCount(0, { timeout: 12000 }).catch(() => {});
+          }
+        }
+      }
+
       await waitForLoadedTable();
 
       //Adds test deadline.
@@ -110,19 +123,23 @@ test.describe('Deadline Management – add, modify, delete', () => {
 
       await addDialog.getByRole('textbox', { name: /Title/i }).fill(title);
 
-      await openSelectInDialog('Type');
+      await openSelectInDialog(addDialog, 'Type');
       await chooseOptionByLabel(typeLabel);
 
       await addDialog.getByRole('textbox', { name: /Due Date/i }).fill(dueDate);
 
       await addDialog.getByRole('textbox', { name: /Description/i }).fill(description);
 
-      await openSelectInDialog('Recurring');
+      await openSelectInDialog(addDialog, 'Recurring');
       await chooseOptionByLabel(recurringLabel);
 
       await addDialog.getByRole('button', { name: /^Add$/i }).click(); //Confirm add.
       await expect(addDialog).toBeHidden({ timeout: 8000 });
 
+      await expect(rowByTitle(title)).toBeVisible({ timeout: 10000 });
+      // Verify persisted by reloading
+      await page.reload();
+      await waitForLoadedTable();
       await expect(rowByTitle(title)).toBeVisible({ timeout: 10000 });
 
       //Modifies test deadline by changing 'Test' name to 'Modified'.
@@ -148,6 +165,11 @@ test.describe('Deadline Management – add, modify, delete', () => {
 
       await expect(rowByTitle(newTitle)).toBeVisible({ timeout: 10000 });
       await expect(rowByTitle(title)).toHaveCount(0, { timeout: 10000 });
+      // Verify persisted by reloading
+      await page.reload();
+      await waitForLoadedTable();
+      await expect(rowByTitle(newTitle)).toBeVisible({ timeout: 10000 });
+      await expect(rowByTitle(title)).toHaveCount(0, { timeout: 10000 });
 
       //Deletes the Modified deadline.
       const modRow = rowByTitle(newTitle);
@@ -159,9 +181,21 @@ test.describe('Deadline Management – add, modify, delete', () => {
 
       // Verify it disappears from the main table
       await expect(rowByTitle(newTitle)).toHaveCount(0, { timeout: 12000 });
+      // Confirm after reload
+      await page.reload();
+      await waitForLoadedTable();
+      await expect(rowByTitle(newTitle)).toHaveCount(0, { timeout: 12000 });
 
     } finally {
-      await context.close();
+      // no-op
+    }
+  });
+
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.status !== testInfo.expectedStatus) {
+      const safeTitle = testInfo.title.replace(/[^a-z0-9-_]/gi, '_').toLowerCase();
+      const filePath = path.join(testInfo.outputDir, `${safeTitle}-${testInfo.status || 'failed'}.png`);
+      await page.screenshot({ path: filePath, fullPage: true }).catch(() => {});
     }
   });
 });
