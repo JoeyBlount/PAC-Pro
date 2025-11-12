@@ -30,11 +30,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EventIcon from '@mui/icons-material/Event';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
-import { db } from '../../config/firebase-config';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 
 const DeadlineManagement = () => {
-  const { userRole } = useAuth();
+  const { userRole, currentUser } = useAuth();
   const [deadlines, setDeadlines] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingDeadline, setEditingDeadline] = useState(null);
@@ -56,20 +54,26 @@ const DeadlineManagement = () => {
 
   useEffect(() => {
     fetchDeadlines();
-  }, []);
+  }, [currentUser]);
 
   const fetchDeadlines = async () => {
     try {
-      const deadlinesQuery = query(
-        collection(db, 'deadlines'),
-        orderBy('dueDate', 'asc')
-      );
-      const snapshot = await getDocs(deadlinesQuery);
-      const deadlinesList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setDeadlines(deadlinesList);
+      const token = currentUser ? await currentUser.getIdToken() : null;
+      const response = await fetch('http://localhost:5140/api/pac/deadlines', {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Role': userRole || '',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+      
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errText}`);
+      }
+      
+      const data = await response.json();
+      setDeadlines(data);
     } catch (error) {
       console.error('Error fetching deadlines:', error);
       showAlert('Error loading deadlines', 'error');
@@ -132,25 +136,35 @@ const DeadlineManagement = () => {
     try {
       const deadlineData = {
         title: formData.title,
-        description: formData.description,
+        description: formData.description || '',
         dueDate: formData.dueDate,
         type: formData.type,
-        recurring: formData.recurring,
-        dayOfMonth: formData.recurring ? parseInt(formData.dayOfMonth) : null,
-        updatedAt: serverTimestamp()
+        recurring: formData.recurring === true || formData.recurring === 'true',
+        dayOfMonth: (formData.recurring === true || formData.recurring === 'true') ? parseInt(formData.dayOfMonth) : null,
       };
 
-      if (editingDeadline) {
-        // Update existing deadline
-        await updateDoc(doc(db, 'deadlines', editingDeadline.id), deadlineData);
-        showAlert('Deadline updated successfully');
-      } else {
-        // Add new deadline
-        deadlineData.createdAt = serverTimestamp();
-        await addDoc(collection(db, 'deadlines'), deadlineData);
-        showAlert('Deadline added successfully');
+      const token = currentUser ? await currentUser.getIdToken() : null;
+      const url = editingDeadline 
+        ? `http://localhost:5140/api/pac/deadlines/${editingDeadline.id}`
+        : 'http://localhost:5140/api/pac/deadlines';
+      const method = editingDeadline ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Role': userRole || '',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(deadlineData)
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${response.status}`);
       }
 
+      showAlert(editingDeadline ? 'Deadline updated successfully' : 'Deadline added successfully');
       handleCloseDialog();
       fetchDeadlines();
     } catch (error) {
@@ -165,7 +179,21 @@ const DeadlineManagement = () => {
     }
 
     try {
-      await deleteDoc(doc(db, 'deadlines', deadlineId));
+      const token = currentUser ? await currentUser.getIdToken() : null;
+      const response = await fetch(`http://localhost:5140/api/pac/deadlines/${deadlineId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Role': userRole || '',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${response.status}`);
+      }
+
       showAlert('Deadline deleted successfully');
       fetchDeadlines();
     } catch (error) {
