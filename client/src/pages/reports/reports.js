@@ -15,7 +15,8 @@ import {
   Select,
   MenuItem,
   FormControl,
-  InputLabel
+  InputLabel,
+  useTheme
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import PrintIcon from '@mui/icons-material/Print';
@@ -27,7 +28,7 @@ import './reports.css';
 const Reports = () => {
   const navigate = useNavigate();
   const { selectedStore } = useContext(StoreContext);
-  
+  const theme = useTheme();
   // State for dialogs
   const [pacDialogOpen, setPacDialogOpen] = useState(false);
   const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
@@ -77,7 +78,7 @@ const Reports = () => {
       title: 'PAC Actual Report',
       description: 'View and print the Profit After Controllables (PAC) actual report with detailed expense breakdowns.',
       icon: <DescriptionIcon sx={{ fontSize: 60, color: '#1976d2' }} />,
-      color: '#e3f2fd',
+      // color: '#e3f2fd',
       action: () => setPacDialogOpen(true)
     },
     {
@@ -85,7 +86,7 @@ const Reports = () => {
       title: 'Invoice Log Report',
       description: 'View and print the complete invoice log with all submitted invoices and totals.',
       icon: <ReceiptIcon sx={{ fontSize: 60, color: '#388e3c' }} />,
-      color: '#e8f5e9',
+      // color: '#e8f5e9',
       action: () => setInvoiceDialogOpen(true)
     }
   ];
