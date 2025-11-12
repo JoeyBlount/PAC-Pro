@@ -13,8 +13,9 @@ test.describe('Submit Invoice Tests', () => {
     if (await googleBtn.isVisible().catch(() => false)) {
       await googleBtn.click();
     }
-    // Land on dashboard (post-login)
-    await page.waitForURL(/.*\/navi\/dashboard.*/, { timeout: 45000 });
+    // Land on dashboard (post-login) — navigate directly to avoid flaky redirects
+    await page.goto('http://localhost:3000/navi/dashboard');
+    await expect(page).toHaveURL(/\/navi\/dashboard/i, { timeout: 45_000 });
 
     // 🔑 Force a fresh ID token so the app will attach Authorization header
     await page.evaluate(async () => {

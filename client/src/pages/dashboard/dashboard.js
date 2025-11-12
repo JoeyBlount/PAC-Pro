@@ -10,6 +10,7 @@ import { auth } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext"; // Save for future
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "@mui/material/styles";
+import { apiUrl } from "../../utils/api";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, BarElement, LineElement, Title, Tooltip, Legend); 
 
@@ -35,7 +36,7 @@ const AnnouncementBox = () => {
   const fetchAnnouncements = async () => {
     setLoadingAnnouncements(true);
     try {
-      const res = await fetch(`http://localhost:5140/api/pac/announcements?role=${userRole}`);
+      const res = await fetch(apiUrl(`/api/pac/announcements?role=${userRole}`));
       const data = await res.json();
       setAnnouncements(data);
       setScrollIndex(0);
@@ -173,7 +174,7 @@ const MonthlySalesChart = ({selectedStore}) => {
     const yearMonth = `${todayDate.getFullYear()}${String(todayDate.getMonth()).padStart(2, "0")}`;
     try {
       const response = await fetch(
-        `http://localhost:5140/api/pac/info/sales/${formatStoreID(selectedStore)}/${yearMonth}`
+        apiUrl(`/api/pac/info/sales/${formatStoreID(selectedStore)}/${yearMonth}`)
       );
       if (response.ok) {
         const jsonData = await response.json();
@@ -292,7 +293,7 @@ const BudgetChart = ({selectedStore}) => {
     const yearMonth = `${todayDate.getFullYear()}${String(todayDate.getMonth()).padStart(2, "0")}`;
     try {
       const response = await fetch(
-        `http://localhost:5140/api/pac/info/budget/${formatStoreID(selectedStore)}/${yearMonth}`
+        apiUrl(`/api/pac/info/budget/${formatStoreID(selectedStore)}/${yearMonth}`)
       );
       if (response.ok) {
         const jsonData = await response.json();
@@ -418,7 +419,7 @@ const PacVSProjectedChart = ({selectedStore}) => {
     const yearMonth = `${todayDate.getFullYear()}${String(todayDate.getMonth()).padStart(2, "0")}`;
     try {
       const response = await fetch(
-        `http://localhost:5140/api/pac/info/pac/${formatStoreID(selectedStore)}/${yearMonth}`
+        apiUrl(`/api/pac/info/pac/${formatStoreID(selectedStore)}/${yearMonth}`)
       );
       if (response.ok) {
         const jsonData = await response.json();
@@ -586,7 +587,7 @@ const DeadlinesWidget = () => {
     const fetchDeadlines = async () => {
       try {
         const token = currentUser ? await currentUser.getIdToken() : null;
-        const response = await fetch('http://localhost:5140/api/pac/deadlines/upcoming?days_ahead=30&limit=5', {
+        const response = await fetch(apiUrl('/api/pac/deadlines/upcoming?days_ahead=30&limit=5'), {
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {})

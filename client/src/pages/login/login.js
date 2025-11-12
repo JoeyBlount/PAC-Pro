@@ -8,6 +8,7 @@ import MicrosoftIcon from "@mui/icons-material/Microsoft";
 import { auth, googleAuthProvider } from "../../config/firebase-config";
 import { signInWithPopup } from "firebase/auth";
 import backgroundImage from "./bg.webp";
+import { apiUrl } from "../../utils/api";
 import logo from "./logo.png";
 
 const Login = () => {
@@ -32,7 +33,7 @@ const Login = () => {
       const result = await signInWithPopup(auth, googleAuthProvider);
       const idToken = await result.user.getIdToken();
 
-      const resp = await fetch("http://localhost:5140/api/auth/google/verify", {
+      const resp = await fetch(apiUrl("/api/auth/google/verify"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

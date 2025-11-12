@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { apiUrl } from "../../utils/api";
 import {
   Box,
   Typography,
@@ -36,7 +37,7 @@ export default function Notifications() {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const res = await fetch(`http://localhost:5140/api/pac/settings/notifications/`);
+        const res = await fetch(apiUrl(`/api/pac/settings/notifications/`));
         const data = await res.json();
         setSettings(data);
       } catch (err) {
@@ -77,7 +78,7 @@ export default function Notifications() {
         };
       });
 
-      const res = await fetch(`http://localhost:5140/api/pac/settings/notifications/`, {
+      const res = await fetch(apiUrl(`/api/pac/settings/notifications/`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formattedData)

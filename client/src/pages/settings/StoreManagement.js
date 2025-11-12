@@ -29,6 +29,7 @@ import CancelIcon from "@mui/icons-material/Cancel";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import { useAuth } from "../../context/AuthContext";
 import { ROLES } from "../../constants/roles";
+import { apiUrl } from "../../utils/api";
 
 const months = [
   "January", "February", "March", "April", "May", "June",
@@ -64,7 +65,7 @@ const StoreManagement = () => {
   const fetchStores = async () => {
     setLoadingStores(true);
     try {
-      const res = await fetch(`http://localhost:5140/api/pac/settings/storemanagement/getactive/`);
+      const res = await fetch(apiUrl(`/api/pac/settings/storemanagement/getactive/`));
       const data = await res.json();
       setRows(data);
     } catch (err) {
@@ -77,7 +78,7 @@ const StoreManagement = () => {
   // Fetch deleted stores that haven't expired
   const fetchDeletedStores = async () => {
     try {
-      const res = await fetch(`http://localhost:5140/api/pac/settings/storemanagement/getdeleted/`);
+      const res = await fetch(apiUrl(`/api/pac/settings/storemanagement/getdeleted/`));
       const data = await res.json();
       setDeletedRows(data);
     } catch (err) {
@@ -119,7 +120,7 @@ const StoreManagement = () => {
     if (isAccountant) return;
     const { subName, address, storeID, entity, startMonth } = newStore;
     if (subName && address && storeID && entity && startMonth) {
-      const res = await fetch(`http://localhost:5140/api/pac/settings/storemanagement/add`, {
+      const res = await fetch(apiUrl(`/api/pac/settings/storemanagement/add`), {
         method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(newStore)
@@ -135,7 +136,7 @@ const StoreManagement = () => {
     if (isAccountant) return;
     const store = rows[index];
 
-    const res = await fetch(`http://localhost:5140/api/pac/settings/storemanagement/del/${store.id}?deletedByRole=${encodeURIComponent(userRole || "User")}`, {
+    const res = await fetch(apiUrl(`/api/pac/settings/storemanagement/del/${store.id}?deletedByRole=${encodeURIComponent(userRole || "User")}`), {
         method: "DELETE"
       });
     if (!res.ok) throw new Error("Failed to delete store");
@@ -150,7 +151,7 @@ const StoreManagement = () => {
   // Restore store from deletedStores
   const handleRestore = async (row) => {
     if (isAccountant) return;
-    const res = await fetch(`http://localhost:5140/api/pac/settings/storemanagement/restore/${row.deletedRefId}`, {
+    const res = await fetch(apiUrl(`/api/pac/settings/storemanagement/restore/${row.deletedRefId}`), {
         method: "POST"
       });
     if (!res.ok) throw new Error("Failed to restore store");
@@ -194,7 +195,7 @@ const StoreManagement = () => {
 
   const handleConfirmSave = async () => {
     if (isAccountant) return;
-    const res = await fetch(`http://localhost:5140/api/pac/settings/storemanagement/update`, {
+    const res = await fetch(apiUrl(`/api/pac/settings/storemanagement/update`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(rows),

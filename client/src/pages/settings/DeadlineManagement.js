@@ -30,6 +30,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EventIcon from '@mui/icons-material/Event';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
+import { apiUrl } from '../../utils/api';
 
 const DeadlineManagement = () => {
   const { userRole, currentUser } = useAuth();
@@ -59,7 +60,7 @@ const DeadlineManagement = () => {
   const fetchDeadlines = async () => {
     try {
       const token = currentUser ? await currentUser.getIdToken() : null;
-      const response = await fetch('http://localhost:5140/api/pac/deadlines', {
+      const response = await fetch(apiUrl('/api/pac/deadlines'), {
         headers: {
           'Content-Type': 'application/json',
           'X-User-Role': userRole || '',
@@ -145,8 +146,8 @@ const DeadlineManagement = () => {
 
       const token = currentUser ? await currentUser.getIdToken() : null;
       const url = editingDeadline 
-        ? `http://localhost:5140/api/pac/deadlines/${editingDeadline.id}`
-        : 'http://localhost:5140/api/pac/deadlines';
+        ? apiUrl(`/api/pac/deadlines/${editingDeadline.id}`)
+        : apiUrl('/api/pac/deadlines');
       const method = editingDeadline ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
@@ -180,7 +181,7 @@ const DeadlineManagement = () => {
 
     try {
       const token = currentUser ? await currentUser.getIdToken() : null;
-      const response = await fetch(`http://localhost:5140/api/pac/deadlines/${deadlineId}`, {
+      const response = await fetch(apiUrl(`/api/pac/deadlines/${deadlineId}`), {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

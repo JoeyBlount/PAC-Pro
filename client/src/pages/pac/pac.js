@@ -37,6 +37,7 @@ import {
 } from "../../services/pacActualService";
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
+import { apiUrl } from "../../utils/api";
 
 const expenseList = [
   "Product Sales",
@@ -87,14 +88,14 @@ const hasUserInputAmountField = [
 ];
 
 // Backend (Generate tab)
-const BASE_URL = "http://127.0.0.1:5140";
+const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "http://127.0.0.1:5140").replace(/\/+$/, "");
 async function api(path, { method = "GET", body } = {}) {
   const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
   const headers = {
     "Content-Type": "application/json",
     ...(token
       ? { Authorization: `Bearer ${token}` }
-      : { "X-Dev-Email": "dev@example.com" }),
+      : {}),
   };
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -470,7 +471,7 @@ const PAC = () => {
 
         const firstName = (await getUserFullName()).split(" ")[0] || "Someone";
 
-        await fetch("http://localhost:5140/api/pac/notifications/send", {
+        await fetch(apiUrl("/api/pac/notifications/send"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

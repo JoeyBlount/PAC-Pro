@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 import uuid
 
+from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import firestore, storage, credentials
 
@@ -21,8 +22,14 @@ class InvoiceSubmitService:
     def _initialize_firebase(self):
         """Initialize Firebase if available"""
         try:
+            load_dotenv()
             self.db = firestore.client()
-            self.bucket = storage.bucket('pacpro-ef499.firebasestorage.app')
+            bucket_name = os.environ.get("REACT_APP_FIREBASE_STORAGE_BUCKET") or os.environ.get("FIREBASE_STORAGE_BUCKET")
+            if not bucket_name:
+                raise RuntimeError(
+                    "Missing Firebase storage bucket. Set REACT_APP_FIREBASE_STORAGE_BUCKET (or FIREBASE_STORAGE_BUCKET) in your environment/.env"
+                )
+            self.bucket = storage.bucket(bucket_name)
         except Exception as e:
             print(f"Failed to initialize Firebase: {e}")
             self.db = None
