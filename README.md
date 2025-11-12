@@ -330,6 +330,7 @@ AZURE_CLIENT_SECRET=your-client-secret-value
 AZURE_REDIRECT_URI=http://localhost:5140/api/auth/microsoft/callback
 FRONTEND_BASE_URL=http://localhost:3000
 GOOGLE_APPLICATION_CREDENTIALS=server/python_backend/config/firebase-service-account.json
+REACT_APP_FIREBASE_STORAGE_BUCKET=pacpro-ef499.firebasestorage.app
 ```
 Notes:
 - Client secret must be the Secret Value (not the Secret ID)
