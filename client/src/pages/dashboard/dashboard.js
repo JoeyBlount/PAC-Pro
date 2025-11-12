@@ -10,6 +10,7 @@ import { auth, db } from "../../config/firebase-config";
 import { collection, query, orderBy, getDocs, where } from "firebase/firestore";
 import { StoreContext } from "../../context/storeContext"; // Save for future
 import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "@mui/material/styles";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, BarElement, LineElement, Title, Tooltip, Legend); 
 
@@ -30,6 +31,7 @@ const AnnouncementBox = () => {
   const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
   const [fetching, setFetching] = useState(false);
   const { userRole } = useAuth();
+  const theme = useTheme();
 
   const fetchAnnouncements = async () => {
     setLoadingAnnouncements(true);
@@ -72,16 +74,19 @@ const AnnouncementBox = () => {
 
   return (
     <Paper
-    elevation={3}
-    sx={{
-      minHeight: 100,
-      height: 'auto',
-      overflow: 'hidden',
-      position: 'relative',
-      backgroundColor: '#ffffffff',
-      padding: 1,
-    }}
-  >
+      elevation={3}
+      sx={{
+        minHeight: 100,
+        height: "auto",
+        overflow: "hidden",
+        position: "relative",
+        padding: 1,
+        backgroundColor: theme.palette.background.paper, // 👈 dark/light friendly
+        color: theme.palette.text.primary,
+        border: `1px solid ${theme.palette.divider}`,
+        transition: "background-color 0.3s ease, color 0.3s ease",
+      }}
+    >
     <Typography
       variant="subtitle1"
       sx={{

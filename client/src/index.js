@@ -32,6 +32,7 @@ import DeadlineManagement from "./pages/settings/DeadlineManagement";
 import { StoreProvider } from "./context/storeContext";
 import { AuthProvider } from './context/AuthContext';
 import { AdminRoute, AdminOrOmRoute, SettingsViewRoute, StoreManagementRoute, UserManagementRoute, ViewOnlyRoute, AllAuthenticatedUsersRoute } from './routes/ProtectedRoute';
+import { ThemeContextProvider } from "./context/ThemeContext";
 
 const router = createBrowserRouter([
   {
@@ -71,11 +72,13 @@ const router = createBrowserRouter([
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
+    <ThemeContextProvider>
     <AuthProvider>
       <StoreProvider>
         <RouterProvider router={router} />
       </StoreProvider>
     </AuthProvider>
+    </ThemeContextProvider>
   </React.StrictMode>
 );
 
