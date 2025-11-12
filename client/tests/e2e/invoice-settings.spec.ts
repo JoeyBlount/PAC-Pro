@@ -1,25 +1,18 @@
-import { test, expect, chromium } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+test.use({ storageState: './auth.json' });
+test.use({ headless: true, channel: 'chrome' });
 
 test.describe('Invoice Settings Tests', () => {
-  test('should edit account number for specific category and revert back', async () => {
+  test('should edit account number for specific category and revert back', async ({ page }, testInfo) => {
     test.setTimeout(60000);
 
-    const context = await chromium.launchPersistentContext('./.pw-invoice-settings-test-profile', {
-      channel: 'chrome',
-      headless: false,
-      ignoreDefaultArgs: ['--enable-automation'],
-      args: ['--disable-blink-features=AutomationControlled'],
-    });
-    const page = await context.newPage();
-
     await page.goto('http://localhost:3000');
-    await expect(page.getByText('Sign In')).toBeVisible();
-
-    // Google login (manual in headed mode)
-    await page.pause(); // complete login manually
-
+    const googleBtn = page.getByRole('button', { name: /^Login with Google$/i });
+    if (await googleBtn.isVisible().catch(() => false)) {
+      await googleBtn.click();
+    }
     // Land on dashboard
-    await page.waitForURL(/.*dashboard.*/);
+    await page.waitForURL(/\/navi\/dashboard.*/);
 
     // 🔑 Force a fresh ID token so the app will attach Authorization header
     await page.evaluate(async () => {
@@ -31,60 +24,104 @@ test.describe('Invoice Settings Tests', () => {
       }
     });
 
-    // Navigate to settings page
-    await page.goto('http://localhost:3000/navi/settings');
-    await page.waitForURL(/.*settings.*/);
-
-    // Click on Invoice Settings card
-    await page.getByText('Invoice Settings').click();
-    await page.waitForURL(/.*invoice-settings.*/);
+    // Navigate directly to invoice settings
+    await page.goto('http://localhost:3000/navi/settings/invoice-settings');
+    await expect(page).toHaveURL(/\/navi\/settings\/invoice-settings/i, { timeout: 15000 });
 
     // Wait for invoice settings table to load
-    await page.waitForSelector('table', { timeout: 10000 });
+    const table = page.locator('table').first();
+    await expect(table).toBeVisible({ timeout: 10000 });
+    await expect(table.locator('tbody')).toBeVisible({ timeout: 10000 });
 
     // Find the FOOD category row and get its original account number
-    const foodRow = page.locator('tr').filter({ hasText: 'FOOD' });
-    const originalAccountNumber = await foodRow.locator('td').nth(1).textContent();
+    const foodRow = () =>
+      table
+        .locator('tbody tr')
+        .filter({ has: page.locator('td').nth(0).filter({ hasText: /^FOOD$/i }) })
+        .first();
+    const accountCell = () => foodRow().locator('td').nth(1);
+    const editInput = () => foodRow().locator('input');
+
+    await expect(foodRow()).toBeVisible({ timeout: 10000 });
+    const originalAccountNumberRaw = (await accountCell().textContent()) || '';
+    const originalAccountNumber = originalAccountNumberRaw.trim();
     console.log('Original FOOD account number:', originalAccountNumber);
 
+    const targetNewValue = originalAccountNumber === '9999' ? '9998' : '9999';
+
     // Click Edit button for FOOD category
-    await foodRow.locator('button', { hasText: 'Edit' }).click();
+    await foodRow().locator('button', { hasText: 'Edit' }).click();
 
     // Wait for input field to appear
-    await foodRow.locator('input').waitFor({ state: 'visible' });
+    await editInput().waitFor({ state: 'visible' });
 
-    // Clear and enter new account number
-    await foodRow.locator('input').clear();
-    await foodRow.locator('input').fill('9999');
+    // Clear and enter new account number (robust: select all + delete)
+    await editInput().click();
+    await editInput().press('Control+A').catch(() => {});
+    await editInput().press('Delete').catch(() => {});
+    await editInput().type(targetNewValue);
+    // Blur the input to ensure change is registered by the UI
+    await page.mouse.click(0, 0);
+    await page.waitForTimeout(150);
 
     // Click Save button
-    await foodRow.locator('button', { hasText: 'Save' }).click();
+    // Prepare to observe backend update call
+    const id = 'FOOD';
+    const updateUrlRegex = new RegExp(`/api/pac/invoice-settings/category/${id.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}$`, 'i');
+    const waitUpdate = page.waitForResponse(resp => {
+      try {
+        return updateUrlRegex.test(new URL(resp.url()).pathname);
+      } catch {
+        return false;
+      }
+    }, { timeout: 15000 }).catch(() => null);
 
-    // Wait for the update to complete
-    await page.waitForTimeout(2000);
+    await foodRow().locator('button', { hasText: 'Save' }).click();
 
-    // Verify the account number was updated
-    const updatedAccountNumber = await foodRow.locator('td').nth(1).textContent();
-    expect(updatedAccountNumber).toBe('9999');
-    console.log('Updated FOOD account number:', updatedAccountNumber);
+    // Ensure backend accepted the change; if not, surface details
+    const updateResp = await waitUpdate;
+    if (!updateResp) {
+      throw new Error('Timed out waiting for invoice-settings update request.');
+    }
+    if (!updateResp.ok()) {
+      const bodyText = await updateResp.text().catch(() => '');
+      throw new Error(`Invoice-settings update rejected: HTTP ${updateResp.status()} ${updateResp.statusText()} Body: ${bodyText}`);
+    }
+
+    // Verify the account number was updated (wait for cell text)
+    // Verify persistence after reload (some UIs only reflect changes after re-fetch)
+    await page.reload();
+    await expect(table).toBeVisible({ timeout: 15000 });
+    await expect(table.locator('tbody')).toBeVisible({ timeout: 15000 });
+    await expect(accountCell()).toHaveText(targetNewValue, { timeout: 10000 });
 
     // Now revert back to original number
-    await foodRow.locator('button', { hasText: 'Edit' }).click();
-    await foodRow.locator('input').waitFor({ state: 'visible' });
-    await foodRow.locator('input').clear();
-    await foodRow.locator('input').fill(originalAccountNumber || '0000');
-    await foodRow.locator('button', { hasText: 'Save' }).click();
-
-    // Wait for the revert to complete
-    await page.waitForTimeout(2000);
+    await foodRow().locator('button', { hasText: 'Edit' }).click();
+    await editInput().waitFor({ state: 'visible' });
+    await editInput().click();
+    await editInput().press('Control+A').catch(() => {});
+    await editInput().press('Delete').catch(() => {});
+    await editInput().type(originalAccountNumber || '0000');
+    await foodRow().locator('button', { hasText: 'Save' }).click();
 
     // Verify the account number was reverted back
-    const revertedAccountNumber = await foodRow.locator('td').nth(1).textContent();
-    expect(revertedAccountNumber).toBe(originalAccountNumber);
-    console.log('Reverted FOOD account number:', revertedAccountNumber);
+    await expect(accountCell()).toHaveText(originalAccountNumber, { timeout: 10000 });
+    console.log('Reverted FOOD account number:', await accountCell().textContent());
 
-    // Verify the account number is back to original
-    expect(revertedAccountNumber).toBe(originalAccountNumber);
+    // Re-check after reload
+    await page.reload();
+    await expect(table).toBeVisible({ timeout: 10000 });
+    await expect(table.locator('tbody')).toBeVisible({ timeout: 10000 });
+    await expect(accountCell()).toHaveText(originalAccountNumber, { timeout: 10000 });
+
+  });
+
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.status !== testInfo.expectedStatus) {
+      const safeTitle = testInfo.title.replace(/[^a-z0-9-_]/gi, '_').toLowerCase();
+      const filePath = require('path').join(testInfo.outputDir, `${safeTitle}-${testInfo.status || 'failed'}.png`);
+      await page.screenshot({ path: filePath, fullPage: true }).catch(() => {});
+    }
   });
 });
 

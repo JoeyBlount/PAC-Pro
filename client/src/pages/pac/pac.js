@@ -24,6 +24,7 @@ import {
   FormLabel,
   Alert,
   Chip,
+  useTheme,
 } from "@mui/material";
 import { StoreContext } from "../../context/storeContext";
 import PacTab from "./PacTab";
@@ -374,6 +375,7 @@ const PAC = () => {
   const { monthIndex: prevIdx, year: prevYear } = getPrevMonthYear();
   const [histMonth, setHistMonth] = useState(months[prevIdx]);
   const [histYear, setHistYear] = useState(prevYear);
+  const theme = useTheme();
 
   useEffect(() => {
     if (!month || !year) return;
@@ -908,33 +910,33 @@ const PAC = () => {
   const [hoverInfo, setHoverInfo] = useState(null);
 
   // Categories for visual grouping
-  const categories = {
-    Sales: ["Product Sales", "All Net Sales"],
-    "Food & Paper": [
-      "Base Food",
-      "Employee Meal",
-      "Condiment",
-      "Total Waste",
-      "Paper",
-    ],
-    Labor: ["Crew Labor", "Management Labor", "Payroll Tax"],
-    Purchases: [
-      "Advertising",
-      "Travel",
-      "Adv Other",
-      "Promotion",
-      "Outside Services",
-      "Linen",
-      "OP. Supply",
-      "Maint. & Repair",
-      "Small Equipment",
-      "Utilities",
-      "Office",
-      "Cash +/-",
-      "Crew Relations",
-      "Training",
-    ],
-  };
+ const categories = {
+  Sales: ["Product Sales", "All Net Sales"],
+  "Food & Paper": [
+    "Base Food",
+    "Employee Meal",
+    "Condiment",
+    "Total Waste",
+    "Paper",
+  ],
+  Labor: ["Crew Labor", "Management Labor", "Payroll Tax"],
+  Purchases: [
+    "Advertising",
+    "Travel",
+    "Adv Other",
+    "Promotion",
+    "Outside Services",
+    "Linen",
+    "OP. Supply",
+    "Maint. & Repair",
+    "Small Equipment",
+    "Utilities",
+    "Office",
+    "Cash +/-",
+    "Crew Relations",
+    "Training",
+  ],
+};
 
   // Helper functions
   const getCategory = (expense) => {
@@ -947,7 +949,11 @@ const PAC = () => {
     return null;
   };
 
-  const getCategoryColor = (category) => {
+const getCategoryColor = (category) => {
+  const isDark = theme.palette.mode === "dark";
+
+  if (!isDark) {
+    // Light mode
     const colors = {
       Sales: "#e3f2fd",
       "Food & Paper": "#e8f5e9",
@@ -955,7 +961,17 @@ const PAC = () => {
       Purchases: "#f3e5f5",
     };
     return colors[category] || "#ffffff";
-  };
+  } else {
+    // Dark mode - balanced contrasts
+    const colors = {
+      Sales: "#1a2b3d",          // navy blue tint
+      "Food & Paper": "#1c2a1c", // green tint
+      Labor: "#332a1c",          // warm brown tint
+      Purchases: "#2a1f2f",      // violet tint
+    };
+    return colors[category] || "#121212";
+  }
+};
 
   // this function saves all the user input data from the generate page via backend
   const handleGenerate = async (e) => {

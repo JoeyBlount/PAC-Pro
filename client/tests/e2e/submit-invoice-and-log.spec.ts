@@ -1,25 +1,20 @@
-import { test, expect, chromium } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+
+test.use({ storageState: './auth.json' });
+test.use({ headless: true, channel: 'chrome' });
 
 test.describe('Submit Invoice Tests', () => {
-  test('should submit invoice with all required fields', async () => {
+  test('should submit invoice with all required fields', async ({ page }, testInfo) => {
     test.setTimeout(60000);
 
-    const context = await chromium.launchPersistentContext('./.pw-invoice-test-profile', {
-      channel: 'chrome',
-      headless: false,
-      ignoreDefaultArgs: ['--enable-automation'],
-      args: ['--disable-blink-features=AutomationControlled'],
-    });
-    const page = await context.newPage();
-
+    // Open app root and click Google login if needed (using persisted Chrome profile)
     await page.goto('http://localhost:3000');
-    await expect(page.getByText('Sign In')).toBeVisible();
-
-    // Google login (manual in headed mode)
-    await page.pause(); // complete login manually
-
-    // Land on dashboard
-    await page.waitForURL(/.*dashboard.*/);
+    const googleBtn = page.getByRole('button', { name: /^Login with Google$/i });
+    if (await googleBtn.isVisible().catch(() => false)) {
+      await googleBtn.click();
+    }
+    // Land on dashboard (post-login)
+    await page.waitForURL(/.*\/navi\/dashboard.*/, { timeout: 45000 });
 
     // 🔑 Force a fresh ID token so the app will attach Authorization header
     await page.evaluate(async () => {
@@ -238,5 +233,6 @@ test.describe('Submit Invoice Tests', () => {
       await setLogsMonthYear('January', '2024');
       await expect(rowByInvoiceNumber(newInvNum)).toHaveCount(0, { timeout: 20000 });
     }
+
   });
 });

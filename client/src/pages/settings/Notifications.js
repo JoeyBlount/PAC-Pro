@@ -92,7 +92,7 @@ export default function Notifications() {
 
   return (
     <Box sx={{ p: 4 }}>
-      <Typography variant="h5" gutterBottom>
+      <Typography variant="h5" gutterBottom data-testid="notifications-heading">
         Notification Settings
       </Typography>
 
@@ -108,6 +108,7 @@ export default function Notifications() {
                 alignItems="center"
                 spacing={2}
                 sx={{ p: 1, border: "1px solid #e0e0e0", borderRadius: 2 }}
+                data-testid={`notif-row-${(setting.type || '').toLowerCase().replace(/\s+/g, '-')}`}
               >
                 <Typography sx={{ width: "30%" }}>{setting.type}</Typography>
 
@@ -118,6 +119,7 @@ export default function Notifications() {
                     value={setting.roles}
                     onChange={(e) => handleRoleChange(index, e)}
                     input={<OutlinedInput label="Roles" />}
+                    data-testid="roles-select"
                     renderValue={(selected) => (
                       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
                         {selected.map((role) => (
@@ -137,6 +139,7 @@ export default function Notifications() {
                 <Switch
                   checked={setting.enabled}
                   onChange={() => handleToggle(index)}
+                  data-testid="enabled-switch"
                 />
               </Stack>
             ))}
@@ -145,7 +148,7 @@ export default function Notifications() {
       </Paper>
 
       <Box mt={3}>
-        <Button variant="contained" color="primary" onClick={handleUpdate}>
+        <Button variant="contained" color="primary" onClick={handleUpdate} data-testid="update-settings-btn">
           Update Settings
         </Button>
       </Box>
