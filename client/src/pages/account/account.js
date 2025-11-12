@@ -2,10 +2,12 @@
 import React, { useState, useEffect } from "react";
 import {
   Container, Typography, Button, Box, Table, TableBody, TableCell,
-  TableContainer, TableRow, Paper, Menu, MenuItem, Snackbar, Alert, Divider
+  TableContainer, TableRow, Paper, Menu, MenuItem, Snackbar, Alert, Divider, Switch
 } from "@mui/material";
 import { auth } from "../../config/firebase-config";
 import { signOut, onAuthStateChanged } from "firebase/auth";
+import DarkModeIcon from '@mui/icons-material/DarkMode';
+import { useThemeMode } from '../../context/ThemeContext';
 const BASE_URL = "http://localhost:5140";
 
 // Auth-aware fetch helper
@@ -34,7 +36,7 @@ const Account = () => {
   const [stores, setStores] = useState([]);
   const [anchorEl, setAnchorEl] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "" });
-
+  const { mode, toggleMode } = useThemeMode();
   useEffect(() => {
     document.title = "PAC Pro - Account";
   }, []);
@@ -113,6 +115,58 @@ const Account = () => {
 
   return (
     <Container sx={{ textAlign: "center", marginTop: 5, position: "relative", minHeight: "80vh" }}>
+    {/* DARK MODE TOGGLE CARD */}
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 1.5,
+        backgroundColor: mode === "dark" ? "#1e1e1e" : "#f5f5f5",
+        borderRadius: "30px",
+        padding: "8px 16px",
+        boxShadow:
+          mode === "dark"
+            ? "0 0 10px rgba(255,255,255,0.1)"
+            : "0 2px 6px rgba(0,0,0,0.1)",
+        width: "fit-content",
+        margin: "0 auto 24px auto",
+        transition: "all 0.3s ease-in-out",
+      }}
+    >
+      <DarkModeIcon
+        sx={{
+          color: mode === "dark" ? "#ffb300" : "#333",
+          fontSize: 26,
+          transition: "color 0.3s ease",
+        }}
+      />
+      <Typography
+        sx={{
+          fontWeight: 600,
+          color: mode === "dark" ? "#fff" : "#000",
+          fontSize: "1rem",
+          userSelect: "none",
+          transition: "color 0.3s ease",
+        }}
+      >
+        {mode === "dark" ? "Dark Mode" : "Light Mode"}
+      </Typography>
+      <Switch
+        checked={mode === "dark"}
+        onChange={toggleMode}
+        color="default"
+        sx={{
+          "& .MuiSwitch-switchBase.Mui-checked": {
+            color: "#ffb300",
+          },
+          "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+            backgroundColor: "#ffb300",
+          },
+        }}
+      />
+    </Box>
+
       {/* ACCOUNT INFORMATION TABLE */}
       {userData && (
         <TableContainer component={Paper} sx={{ maxWidth: 500, margin: "auto", marginBottom: 4 }}>

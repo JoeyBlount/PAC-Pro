@@ -95,9 +95,9 @@ const Login = () => {
           />
         </Box>
 
-        <Box sx={{ padding: '10px' }} />
-
-        <Typography variant="h4" fontWeight="bold">
+        <Box sx={{padding: '10px'}}/>
+        
+        <Typography variant="h4" fontWeight="bold" color="black">
           Sign In
         </Typography>
 
