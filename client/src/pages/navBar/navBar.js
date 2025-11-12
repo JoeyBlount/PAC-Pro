@@ -42,6 +42,7 @@ import {
 } from "@mui/icons-material";
 import { StoreContext } from "../../context/storeContext";
 import AnnoucementDialog from "./annoucement";
+import { apiUrl } from "../../utils/api";
 
 // Helper to format timestamps into "x minutes ago"
 function formatRelativeTime(timestamp) {
@@ -100,7 +101,7 @@ export function NavBar() {
       try {
         const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
         // Load allowed stores from backend
-        const res = await fetch('http://localhost:5140/api/pac/nav/allowed-stores', {
+        const res = await fetch(apiUrl('/api/pac/nav/allowed-stores'), {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -255,7 +256,7 @@ export function NavBar() {
 
     const fetchNotifications = async () => {
       try {
-        const res = await fetch(`http://localhost:5140/api/pac/notifications?toEmail=${encodeURIComponent(auth.currentUser.email)}`);
+        const res = await fetch(apiUrl(`/api/pac/notifications?toEmail=${encodeURIComponent(auth.currentUser.email)}`));
         const data = await res.json();
         setNotifications(data);
       } catch (err) {
@@ -271,7 +272,7 @@ export function NavBar() {
   // Mark single notification as read
   const markAsRead = async(notifId) => {
     try {
-      const res = await fetch(`http://localhost:5140/api/pac/notifications/${notifId}/read`, 
+      const res = await fetch(apiUrl(`/api/pac/notifications/${notifId}/read`), 
         { method: "POST" });
       if (res.ok) {
         setNotifications((prev) =>
@@ -287,7 +288,7 @@ export function NavBar() {
   const markAllAsRead = async () => {
     try {
       const res = await fetch(
-        `http://localhost:5140/api/pac/notifications/mark_all_read?toEmail=${encodeURIComponent(auth.currentUser.email)}`,
+        apiUrl(`/api/pac/notifications/mark_all_read?toEmail=${encodeURIComponent(auth.currentUser.email)}`),
         { method: "POST" });
       if (res.ok) {
         setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));

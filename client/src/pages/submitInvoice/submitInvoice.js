@@ -7,6 +7,7 @@ import styles from "./submitInvoice.module.css";
 import { invoiceCatList } from "../settings/InvoiceSettings";
 // Frontend no longer uploads to Storage or writes to Firestore; backend handles it
 import { useTheme } from '@mui/material/styles';
+import { apiUrl } from '../../utils/api';
 import {
   Alert,
   TextField,
@@ -210,7 +211,7 @@ const SubmitInvoice = () => {
     setLoadingUpload(true);
 
     try {
-      const res = await fetch("http://localhost:5140/api/invoiceread/read", {
+      const res = await fetch(apiUrl('/api/invoiceread/read'), {
         method: "POST",
         body: formData,
       });
@@ -382,7 +383,7 @@ const SubmitInvoice = () => {
 
       // Submit to backend service (no auth token required)
       const response = await fetch(
-        "http://localhost:5140/api/pac/invoices/submit",
+        apiUrl('/api/pac/invoices/submit'),
         {
           method: "POST",
           body: formData,

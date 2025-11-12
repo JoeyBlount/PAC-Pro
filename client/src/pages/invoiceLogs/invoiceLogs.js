@@ -159,7 +159,7 @@ const InvoiceLogs = () => {
     return 0;
   };
 
-  const API_URL = "http://localhost:5140/api/pac"; // or your deployed backend URL
+  const API_URL = ((process.env.REACT_APP_BACKEND_URL || "http://localhost:5140").replace(/\/+$/, "")) + "/api/pac"; // or your deployed backend URL
 
   async function sendNotification(event, context) {
     try {
@@ -421,7 +421,7 @@ const InvoiceLogs = () => {
       const auth = getAuth();
       const editorUser = auth.currentUser || { firstName: "User" };
       const token = await editorUser?.getIdToken();
-      await fetch("http://localhost:5140/api/pac/notifications/send", {
+      await fetch(`${API_URL}/notifications/send`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

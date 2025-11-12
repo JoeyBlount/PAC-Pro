@@ -5,6 +5,7 @@ import { Container, Typography } from "@mui/material";
 import styles from "./InvoiceSettings.module.css"; 
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
+import { apiUrl } from '../../utils/api';
 
 //export const invoiceCatList = ["FOOD", "CONDIMENT", "NONPRODUCT", "PAPER", "TRAVEL"];
 // All categories from invoice log, organized in PAC page order
@@ -36,7 +37,7 @@ const InvoiceSettings = () => {
   const getCategories = async () => {
     try {
       const token = currentUser ? await currentUser.getIdToken() : null;
-      const response = await fetch('http://localhost:5140/api/pac/invoice-settings/categories', {
+      const response = await fetch(apiUrl('/api/pac/invoice-settings/categories'), {
         headers: {
           'Content-Type': 'application/json',
           'X-User-Role': userRole || '',
@@ -80,7 +81,7 @@ const InvoiceSettings = () => {
       setCategories(optimisticCategories);
 
       const token = currentUser ? await currentUser.getIdToken() : null;
-      const response = await fetch(`http://localhost:5140/api/pac/invoice-settings/category/${encodeURIComponent(id)}` , {
+      const response = await fetch(apiUrl(`/api/pac/invoice-settings/category/${encodeURIComponent(id)}`) , {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json', 

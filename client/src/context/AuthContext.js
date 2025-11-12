@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
+import { apiUrl } from '../utils/api';
 import { auth } from '../config/firebase-config';
 import { onAuthStateChanged } from 'firebase/auth';
 
@@ -15,7 +16,7 @@ export const AuthProvider = ({ children }) => {
 
 
     const fetchUserInfo = async (email) => {
-    const url = `http://localhost:5140/api/auth/user-info?email=${encodeURIComponent(email)}`;
+    const url = apiUrl(`/api/auth/user-info?email=${encodeURIComponent(email)}`);
     const res = await fetch(url, { credentials: 'include' });
     if (!res.ok) throw new Error('Failed to fetch user info');
     return res.json(); // { email, firstName, lastName, name, role }

@@ -19,6 +19,7 @@ import {
 } from "@mui/material";
 import "./pac.css";
 import { useTheme } from "@mui/material/styles"; 
+import { apiUrl } from "../../utils/api";
 // Add print styles
 const printStyles = `
   @media print {
@@ -1293,7 +1294,7 @@ const PacTab = ({
   const fetchProjectionsData = async (formattedStoreId, yearMonth) => {
     try {
       const response = await fetch(
-        `http://localhost:5140/api/pac/projections/${formattedStoreId}/${yearMonth}`
+        apiUrl(`/api/pac/projections/${formattedStoreId}/${yearMonth}`)
       );
       if (response.ok) {
         const data = await response.json();
@@ -1326,7 +1327,7 @@ const PacTab = ({
       const [actualResponse, projectionsData, pacActualData] =
         await Promise.all([
           fetch(
-            `http://localhost:5140/api/pac/calc/${formattedStoreId}/${yearMonth}`
+            apiUrl(`/api/pac/calc/${formattedStoreId}/${yearMonth}`)
           ),
           fetchProjectionsData(formattedStoreId, yearMonth),
           getPacActual(formattedStoreId, year, month),

@@ -24,6 +24,7 @@ import AddIcon from "@mui/icons-material/Add";
 import EditIcon from '@mui/icons-material/Edit'; // For editing role
 import { useAuth } from '../../context/AuthContext'; // Adjust path
 import { ROLES } from '../../constants/roles'; // Adjust path
+import { apiUrl } from '../../utils/api';
 
 const UserManagement = () => {
   const { userRole, currentUser } = useAuth(); // Get current user's role and info
@@ -53,7 +54,7 @@ const UserManagement = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('http://localhost:5140/api/pac/userManagement/fetch');
+      const response = await fetch(apiUrl('/api/pac/userManagement/fetch'));
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`HTTP error! status: ${response.status}, message: ${errorText}`);
@@ -87,7 +88,7 @@ const UserManagement = () => {
     if (!selectedUser) return;
 
     try {
-      const response = await fetch(`http://localhost:5140/api/pac/userManagement/delete?user_email=${encodeURIComponent(selectedUser.email)}`, {
+      const response = await fetch(apiUrl(`/api/pac/userManagement/delete?user_email=${encodeURIComponent(selectedUser.email)}`), {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -122,7 +123,7 @@ const UserManagement = () => {
   const fetchAllStores = async () => {
     try {
       const token = currentUser ? await currentUser.getIdToken() : null;
-      const response = await fetch('http://localhost:5140/api/account/stores', {
+      const response = await fetch(apiUrl('/api/account/stores'), {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -172,7 +173,7 @@ const UserManagement = () => {
 
     if (newUser.firstName && newUser.lastName && newUser.email && newUser.role) {
       try {
-        const response = await fetch('http://localhost:5140/api/pac/userManagement/add', {
+        const response = await fetch(apiUrl('/api/pac/userManagement/add'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -301,7 +302,7 @@ try {
         body.assignedStores = editAssignedStores.map((s) => ({ id: s.id, name: s.name, address: s.address }));
       }
 
-      const response = await fetch(`http://localhost:5140/api/pac/userManagement/edit?user_email=${encodeURIComponent(editingUser.email)}`, {
+      const response = await fetch(apiUrl(`/api/pac/userManagement/edit?user_email=${encodeURIComponent(editingUser.email)}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

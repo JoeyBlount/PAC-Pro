@@ -16,6 +16,7 @@ import {
 } from "@mui/material";
 import { Delete, ManageAccounts } from "@mui/icons-material";
 import { useEffect, useState } from "react";
+import { apiUrl } from "../../utils/api";
 import { ROLES } from "../../constants/roles";
 import { useTheme } from "@mui/material/styles";
 import { useAuth } from "../../context/AuthContext";
@@ -35,7 +36,7 @@ const ManageAnnouncementsDialog = ({ open, onClose, refresh }) => {
   const fetchAnnouncements = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5140/api/pac/announcements/all/");
+      const res = await fetch(apiUrl("/api/pac/announcements/all/"));
       const data = await res.json();
       setAnnouncements(data);
     } catch (err) {
@@ -55,7 +56,7 @@ const ManageAnnouncementsDialog = ({ open, onClose, refresh }) => {
     };
 
     try {
-      await fetch("http://localhost:5140/api/pac/announcements", {
+      await fetch(apiUrl("/api/pac/announcements"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -72,7 +73,7 @@ const ManageAnnouncementsDialog = ({ open, onClose, refresh }) => {
 
   const handleDelete = async (id) => {
     try {
-      await fetch(`http://localhost:5140/api/pac/announcements/${id}`, {
+      await fetch(apiUrl(`/api/pac/announcements/${id}`), {
         method: "DELETE",
       });
       fetchAnnouncements();
@@ -231,7 +232,7 @@ const AnnouncementDialog = ({ open, onClose }) => {
     setLoading(true);
     try {
       const res = await fetch(
-        `http://localhost:5140/api/pac/announcements?role=${userRole}`
+        apiUrl(`/api/pac/announcements?role=${userRole}`)
       );
       const data = await res.json();
       setAnnouncements(data);
