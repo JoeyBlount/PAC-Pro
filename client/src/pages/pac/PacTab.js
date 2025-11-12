@@ -1326,7 +1326,7 @@ const PacTab = ({
       const [actualResponse, projectionsData, pacActualData] =
         await Promise.all([
           fetch(
-            `http://localhost:5140/api/pac/${formattedStoreId}/${yearMonth}`
+            `http://localhost:5140/api/pac/calc/${formattedStoreId}/${yearMonth}`
           ),
           fetchProjectionsData(formattedStoreId, yearMonth),
           getPacActual(formattedStoreId, year, month),

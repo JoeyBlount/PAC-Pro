@@ -5,7 +5,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import json
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Security, Request, Query
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Security, Request, Query, Path
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from models import PacCalculationResult, PacInputData
@@ -21,6 +21,9 @@ from services.invoice_submit import InvoiceSubmitService
 from services.user_management_service import UserManagementService
 from services.navBar_service import NavBarService
 from services.invoice_settings_service import InvoiceSettingsService
+
+from services.deadlines_service import DeadlinesService
+
 from services.notification_service import NotificationService
 from services.store_management_service import StoreManagementService
 from services.announcement_service import AnnouncementService
@@ -185,6 +188,13 @@ def get_invoice_settings_service() -> InvoiceSettingsService:
     Get the invoice settings service instance.
     """
     return InvoiceSettingsService()
+
+
+def get_deadlines_service() -> DeadlinesService:
+    """
+    Get the deadlines service instance.
+    """
+    return DeadlinesService()
 
 
 # ---- Invoice Settings Routes ----
@@ -454,42 +464,44 @@ async def get_allowed_stores(
         raise HTTPException(status_code=500, detail="Failed to fetch allowed stores")
 
 # ---- PAC Routes ----
-@router.get("/{entity_id}/{year_month}", response_model=PacCalculationResult)
+@router.get("/calc/{entity_id}/{year_month}", response_model=PacCalculationResult)
 async def get_pac_calculations(
     entity_id: str,
-    year_month: str,
+    year_month: int = Path(..., ge=200001, le=209912, description="Target month as YYYYMM"),
     pac_service: PacCalculationService = Depends(get_pac_calculation_service),
 ) -> PacCalculationResult:
     """
     Get PAC calculations for a specific store and month (YYYYMM).
     """
-    if not is_valid_year_month(year_month):
+    ym = str(year_month)
+    if not is_valid_year_month(ym):
         raise HTTPException(
             status_code=400,
             detail="Invalid yearMonth format. Expected YYYYMM (e.g., 202501)",
         )
     try:
-        return await pac_service.calculate_pac_async(entity_id, year_month)
+        return await pac_service.calculate_pac_async(entity_id, ym)
     except Exception as ex:
         raise HTTPException(status_code=500, detail=f"Error calculating PAC: {str(ex)}")
 
 
-@router.get("/{entity_id}/{year_month}/input", response_model=PacInputData)
+@router.get("/calc/{entity_id}/{year_month}/input", response_model=PacInputData)
 async def get_pac_input_data(
     entity_id: str,
-    year_month: str,
+    year_month: int = Path(..., ge=200001, le=209912, description="Target month as YYYYMM"),
     pac_service: PacCalculationService = Depends(get_pac_calculation_service),
 ) -> PacInputData:
     """
     Get PAC input data used for calculations for a specific store and month (YYYYMM).
     """
-    if not is_valid_year_month(year_month):
+    ym = str(year_month)
+    if not is_valid_year_month(ym):
         raise HTTPException(
             status_code=400,
             detail="Invalid yearMonth format. Expected YYYYMM (e.g., 202501)",
         )
     try:
-        return await pac_service.get_input_data_async(entity_id, year_month)
+        return await pac_service.get_input_data_async(entity_id, ym)
     except Exception as ex:
         raise HTTPException(
             status_code=500, detail=f"Error retrieving PAC input data: {str(ex)}"
@@ -1422,6 +1434,141 @@ async def update_stores(stores: List[Dict]):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+    db = firestore.client()
+    collection = db.collection("announcements")
+    doc_ref = collection.document(announcement_id)
+    if not doc_ref.get().exists:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    doc_ref.delete()
+    return {"status": "deleted"}
+
+
+# ---- Deadline Models ----
+class DeadlineIn(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    dueDate: str
+    type: str = "pac"  # pac, invoice, report
+    recurring: bool = False
+    dayOfMonth: Optional[int] = None
+
+
+class DeadlineOut(BaseModel):
+    id: str
+    title: str
+    description: str
+    dueDate: str
+    type: str
+    recurring: bool
+    dayOfMonth: Optional[int] = None
+    createdAt: Optional[str] = None
+    updatedAt: Optional[str] = None
+
+
+# ---- Deadline Routes ----
+@router.get("/deadlines", response_model=List[DeadlineOut])
+async def get_all_deadlines(
+    svc: DeadlinesService = Depends(get_deadlines_service),
+    _auth: Dict[str, Any] = Depends(require_auth),
+) -> List[DeadlineOut]:
+    """
+    Get all deadlines ordered by due date.
+    """
+    if not svc.is_available():
+        raise HTTPException(status_code=503, detail="Deadlines service not available - Firebase not initialized")
+    try:
+        deadlines = await svc.get_all_deadlines()
+        return [DeadlineOut(**d) for d in deadlines]
+    except Exception as e:
+        logger.error(f"Error fetching deadlines: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch deadlines: {str(e)}")
+
+
+@router.get("/deadlines/upcoming", response_model=List[DeadlineOut])
+async def get_upcoming_deadlines(
+    days_ahead: int = Query(30, ge=1, le=365, description="Number of days to look ahead"),
+    limit: int = Query(5, ge=1, le=50, description="Maximum number of deadlines to return"),
+    svc: DeadlinesService = Depends(get_deadlines_service),
+    _auth: Dict[str, Any] = Depends(require_auth),
+) -> List[DeadlineOut]:
+    """
+    Get upcoming deadlines within the next N days.
+    """
+    if not svc.is_available():
+        raise HTTPException(status_code=503, detail="Deadlines service not available - Firebase not initialized")
+    try:
+        deadlines = await svc.get_upcoming_deadlines(days_ahead=days_ahead, limit=limit)
+        return [DeadlineOut(**d) for d in deadlines]
+    except Exception as e:
+        logger.error(f"Error fetching upcoming deadlines: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch upcoming deadlines: {str(e)}")
+
+
+@router.post("/deadlines", response_model=DeadlineOut)
+async def create_deadline(
+    deadline: DeadlineIn,
+    svc: DeadlinesService = Depends(get_deadlines_service),
+    _auth: Dict[str, Any] = Depends(require_roles(["Admin"])),
+) -> DeadlineOut:
+    """
+    Create a new deadline. Admin only.
+    """
+    if not svc.is_available():
+        raise HTTPException(status_code=503, detail="Deadlines service not available - Firebase not initialized")
+    try:
+        deadline_data = deadline.dict()
+        result = await svc.create_deadline(deadline_data)
+        return DeadlineOut(**result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating deadline: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create deadline: {str(e)}")
+
+
+@router.put("/deadlines/{deadline_id}", response_model=DeadlineOut)
+async def update_deadline(
+    deadline_id: str,
+    deadline: DeadlineIn,
+    svc: DeadlinesService = Depends(get_deadlines_service),
+    _auth: Dict[str, Any] = Depends(require_roles(["Admin"])),
+) -> DeadlineOut:
+    """
+    Update an existing deadline. Admin only.
+    """
+    if not svc.is_available():
+        raise HTTPException(status_code=503, detail="Deadlines service not available - Firebase not initialized")
+    try:
+        deadline_data = deadline.dict()
+        result = await svc.update_deadline(deadline_id, deadline_data)
+        return DeadlineOut(**result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating deadline: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update deadline: {str(e)}")
+
+
+@router.delete("/deadlines/{deadline_id}")
+async def delete_deadline(
+    deadline_id: str,
+    svc: DeadlinesService = Depends(get_deadlines_service),
+    _auth: Dict[str, Any] = Depends(require_roles(["Admin"])),
+) -> Dict[str, Any]:
+    """
+    Delete a deadline. Admin only.
+    """
+    if not svc.is_available():
+        raise HTTPException(status_code=503, detail="Deadlines service not available - Firebase not initialized")
+    try:
+        await svc.delete_deadline(deadline_id)
+        return {"success": True, "message": "Deadline deleted successfully"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error deleting deadline: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete deadline: {str(e)}")
+        
 @router.delete("/settings/storemanagement/del/{store_id}")
 async def delete_store(store_id: str, deletedByRole: Optional[str] = Query(None)):
     """Soft delete a store"""
@@ -1444,3 +1591,4 @@ async def restore_store(deleted_ref_id: str):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
