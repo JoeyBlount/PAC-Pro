@@ -662,9 +662,11 @@ const DeadlinesWidget = () => {
               }}
             >
               <ListItemText
+                primaryTypographyProps={{ component: 'div' }}
+                secondaryTypographyProps={{ component: 'div' }}
                 primary={
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body1" fontWeight={500}>
+                    <Typography variant="body1" component="span" fontWeight={500}>
                       {deadline.title}
                     </Typography>
                     <Chip
@@ -681,7 +683,7 @@ const DeadlinesWidget = () => {
                 }
                 secondary={
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" component="span" color="text.secondary">
                       {formatDate(deadline.dueDate)}
                     </Typography>
                     <Chip

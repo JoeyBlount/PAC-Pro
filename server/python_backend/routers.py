@@ -5,7 +5,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import json
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Security, Request, Query
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Security, Request, Query, Path
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from models import PacCalculationResult, PacInputData
@@ -464,42 +464,44 @@ async def get_allowed_stores(
         raise HTTPException(status_code=500, detail="Failed to fetch allowed stores")
 
 # ---- PAC Routes ----
-@router.get("/{entity_id}/{year_month}", response_model=PacCalculationResult)
+@router.get("/calc/{entity_id}/{year_month}", response_model=PacCalculationResult)
 async def get_pac_calculations(
     entity_id: str,
-    year_month: str,
+    year_month: int = Path(..., ge=200001, le=209912, description="Target month as YYYYMM"),
     pac_service: PacCalculationService = Depends(get_pac_calculation_service),
 ) -> PacCalculationResult:
     """
     Get PAC calculations for a specific store and month (YYYYMM).
     """
-    if not is_valid_year_month(year_month):
+    ym = str(year_month)
+    if not is_valid_year_month(ym):
         raise HTTPException(
             status_code=400,
             detail="Invalid yearMonth format. Expected YYYYMM (e.g., 202501)",
         )
     try:
-        return await pac_service.calculate_pac_async(entity_id, year_month)
+        return await pac_service.calculate_pac_async(entity_id, ym)
     except Exception as ex:
         raise HTTPException(status_code=500, detail=f"Error calculating PAC: {str(ex)}")
 
 
-@router.get("/{entity_id}/{year_month}/input", response_model=PacInputData)
+@router.get("/calc/{entity_id}/{year_month}/input", response_model=PacInputData)
 async def get_pac_input_data(
     entity_id: str,
-    year_month: str,
+    year_month: int = Path(..., ge=200001, le=209912, description="Target month as YYYYMM"),
     pac_service: PacCalculationService = Depends(get_pac_calculation_service),
 ) -> PacInputData:
     """
     Get PAC input data used for calculations for a specific store and month (YYYYMM).
     """
-    if not is_valid_year_month(year_month):
+    ym = str(year_month)
+    if not is_valid_year_month(ym):
         raise HTTPException(
             status_code=400,
             detail="Invalid yearMonth format. Expected YYYYMM (e.g., 202501)",
         )
     try:
-        return await pac_service.get_input_data_async(entity_id, year_month)
+        return await pac_service.get_input_data_async(entity_id, ym)
     except Exception as ex:
         raise HTTPException(
             status_code=500, detail=f"Error retrieving PAC input data: {str(ex)}"
