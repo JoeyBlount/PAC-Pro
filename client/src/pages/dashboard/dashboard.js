@@ -584,7 +584,7 @@ const DeadlinesWidget = () => {
         const response = await fetch('http://localhost:5140/api/pac/deadlines/upcoming?days_ahead=30&limit=5', {
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : { Authorization: 'Bearer dev' })
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
           }
         });
 

@@ -63,7 +63,7 @@ const DeadlineManagement = () => {
         headers: {
           'Content-Type': 'application/json',
           'X-User-Role': userRole || '',
-          ...(token ? { Authorization: `Bearer ${token}` } : { Authorization: 'Bearer dev' })
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         }
       });
       
@@ -154,7 +154,7 @@ const DeadlineManagement = () => {
         headers: {
           'Content-Type': 'application/json',
           'X-User-Role': userRole || '',
-          ...(token ? { Authorization: `Bearer ${token}` } : { Authorization: 'Bearer dev' })
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
         body: JSON.stringify(deadlineData)
       });
@@ -185,7 +185,7 @@ const DeadlineManagement = () => {
         headers: {
           'Content-Type': 'application/json',
           'X-User-Role': userRole || '',
-          ...(token ? { Authorization: `Bearer ${token}` } : { Authorization: 'Bearer dev' })
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         }
       });
 
