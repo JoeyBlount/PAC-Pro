@@ -12,6 +12,7 @@ import PrivateRoute from "./routes/PrivateRoute"; // Assuming this is used with 
 import ProtectedRoute from './routes/ProtectedRoute';
 import Login from "./pages/login/login";
 import SignUpScreen from "./pages/login/signupscreen";
+import NotAllowed from "./pages/login/NotAllowed";
 import App from "./App"; // Often used with Router/Routes structure
 import Dashboard from "./pages/dashboard/dashboard";
 import InvoiceLogs from "./pages/invoiceLogs/invoiceLogs";
@@ -44,6 +45,10 @@ const router = createBrowserRouter([
     element: <SignUpScreen />,
   },
   {
+    path: "not-allowed",
+    element: <NotAllowed />,
+  },
+  {
     path: "/navi",
     element: <PrivateRoute><App /></PrivateRoute>,
     children: [
@@ -73,11 +78,11 @@ const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
     <ThemeContextProvider>
-    <AuthProvider>
-      <StoreProvider>
-        <RouterProvider router={router} />
-      </StoreProvider>
-    </AuthProvider>
+      <AuthProvider>
+        <StoreProvider>
+          <RouterProvider router={router} />
+        </StoreProvider>
+      </AuthProvider>
     </ThemeContextProvider>
   </React.StrictMode>
 );

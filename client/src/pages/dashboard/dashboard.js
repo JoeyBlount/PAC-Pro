@@ -36,7 +36,9 @@ const AnnouncementBox = () => {
   const fetchAnnouncements = async () => {
     setLoadingAnnouncements(true);
     try {
-      const res = await fetch(apiUrl(`/api/pac/announcements?role=${userRole}`));
+      const res = await fetch(apiUrl(`/api/pac/announcements?role=${userRole}`), {
+        credentials: 'include',
+      });
       const data = await res.json();
       setAnnouncements(data);
       setScrollIndex(0);
@@ -174,7 +176,10 @@ const MonthlySalesChart = ({selectedStore}) => {
     const yearMonth = `${todayDate.getFullYear()}${String(todayDate.getMonth()).padStart(2, "0")}`;
     try {
       const response = await fetch(
-        apiUrl(`/api/pac/info/sales/${formatStoreID(selectedStore)}/${yearMonth}`)
+        apiUrl(`/api/pac/info/sales/${formatStoreID(selectedStore)}/${yearMonth}`),
+        {
+          credentials: 'include',
+        }
       );
       if (response.ok) {
         const jsonData = await response.json();
@@ -293,7 +298,10 @@ const BudgetChart = ({selectedStore}) => {
     const yearMonth = `${todayDate.getFullYear()}${String(todayDate.getMonth()).padStart(2, "0")}`;
     try {
       const response = await fetch(
-        apiUrl(`/api/pac/info/budget/${formatStoreID(selectedStore)}/${yearMonth}`)
+        apiUrl(`/api/pac/info/budget/${formatStoreID(selectedStore)}/${yearMonth}`),
+        {
+          credentials: 'include',
+        }
       );
       if (response.ok) {
         const jsonData = await response.json();
@@ -419,7 +427,10 @@ const PacVSProjectedChart = ({selectedStore}) => {
     const yearMonth = `${todayDate.getFullYear()}${String(todayDate.getMonth()).padStart(2, "0")}`;
     try {
       const response = await fetch(
-        apiUrl(`/api/pac/info/pac/${formatStoreID(selectedStore)}/${yearMonth}`)
+        apiUrl(`/api/pac/info/pac/${formatStoreID(selectedStore)}/${yearMonth}`),
+        {
+          credentials: 'include',
+        }
       );
       if (response.ok) {
         const jsonData = await response.json();
@@ -586,12 +597,23 @@ const DeadlinesWidget = () => {
   useEffect(() => {
     const fetchDeadlines = async () => {
       try {
-        const token = currentUser ? await currentUser.getIdToken() : null;
+        let headers = {
+          'Content-Type': 'application/json',
+        };
+
+        // Handle authentication for both Firebase and Microsoft users
+        if (currentUser && currentUser.authMethod === 'microsoft') {
+          // For Microsoft users, use credentials with session cookies
+          headers['X-Auth-Method'] = 'microsoft';
+        } else if (currentUser && auth.currentUser) {
+          // For Firebase users, use ID token
+          const token = await auth.currentUser.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
         const response = await fetch(apiUrl('/api/pac/deadlines/upcoming?days_ahead=30&limit=5'), {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          }
+          headers: headers,
+          credentials: 'include',
         });
 
         if (!response.ok) {

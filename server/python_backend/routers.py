@@ -71,26 +71,47 @@ logger = logging.getLogger(__name__)
 security_scheme = HTTPBearer(auto_error=False)
 
 
-def require_auth(credentials: HTTPAuthorizationCredentials = Security(security_scheme)) -> Dict[str, Any]:
-    """Basic auth requirement: ensure a Bearer token is provided.
+def require_auth(credentials: HTTPAuthorizationCredentials = Security(security_scheme), request: Request = None) -> Dict[str, Any]:
+    """Enhanced auth requirement that supports both Firebase ID tokens and Microsoft session cookies."""
 
-    In production, this should validate the token (e.g., Firebase ID token).
-    For now, we enforce presence of the header to prevent unauthenticated access.
-    """
+    # First try Microsoft session cookie authentication
+    if request:
+        session_token = request.cookies.get("session_token")
+        if session_token:
+            try:
+                # Decode Microsoft session token
+                from auth.microsoft import _decode_session_token
+                decoded = _decode_session_token(session_token)
+                return {
+                    "uid": decoded.get("email"),  # Use email as uid for Microsoft users
+                    "email": decoded.get("email"),
+                    "name": decoded.get("name"),
+                    "auth_method": "microsoft",
+                    "claims": {"email": decoded.get("email")}
+                }
+            except Exception as e:
+                # Invalid session token, continue to Firebase auth
+                pass
+
+    # If no valid Microsoft session, try Firebase ID token
     if credentials is None or not credentials.credentials:
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
 
     token = credentials.credentials
 
     # If Firebase Admin SDK is available and initialized, verify the token.
-    # Otherwise, accept any non-empty token but still require presence (dev fallback).
     try:
         import firebase_admin  # type: ignore
         from firebase_admin import auth as fb_auth  # type: ignore
         if firebase_admin._apps:
             try:
                 decoded = fb_auth.verify_id_token(token)
-                return {"uid": decoded.get("uid"), "email": decoded.get("email"), "claims": decoded}
+                return {
+                    "uid": decoded.get("uid"),
+                    "email": decoded.get("email"),
+                    "auth_method": "firebase",
+                    "claims": decoded
+                }
             except Exception:
                 # Provided token is present but invalid
                 raise HTTPException(status_code=401, detail="Invalid token")
@@ -98,7 +119,7 @@ def require_auth(credentials: HTTPAuthorizationCredentials = Security(security_s
         # Firebase not available; proceed with minimal context in dev
         pass
 
-    return {"uid": None, "email": None, "claims": None}
+    return {"uid": None, "email": None, "auth_method": "unknown", "claims": None}
 
 
 def require_roles(allowed_roles: List[str]):

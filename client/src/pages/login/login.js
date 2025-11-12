@@ -19,9 +19,9 @@ const Login = () => {
 
   const navigate = useNavigate(); // Hook for navigation
 
-  // Function to handle Microsoft login
+  // Function to handle Microsoft login using backend OAuth flow
   const handleMicrosoftLogin = async () => {
-    const BACKEND_BASE = "http://localhost:8000";
+    const BACKEND_BASE = "http://localhost:5140";
     const redirect = encodeURIComponent(`${window.location.origin}/navi/dashboard`);
     window.location.href = `${BACKEND_BASE}/api/auth/microsoft/login?redirect=${redirect}`;
   };

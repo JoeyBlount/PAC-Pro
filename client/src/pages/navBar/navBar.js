@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "./navBar.css";
 import { auth } from "../../config/firebase-config";
 import { signOut } from "firebase/auth";
+import { useAuth } from "../../context/AuthContext";
 import {
   FormControl,
   InputLabel,
@@ -62,6 +63,7 @@ function formatRelativeTime(timestamp) {
 
 export function NavBar() {
   const navigate = useNavigate();
+  const { currentUser, userRole, loading: authLoading } = useAuth();
   const [sideNavOpen, setSideNavOpen] = useState(false);
   const [reportsDropdownOpen, setReportsDropdownOpen] = useState(false);
   const [reportsHoverTimeout, setReportsHoverTimeout] = useState(null);
@@ -97,17 +99,36 @@ export function NavBar() {
   // Fetch allowed stores from backend and basic user info
   useEffect(() => {
     const fetchData = async () => {
+      if (authLoading || !currentUser) {
+        return;
+      }
+
       setLoading(true);
       try {
-        const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+        let headers = {
+          'Content-Type': 'application/json',
+        };
+
+        // Handle authentication for both Firebase and Microsoft users
+        if (currentUser.authMethod === 'microsoft') {
+          // For Microsoft users, use credentials with session cookies
+          headers['X-Auth-Method'] = 'microsoft';
+        } else if (auth.currentUser) {
+          // For Firebase users, use ID token
+          const token = await auth.currentUser.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        } else {
+          // Fallback for dev mode
+          headers['X-Dev-Email'] = 'dev@example.com';
+        }
+
         // Load allowed stores from backend
         const res = await fetch(apiUrl('/api/pac/nav/allowed-stores'), {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : { 'X-Dev-Email': auth.currentUser?.email || 'dev@example.com' }),
-          },
+          headers: headers,
+          credentials: 'include',
         });
+
         if (!res.ok) {
           const errText = await res.text();
           throw new Error(`Failed to load stores: ${res.status} - ${errText}`);
@@ -121,8 +142,11 @@ export function NavBar() {
           setSelectedStore(storesData[0].id);
         }
 
-        // Minimal user info for display (keep reading name from Firestore notifications or elsewhere if needed)
-        setUserData({ firstName: auth.currentUser?.displayName || 'User' });
+        // Set user data for display - use currentUser from AuthContext
+        setUserData({
+          firstName: currentUser.displayName?.split(' ')[0] || 'User',
+          email: currentUser.email
+        });
       } catch (error) {
         console.error('Error loading allowed stores:', error);
         setStores([]);
@@ -132,7 +156,7 @@ export function NavBar() {
     };
 
     fetchData();
-  }, [selectedStore, setSelectedStore]);
+  }, [authLoading, currentUser, selectedStore, setSelectedStore]);
 
   // Helpers
   const handleStoreChange = (event) => {
@@ -234,11 +258,24 @@ export function NavBar() {
   // Sign out logic
   async function handleSignOut() {
     try {
-      await signOut(auth);
+      // Sign out of Firebase if logged in
+      try { await signOut(auth); } catch {}
+
+      // Clear backend Microsoft session cookie
+      const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "http://localhost:5140").replace(/\/+$/, "");
+      await fetch(`${BASE_URL}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+
+      // Clear local storage and redirect
       localStorage.removeItem("user");
       navigate("/");
     } catch (e) {
       console.error("Error signing out: ", e);
+      // Force redirect even on error
+      localStorage.removeItem("user");
+      navigate("/");
     }
   }
 
