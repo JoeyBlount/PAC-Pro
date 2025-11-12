@@ -1,25 +1,20 @@
-import { test, expect, chromium } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+
+test.use({ storageState: './auth.json' });
+test.use({ headless: true, channel: 'chrome' });
 
 test.describe('Reports Tests', () => {
-  test('should hover reports icon to open mini menu and print PAC and Invoice Log reports', async () => {
+  test('should hover reports icon to open mini menu and print PAC and Invoice Log reports', async ({ page }, testInfo) => {
     test.setTimeout(120000);
 
-    const context = await chromium.launchPersistentContext('./.pw-reports-test-profile', {
-      channel: 'chrome',
-      headless: false,
-      ignoreDefaultArgs: ['--enable-automation'],
-      args: ['--disable-blink-features=AutomationControlled'],
-    });
-    const page = await context.newPage();
-
     await page.goto('http://localhost:3000');
-    await expect(page.getByText('Sign In')).toBeVisible();
-
-    // Google login (manual in headed mode)
-    await page.pause(); // complete login manually
-
+    // Google login (using saved state/cookies; click button if still on login screen)
+    const googleBtn = page.getByRole('button', { name: /^Login with Google$/i });
+    if (await googleBtn.isVisible().catch(() => false)) {
+      await googleBtn.click();
+    }
     // Land on dashboard
-    await page.waitForURL(/.*dashboard.*/);
+    await page.waitForURL(/.*\/navi\/dashboard.*/, { timeout: 45000 });
 
     // 🔑 Force a fresh ID token so the app will attach Authorization header
     await page.evaluate(async () => {
@@ -160,17 +155,22 @@ test.describe('Reports Tests', () => {
     await page.waitForURL(/.*invoiceLogs.*/, { timeout: 10000 });
     await page.waitForTimeout(3000);
     
-    // Look for export/print button and click it
-    const exportButton = page.locator('button').filter({ hasText: /export/i }).or(
-      page.locator('button').filter({ hasText: /print/i })
-    );
-    
-    if (await exportButton.isVisible()) {
-      await exportButton.click();
-      console.log('Invoice Log export/print button clicked from main page');
+    // Look for a unique Export button (avoid strict mode conflicts), fallback to Print
+    let clickedExport = false;
+    const exportBtnMain = page.getByRole('button', { name: /^Export$/i });
+    if (await exportBtnMain.isVisible().catch(() => false)) {
+      await exportBtnMain.click();
+      console.log('Invoice Log Export button clicked from main page');
+      clickedExport = true;
     } else {
-      console.log('Invoice Log export/print button not found on main page');
+      const printBtnMain = page.getByRole('button', { name: /^Print$/i });
+      if (await printBtnMain.isVisible().catch(() => false)) {
+        await printBtnMain.click();
+        console.log('Invoice Log Print button clicked from main page');
+        clickedExport = true;
+      }
     }
+    if (!clickedExport) console.log('Invoice Log export/print button not found on main page');
 
     // Test 5: Test Invoice Log from hover menu
     console.log('Testing Invoice Log from hover menu...');
@@ -190,17 +190,22 @@ test.describe('Reports Tests', () => {
     await page.waitForURL(/.*invoiceLogs.*/, { timeout: 10000 });
     await page.waitForTimeout(3000);
     
-    // Look for export/print button and click it
-    const exportButtonFromHover = page.locator('button').filter({ hasText: /export/i }).or(
-      page.locator('button').filter({ hasText: /print/i })
-    );
-    
-    if (await exportButtonFromHover.isVisible()) {
-      await exportButtonFromHover.click();
-      console.log('Invoice Log export/print button clicked from hover menu');
+    // Look for a unique Export button (avoid strict mode conflicts), fallback to Print
+    let clickedExportHover = false;
+    const exportBtnHover = page.getByRole('button', { name: /^Export$/i });
+    if (await exportBtnHover.isVisible().catch(() => false)) {
+      await exportBtnHover.click();
+      console.log('Invoice Log Export button clicked from hover menu');
+      clickedExportHover = true;
     } else {
-      console.log('Invoice Log export/print button not found from hover menu');
+      const printBtnHover = page.getByRole('button', { name: /^Print$/i });
+      if (await printBtnHover.isVisible().catch(() => false)) {
+        await printBtnHover.click();
+        console.log('Invoice Log Print button clicked from hover menu');
+        clickedExportHover = true;
+      }
     }
+    if (!clickedExportHover) console.log('Invoice Log export/print button not found from hover menu');
 
     console.log('All report tests completed successfully');
   });

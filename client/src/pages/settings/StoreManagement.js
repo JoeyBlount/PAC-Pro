@@ -241,7 +241,7 @@ const StoreManagement = () => {
           marginBottom: 3,
         }}
       >
-        <Typography variant="h5" sx={{ fontWeight: "bold", textTransform: "uppercase" }}>
+        <Typography variant="h5" sx={{ fontWeight: "bold", textTransform: "uppercase" }} data-testid="store-mgmt-heading">
           Store Management
           {isAccountant && (
             <VisibilityIcon sx={{ ml: 1, color: "text.secondary", fontSize: 24 }} />
@@ -250,6 +250,7 @@ const StoreManagement = () => {
         {!isAccountant && (
           <Box>
             <Button
+              data-testid="modify-toggle-btn"
               variant="contained"
               sx={{
                 backgroundColor: modifyMode
@@ -272,7 +273,7 @@ const StoreManagement = () => {
               {modifyMode ? "Save" : "Modify"}
             </Button>
             <Tooltip title="Add Store">
-              <IconButton color="primary" onClick={handleOpen}>
+              <IconButton color="primary" onClick={handleOpen} data-testid="add-store-btn">
                 <AddCircleOutlineIcon fontSize="large" />
               </IconButton>
             </Tooltip>
@@ -395,7 +396,7 @@ const StoreManagement = () => {
         </Box>
       )}
 
-      <Dialog open={open} onClose={handleClose}>
+      <Dialog open={open} onClose={handleClose} data-testid="add-store-dialog">
         <DialogTitle>Add New Store</DialogTitle>
         <DialogContent
           sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}
