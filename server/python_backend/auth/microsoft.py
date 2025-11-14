@@ -218,8 +218,13 @@ async def microsoft_callback(request: Request):
         if resp.status_code >= 400:
             raise HTTPException(status_code=400, detail="Failed to fetch user profile from Graph")
         me = resp.json()
-        email = me.get("mail") or me.get("userPrincipalName")
-        name = me.get("displayName")
+
+        mail = me.get("mail")
+        userPrincipalName = me.get("userPrincipalName")
+        displayName = me.get("displayName")
+
+        email = mail or userPrincipalName
+        name = displayName
 
     if not email:
         raise HTTPException(status_code=400, detail="Unable to determine user email from Microsoft account")
@@ -248,6 +253,97 @@ async def get_me(request: Request):
         "email": data.get("email"),
         "name": data.get("name"),
     })
+
+
+@router.get("/validate-session")
+async def validate_session(request: Request):
+    """Validate current session and return user info"""
+    token = request.cookies.get("session_token")
+    if not token:
+        return JSONResponse({"valid": False, "user": None})
+
+    try:
+        data = _decode_session_token(token)
+        email = data.get("email")
+        name = data.get("name")
+
+        # Check if user is still allowed
+        if not await _is_user_allowed(email):
+            return JSONResponse({"valid": False, "user": None})
+
+        # Get user role from Firestore
+        try:
+            import firebase_admin  # type: ignore
+            from firebase_admin import firestore  # type: ignore
+            if getattr(firebase_admin, "_apps", None):
+                db = firestore.client()
+                user_doc = db.collection("users").document(email).get()
+                if user_doc.exists:
+                    user_data = user_doc.to_dict()
+                    return JSONResponse({
+                        "valid": True,
+                        "user": {
+                            "email": email,
+                            "name": name,
+                            "role": user_data.get("role", "user")
+                        }
+                    })
+        except Exception:
+            pass
+
+        return JSONResponse({
+            "valid": True,
+            "user": {
+                "email": email,
+                "name": name,
+                "role": "user"  # default role
+            }
+        })
+    except Exception:
+        return JSONResponse({"valid": False, "user": None})
+
+
+@router.post("/microsoft/validate-token")
+async def validate_microsoft_token(request: Request):
+    """Validate Microsoft access token and create session"""
+    try:
+        # Get the authorization header
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+
+        access_token = auth_header.split(" ")[1]
+
+        # Validate the token with Microsoft Graph
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                "https://graph.microsoft.com/v1.0/me",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            if resp.status_code >= 400:
+                raise HTTPException(status_code=401, detail="Invalid Microsoft access token")
+
+            me = resp.json()
+            email = me.get("mail") or me.get("userPrincipalName")
+            name = me.get("displayName")
+
+            if not email:
+                raise HTTPException(status_code=400, detail="Unable to determine user email from Microsoft account")
+
+            # Check if user is allowed
+            if not await _is_user_allowed(email):
+                return JSONResponse({"allowed": False, "message": "User not found in system"})
+
+            # Create session token
+            token = _create_session_token(email=email, name=name)
+
+            # Set session cookie
+            response = JSONResponse({"allowed": True, "message": "Authentication successful"})
+            response.set_cookie("session_token", token, **_get_cookie_settings(request))
+            return response
+
+    except httpx.RequestError:
+        raise HTTPException(status_code=500, detail="Failed to validate token with Microsoft Graph")
 
 
 @router.post("/logout")

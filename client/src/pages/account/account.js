@@ -64,11 +64,16 @@ const Account = () => {
     try {
       // Sign out of Firebase if logged in via Google
       try { await signOut(auth); } catch {}
+
       // Clear backend Microsoft session cookie
       await fetch(`${BASE_URL}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+
+      // Force redirect to login page
       window.location.href = '/';
     } catch (err) {
       console.error("Logout Error:", err);
+      // Force redirect even on error
+      window.location.href = '/';
     }
   };
 
