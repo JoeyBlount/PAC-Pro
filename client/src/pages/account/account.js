@@ -8,7 +8,7 @@ import { auth } from "../../config/firebase-config";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useThemeMode } from '../../context/ThemeContext';
-const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "http://localhost:5140").replace(/\/+$/, "");
+const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "https://pac-pro-197980862836.us-west2.run.app").replace(/\/+$/, "");
 
 // Auth-aware fetch helper
 async function api(path, { method = "GET", body } = {}) {

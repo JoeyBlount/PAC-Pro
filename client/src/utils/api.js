@@ -1,5 +1,5 @@
 // Centralized API URL and helpers for frontend fetch calls
-const RAW_BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5140';
+const RAW_BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://pac-pro-197980862836.us-west2.run.app';
 
 export function getBackendUrl() {
   // Ensure no trailing slash

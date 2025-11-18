@@ -21,7 +21,7 @@ const Login = () => {
 
   // Function to handle Microsoft login using backend OAuth flow
   const handleMicrosoftLogin = async () => {
-    const BACKEND_BASE = "http://localhost:5140";
+    const BACKEND_BASE = "https://pac-pro-197980862836.us-west2.run.app";
     const redirect = encodeURIComponent(`${window.location.origin}/navi/dashboard`);
     window.location.href = `${BACKEND_BASE}/api/auth/microsoft/login?redirect=${redirect}`;
   };
