@@ -2005,8 +2005,7 @@ const PacTab = ({
   const getProjectedValue = (expenseName, type) => {
     if (!projectionsData) return "-";
 
-    // Map expense names to projections data fields
-    const fieldMap = {
+    const dollarFieldMap = {
       "Product Net Sales": "product_net_sales",
       "All Net Sales": "all_net_sales",
       "Base Food": "controllable_expenses.base_food.dollars",
@@ -2036,30 +2035,62 @@ const PacTab = ({
       "P.A.C.": "pac_dollars",
     };
 
+    const percentFieldMap = {
+      "Base Food": "controllable_expenses.base_food.percent",
+      "Employee Meal": "controllable_expenses.employee_meal.percent",
+      Condiment: "controllable_expenses.condiment.percent",
+      "Total Waste": "controllable_expenses.total_waste.percent",
+      Paper: "controllable_expenses.paper.percent",
+      "Crew Labor": "controllable_expenses.crew_labor.percent",
+      "Management Labor": "controllable_expenses.management_labor.percent",
+      "Payroll Tax": "controllable_expenses.payroll_tax.percent",
+      Travel: "controllable_expenses.travel.percent",
+      Advertising: "controllable_expenses.advertising.percent",
+      "Advertising Other": "controllable_expenses.advertising_other.percent",
+      Promotion: "controllable_expenses.promotion.percent",
+      "Outside Services": "controllable_expenses.outside_services.percent",
+      Linen: "controllable_expenses.linen.percent",
+      "Operating Supply": [
+        "controllable_expenses.operating_supply.percent",
+        "controllable_expenses.op_supply.percent",
+      ],
+      "Maintenance & Repair":
+        "controllable_expenses.maintenance_repair.percent",
+      "Small Equipment": "controllable_expenses.small_equipment.percent",
+      Utilities: "controllable_expenses.utilities.percent",
+      Office: "controllable_expenses.office.percent",
+      "Cash +/-": "controllable_expenses.cash_adjustments.percent",
+      "Crew Relations": "controllable_expenses.crew_relations.percent",
+      Training: "controllable_expenses.training.percent",
+      "Total Controllable": "total_controllable_percent",
+      "P.A.C.": "pac_percent",
+    };
+
+    const fieldMap = type === "percent" ? percentFieldMap : dollarFieldMap;
     const fieldPath = fieldMap[expenseName];
     if (!fieldPath) return "-";
 
-    // Navigate nested object path
-    const value = fieldPath
-      .split(".")
-      .reduce((obj, key) => obj?.[key], projectionsData);
+    const resolveValue = (pathOrPaths) => {
+      const paths = Array.isArray(pathOrPaths) ? pathOrPaths : [pathOrPaths];
+      for (const path of paths) {
+        const next = path
+          .split(".")
+          .reduce((obj, key) => obj?.[key], projectionsData);
+        if (next !== undefined && next !== null) {
+          return next;
+        }
+      }
+      return undefined;
+    };
 
-    if (value === null || value === undefined) return "-";
+    const value = resolveValue(fieldPath);
+    if (value === undefined) return "-";
 
     if (type === "dollar") {
       return formatCurrency(parseFloat(value));
-    } else if (type === "percent") {
-      // For percentages, we need to calculate them from the dollar amounts
-      // Get the projected net sales for percentage calculation
-      const projectedNetSales =
-        projectionsData.product_net_sales || projectionsData.all_net_sales;
-      if (!projectedNetSales || projectedNetSales === 0) return "-";
-
-      const percentage =
-        (parseFloat(value) / parseFloat(projectedNetSales)) * 100;
-      return formatPercentage(percentage);
     }
-    return "-";
+
+    return formatPercentage(parseFloat(value));
   };
 
   if (!storeId) {
