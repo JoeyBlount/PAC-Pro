@@ -1178,19 +1178,17 @@ const PacTab = ({
             <td style="font-weight: bold; background-color: #fce4ec;">${formatCurrency(
               (actualData.controllableExpenses.travel?.dollars || 0) +
                 (actualData.controllableExpenses.advertising?.dollars || 0) +
-                (actualData.controllableExpenses.promo?.dollars || 0) +
+                (actualData.controllableExpenses.promotion?.dollars || 0) +
                 (actualData.controllableExpenses.outsideServices?.dollars ||
                   0) +
                 (actualData.controllableExpenses.linen?.dollars || 0) +
-                (actualData.controllableExpenses.operatingSupply?.dollars ||
-                  0) +
+                (actualData.controllableExpenses.opsSupplies?.dollars || 0) +
                 (actualData.controllableExpenses.maintenanceRepair?.dollars ||
                   0) +
                 (actualData.controllableExpenses.smallEquipment?.dollars || 0) +
                 (actualData.controllableExpenses.utilities?.dollars || 0) +
                 (actualData.controllableExpenses.office?.dollars || 0) +
-                (actualData.controllableExpenses.cashAdjustments?.dollars ||
-                  0) +
+                (actualData.controllableExpenses.cashPlusMinus?.dollars || 0) +
                 (actualData.controllableExpenses.crewRelations?.dollars || 0) +
                 (actualData.controllableExpenses.training?.dollars || 0) +
                 (actualData.controllableExpenses.duesAndSubscriptions
@@ -3113,7 +3111,9 @@ const PacTab = ({
                   (actualData.controllableExpenses.crewLabor?.dollars || 0) +
                     (actualData.controllableExpenses.managementLabor?.dollars ||
                       0) +
-                    (actualData.controllableExpenses.payrollTax?.dollars || 0)
+                    (actualData.controllableExpenses.payrollTax?.dollars || 0) +
+                    (actualData.controllableExpenses.additionalLaborDollars
+                      ?.dollars || 0)
                 )}
               </TableCell>
               <TableCell align="right" sx={{ fontWeight: "bold" }}>
@@ -3121,7 +3121,9 @@ const PacTab = ({
                   (actualData.controllableExpenses.crewLabor?.percent || 0) +
                     (actualData.controllableExpenses.managementLabor?.percent ||
                       0) +
-                    (actualData.controllableExpenses.payrollTax?.percent || 0)
+                    (actualData.controllableExpenses.payrollTax?.percent || 0) +
+                    (actualData.controllableExpenses.additionalLaborDollars
+                      ?.percent || 0)
                 )}
               </TableCell>
               <TableCell align="right" sx={{ fontWeight: "bold" }}>
