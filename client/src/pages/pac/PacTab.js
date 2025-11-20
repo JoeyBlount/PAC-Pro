@@ -3060,41 +3060,52 @@ const PacTab = ({
                 name: "Additional Labor Dollars",
                 field: "additionalLaborDollars",
               },
-            ].map(({ name, field }) => (
-              <TableRow key={name}>
-                <TableCell sx={{ pl: 4 }}>{name}</TableCell>
-                <TableCell align="right">
-                  {formatCurrency(
-                    actualData.controllableExpenses[field]?.dollars || 0
-                  )}
-                </TableCell>
-                <TableCell align="right">
-                  {formatPercentage(
-                    actualData.controllableExpenses[field]?.percent || 0
-                  )}
-                </TableCell>
-                <TableCell align="right">
-                  {getProjectedValue(name, "dollar")}
-                </TableCell>
-                <TableCell align="right">
-                  {getProjectedValue(name, "percent")}
-                </TableCell>
-                <TableCell align="right">
-                  {formatDiffPercent(
-                    calculateDiffPercent(
-                      actualData.controllableExpenses[field]?.percent || 0,
-                      parseFloat(
-                        String(getProjectedValue(name, "percent")).replace(
-                          "%",
-                          ""
-                        )
-                      )
-                    ),
-                    "default"
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
+            ].map(({ name, field }) => {
+              const expenseData = actualData.controllableExpenses[field];
+              const dollars = expenseData?.dollars;
+              const percent = expenseData?.percent;
+              const isAdditionalLabor = field === "additionalLaborDollars";
+              const shouldShowDash =
+                isAdditionalLabor && (!dollars || dollars === 0);
+              const projectedPercentStr = getProjectedValue(name, "percent");
+              const projectedPercentNum = parseFloat(
+                String(projectedPercentStr || "").replace("%", "")
+              );
+              const hasProjectedData =
+                !isNaN(projectedPercentNum) &&
+                projectedPercentStr !== "" &&
+                projectedPercentStr !== "-";
+              const shouldShowDashForDiff =
+                isAdditionalLabor && (!hasProjectedData || shouldShowDash);
+              return (
+                <TableRow key={name}>
+                  <TableCell sx={{ pl: 4 }}>{name}</TableCell>
+                  <TableCell align="right">
+                    {shouldShowDash ? "-" : formatCurrency(dollars || 0)}
+                  </TableCell>
+                  <TableCell align="right">
+                    {shouldShowDash ? "-" : formatPercentage(percent || 0)}
+                  </TableCell>
+                  <TableCell align="right">
+                    {getProjectedValue(name, "dollar")}
+                  </TableCell>
+                  <TableCell align="right">
+                    {getProjectedValue(name, "percent")}
+                  </TableCell>
+                  <TableCell align="right">
+                    {shouldShowDashForDiff
+                      ? "-"
+                      : formatDiffPercent(
+                          calculateDiffPercent(
+                            percent || 0,
+                            projectedPercentNum
+                          ),
+                          "default"
+                        )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
 
             {/* Labor Total */}
             <TableRow
@@ -3187,41 +3198,52 @@ const PacTab = ({
               { name: "Crew Relations", field: "crewRelations" },
               { name: "Training", field: "training" },
               { name: "Dues and Subscriptions", field: "duesAndSubscriptions" },
-            ].map(({ name, field }) => (
-              <TableRow key={name}>
-                <TableCell sx={{ pl: 4 }}>{name}</TableCell>
-                <TableCell align="right">
-                  {formatCurrency(
-                    actualData.controllableExpenses[field]?.dollars || 0
-                  )}
-                </TableCell>
-                <TableCell align="right">
-                  {formatPercentage(
-                    actualData.controllableExpenses[field]?.percent || 0
-                  )}
-                </TableCell>
-                <TableCell align="right">
-                  {getProjectedValue(name, "dollar")}
-                </TableCell>
-                <TableCell align="right">
-                  {getProjectedValue(name, "percent")}
-                </TableCell>
-                <TableCell align="right">
-                  {formatDiffPercent(
-                    calculateDiffPercent(
-                      actualData.controllableExpenses[field]?.percent || 0,
-                      parseFloat(
-                        String(getProjectedValue(name, "percent")).replace(
-                          "%",
-                          ""
-                        )
-                      )
-                    ),
-                    "default"
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
+            ].map(({ name, field }) => {
+              const expenseData = actualData.controllableExpenses[field];
+              const dollars = expenseData?.dollars;
+              const percent = expenseData?.percent;
+              const isDuesAndSubs = field === "duesAndSubscriptions";
+              const shouldShowDash =
+                isDuesAndSubs && (!dollars || dollars === 0);
+              const projectedPercentStr = getProjectedValue(name, "percent");
+              const projectedPercentNum = parseFloat(
+                String(projectedPercentStr || "").replace("%", "")
+              );
+              const hasProjectedData =
+                !isNaN(projectedPercentNum) &&
+                projectedPercentStr !== "" &&
+                projectedPercentStr !== "-";
+              const shouldShowDashForDiff =
+                isDuesAndSubs && (!hasProjectedData || shouldShowDash);
+              return (
+                <TableRow key={name}>
+                  <TableCell sx={{ pl: 4 }}>{name}</TableCell>
+                  <TableCell align="right">
+                    {shouldShowDash ? "-" : formatCurrency(dollars || 0)}
+                  </TableCell>
+                  <TableCell align="right">
+                    {shouldShowDash ? "-" : formatPercentage(percent || 0)}
+                  </TableCell>
+                  <TableCell align="right">
+                    {getProjectedValue(name, "dollar")}
+                  </TableCell>
+                  <TableCell align="right">
+                    {getProjectedValue(name, "percent")}
+                  </TableCell>
+                  <TableCell align="right">
+                    {shouldShowDashForDiff
+                      ? "-"
+                      : formatDiffPercent(
+                          calculateDiffPercent(
+                            percent || 0,
+                            projectedPercentNum
+                          ),
+                          "default"
+                        )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
 
             {/* Purchases Total */}
             <TableRow
