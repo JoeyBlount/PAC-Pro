@@ -29,6 +29,9 @@ import { apiUrl } from '../../utils/api';
 const UserManagement = () => {
   const { userRole, currentUser } = useAuth(); // Get current user's role and info
   const [users, setUsers] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("ALL");
+  const [storeFilter, setStoreFilter] = useState("ALL");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -341,6 +344,24 @@ try {
     );
   }
 
+  // --- Seach & Filter --
+  const filteredUsers = users.filter((u) => {
+    // --- search filter ---
+    const matchesSearch =
+      `${u.firstName} ${u.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.email.toLowerCase().includes(searchQuery.toLowerCase());
+
+    // --- role filter ---
+    const matchesRole = roleFilter === "ALL" || u.role === roleFilter;
+
+    // --- store filter ---
+    const matchesStore =
+      storeFilter === "ALL" ||
+      (u.assignedStores || []).some((s) => s.id === storeFilter);
+
+    return matchesSearch && matchesRole && matchesStore;
+  });
+
   return (
     <Container sx={{ textAlign: "center", marginTop: 10 }}>
       {/* Header */}
@@ -353,9 +374,85 @@ try {
         )}
       </Box>
 
+      {/* Search + Filters Row */}
+      <Box 
+        display="flex" 
+        gap={2} 
+        flexWrap="wrap"
+        mb={3}
+        p={2} 
+        sx={{ width: "100%", maxWidth: 800, margin: "0 auto" }}
+      >
+        {/* Search */}
+        <TextField
+          label="Search Users"
+          variant="outlined"
+          width="30%"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          sx={{ flex: 1, minWidth: 220 }}
+        />
+
+        {/* Role Filter */}
+        <FormControl sx={{ minWidth: 160 }}>
+          <InputLabel>Role Filter</InputLabel>
+          <Select
+            value={roleFilter}
+            label="Role Filter"
+            onChange={(e) => setRoleFilter(e.target.value)}
+          >
+            <MenuItem value="ALL">All Roles</MenuItem>
+            {Object.values(ROLES).map((role) => (
+              <MenuItem key={role} value={role}>
+                {role}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        {/* Store Filter */}
+        <FormControl sx={{ minWidth: 180 }}>
+          <InputLabel>Store Filter</InputLabel>
+          <Select
+            value={storeFilter}
+            label="Store Filter"
+            onChange={(e) => setStoreFilter(e.target.value)}
+          >
+            <MenuItem value="ALL">All Stores</MenuItem>
+
+            {/* Dynamically pull stores from all users */}
+            {[
+              ...new Map(
+                users
+                  .flatMap((u) => u.assignedStores || [])
+                  .map((s) => [s.id, s])
+              ).values(),
+            ].map((store) => (
+              <MenuItem key={store.id} value={store.id}>
+                {store.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        {/* Clear Filters Button */}
+        <Button
+          variant="outlined"
+          color="secondary"
+          onClick={() => {
+            setSearchQuery("");
+            setRoleFilter("ALL");
+            setStoreFilter("ALL");
+          }}
+          sx={{ whiteSpace: "nowrap", minWidth: 130 }}
+        >
+          Clear Filters
+        </Button>
+      </Box>
+
       {/* User List */}
       <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-        {users.map((user, index) => (
+        {filteredUsers.map((user, index) => (
           <Paper
             key={user.email || `user-${index}`}
             elevation={3}

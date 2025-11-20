@@ -1,0 +1,8 @@
+{
+  "suite": "Store Management",
+  "title": "Clean old data, add Test store, modifie to \"Modified\", and delete it",
+  "timestamp": "2025-11-20T01:10:25.092Z",
+  "status": "passed",
+  "duration": 9613,
+  "errors": ""
+}

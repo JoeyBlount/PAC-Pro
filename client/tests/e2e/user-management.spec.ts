@@ -3,8 +3,8 @@ test.use({ storageState: './auth.json' });
 test.use({ headless: true, channel: 'chrome' });
 import path from 'path';
 
-test.describe('User Management – add(Accountant) → promote(Admin) → delete', () => {
-  test('creates Test Testingson, promotes to Admin, then deletes', async ({ page }, testInfo) => {
+test.describe('User Management', () => {
+  test('Creates Test Testingson, promotes to Admin, then deletes', async ({ page }, testInfo) => {
     test.setTimeout(150_000);
 
     //Confirmation
@@ -12,7 +12,6 @@ test.describe('User Management – add(Accountant) → promote(Admin) → delete
       if (dialog.type() === 'confirm') await dialog.accept();
       else await dialog.dismiss();
     });
-
 
     //Helpers
     function escapeRegex(s: string) {
@@ -165,6 +164,147 @@ test.describe('User Management – add(Accountant) → promote(Admin) → delete
       throw new Error(`UserManagement e2e failed. Screenshot: ${shotPath}\n${(err as Error).stack || err}`);
     } finally {
       // no-op
+    }
+  });
+
+  test('Search and filter functionality', async ({ page }, testInfo) => {
+    test.setTimeout(150_000);
+
+    try {
+      // Login using saved state (click Google if still on login)
+      await page.goto('http://localhost:3000', { waitUntil: 'domcontentloaded' });
+      const googleBtn = page.getByRole('button', { name: /^Login with Google$/i });
+      if (await googleBtn.isVisible().catch(() => false)) {
+        await googleBtn.click();
+      }
+      await page.waitForURL(/\/navi\/dashboard/i, { timeout: 45_000 }).catch(() => {});
+
+      //Navigate to User Management in settings page. 
+      const navLink = page.getByRole('link', { name: /User Management/i }).first();
+      if (await navLink.isVisible().catch(() => false)) {
+        await navLink.click();
+      } else {
+        await page.goto('http://localhost:3000/navi/settings/user-management', { waitUntil: 'domcontentloaded' });
+      }
+      await expect(page).toHaveURL(/\/navi\/settings\/user-management/i, { timeout: 15_000 });
+      await expect(page.getByRole('heading', { name: /User Management/i })).toBeVisible({ timeout: 30_000 }); //Checking
+
+      // Ensure user cards are loaded
+      await page.waitForSelector('.MuiPaper-root', { timeout: 15_000 });
+      const initialCount = await page.locator('.MuiPaper-root').count();
+      expect(initialCount).toBeGreaterThan(0);
+
+      // ----------------------
+      // SEARCH FILTER
+      // ----------------------
+      const searchInput = page.getByRole('textbox', { name: /Search Users/i });
+      await expect(searchInput).toBeVisible();
+
+      // Take first user email as search query
+      const firstCardText = await page.locator('.MuiPaper-root').first().innerText();
+      const firstEmailMatch = firstCardText.match(/Email:\s*(.*)/i);
+      const searchQuery = firstEmailMatch?.[1].slice(0, 5) ?? 'a';
+
+      await searchInput.fill(searchQuery);
+      await page.waitForTimeout(800);
+
+      const visibleCardsAfterSearch = page.locator('.MuiPaper-root:visible');
+      const visibleCount = await visibleCardsAfterSearch.count();
+      expect(visibleCount).toBeGreaterThan(0);
+
+      for (let i = 0; i < visibleCount; i++) {
+        const text = await visibleCardsAfterSearch.nth(i).innerText();
+        expect(text.toLowerCase()).toContain(searchQuery.toLowerCase());
+      }
+
+      // Clear search
+      await searchInput.fill('');
+      await page.waitForTimeout(600);
+      const countAfterClearSearch = await page.locator('.MuiPaper-root').count();
+      expect(countAfterClearSearch).toBe(initialCount);
+
+      // ------------------------------
+      // HELPERS FOR SELECTS
+      // ------------------------------
+      const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      const openSelect = async (labelText: string) => {
+        const form = page.locator(`.MuiFormControl-root:has-text("${labelText}")`).first();
+        const trigger = form.getByRole('button').first().or(form.locator('[aria-haspopup="listbox"]').first());
+        await trigger.click();
+        await page.locator('ul[role="listbox"]').waitFor({ state: 'visible' });
+      };
+
+      const chooseOptionByLabel = async (label: string) => {
+        await page.locator('ul[role="listbox"] [role="option"]', { hasText: label }).click();
+        await expect(page.locator('ul[role="listbox"]')).toBeHidden({ timeout: 10_000 });
+      };
+
+      // ------------------------------
+      // ROLE FILTER – pick second option and reset
+      // ------------------------------
+      await openSelect('Role Filter');
+      const secondRole = await page.locator('ul[role="listbox"] [role="option"]').nth(2).innerText();
+      await chooseOptionByLabel(secondRole);
+      await page.waitForTimeout(600);
+
+      const roleFilteredCards = page.locator('.MuiPaper-root:visible');
+      const roleFilteredCount = await roleFilteredCards.count();
+      expect(roleFilteredCount).toBeGreaterThan(0);
+
+      for (let i = 0; i < roleFilteredCount; i++) {
+        const text = await roleFilteredCards.nth(i).innerText();
+        expect(text).toContain(secondRole);
+      }
+
+      // RESET ROLE FILTER to default
+      await openSelect('Role Filter');
+      await chooseOptionByLabel('All Roles');
+      await page.waitForTimeout(600);
+
+      // ------------------------------
+      // STORE FILTER – pick second option and reset
+      // ------------------------------
+      await openSelect('Store Filter');
+      const secondStore = await page.locator('ul[role="listbox"] [role="option"]').nth(1).innerText();
+      await chooseOptionByLabel(secondStore);
+      await page.waitForTimeout(600);
+
+      const storeFilteredCards = page.locator('.MuiPaper-root:visible');
+      const storeFilteredCount = await storeFilteredCards.count();
+      expect(storeFilteredCount).toBeGreaterThan(0);
+
+      // RESET ROLE FILTER to default
+      await openSelect('Store Filter');
+      await chooseOptionByLabel('All Stores');
+      await page.waitForTimeout(600);
+
+      // ------------------------------
+      // CLEAR FILTERS
+      // ------------------------------
+      await openSelect('Role Filter');
+      await chooseOptionByLabel(secondRole);
+      await page.waitForTimeout(600);
+
+      await openSelect('Store Filter');
+      await chooseOptionByLabel(secondStore);
+      await page.waitForTimeout(600);
+
+      const countBeforeClear = await page.locator('.MuiPaper-root').count();
+      await expect(countBeforeClear).toBeLessThanOrEqual(initialCount);
+
+      const clearFiltersBtn = page.getByRole('button', { name: /Clear Filters/i });
+      await expect(clearFiltersBtn).toBeVisible();
+      await clearFiltersBtn.click();
+      await page.waitForTimeout(600);
+    
+      const countAfterClearAll = await page.locator('.MuiPaper-root').count();
+      expect(countAfterClearAll).toBe(initialCount);
+    
+    } catch (err) {
+      const shotPath = path.join(testInfo.outputDir, 'user-mgmt-search-filter-failure.png');
+      await page.screenshot({ path: shotPath, fullPage: true });
+      throw new Error(`Search/Filter e2e failed. Screenshot: ${shotPath}\n${(err as Error).stack || err}`);
     }
   });
 });

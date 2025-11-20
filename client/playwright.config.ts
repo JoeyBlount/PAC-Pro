@@ -6,7 +6,7 @@ export default defineConfig({
   expect: {
     timeout: 10_000,
   },
-  reporter: [['list']],
+  reporter: [['list'], ['./test-reporter.ts']],
   use: {
     headless: true,
     channel: 'chrome',
