@@ -3,8 +3,8 @@ import { test, expect } from '@playwright/test';
 test.use({ storageState: './auth.json' });
 test.use({ headless: true, channel: 'chrome' });
 
-test.describe('Reports Tests', () => {
-  test('should hover reports icon to open mini menu and print PAC and Invoice Log reports', async ({ page }, testInfo) => {
+test.describe('Reports', () => {
+  test('Hover over reports icon to open mini menu and print PAC and Invoice Log reports', async ({ page }, testInfo) => {
     test.setTimeout(120000);
 
     await page.goto('http://localhost:3000');
@@ -45,7 +45,7 @@ test.describe('Reports Tests', () => {
     await expect(reportsDropdown.locator('.report-item').filter({ hasText: 'Invoice Log' })).toBeVisible();
 
     // Test 2: Print PAC Actual Report from hover menu
-    console.log('Testing PAC Actual Report from hover menu...');
+    //console.log('Testing PAC Actual Report from hover menu...');
     
     // Click on PAC Actual Report in dropdown
     await reportsDropdown.locator('.report-item').filter({ hasText: 'PAC Actual Report' }).click();
@@ -72,16 +72,16 @@ test.describe('Reports Tests', () => {
     const printButton = page.locator('button').filter({ hasText: /print/i });
     if (await printButton.isVisible()) {
       await printButton.click();
-      console.log('PAC Actual Report print button clicked from hover menu');
+      //console.log('PAC Actual Report print button clicked from hover menu');
     } else {
-      console.log('PAC Actual Report print button not found');
+      //console.log('PAC Actual Report print button not found');
     }
 
     // Wait a moment before navigating back
     await page.waitForTimeout(2000);
 
     // Test 3: Navigate to Reports page and test the same functionality
-    console.log('Testing Reports page functionality...');
+    //console.log('Testing Reports page functionality...');
     
     await page.goto('http://localhost:3000/navi/reports');
     await page.waitForURL(/.*reports.*/);
@@ -124,16 +124,16 @@ test.describe('Reports Tests', () => {
     const printButtonFromPage = page.locator('button').filter({ hasText: /print/i });
     if (await printButtonFromPage.isVisible()) {
       await printButtonFromPage.click();
-      console.log('PAC Actual Report print button clicked from main page');
+      //console.log('PAC Actual Report print button clicked from main page');
     } else {
-      console.log('PAC Actual Report print button not found on main page');
+      //console.log('PAC Actual Report print button not found on main page');
     }
 
     // Wait a moment before testing Invoice Log
     await page.waitForTimeout(2000);
 
     // Test 4: Navigate back to Reports page and test Invoice Log
-    console.log('Testing Invoice Log Report...');
+    //console.log('Testing Invoice Log Report...');
     
     await page.goto('http://localhost:3000/navi/reports');
     await page.waitForTimeout(2000);
@@ -160,20 +160,20 @@ test.describe('Reports Tests', () => {
     const exportBtnMain = page.getByRole('button', { name: /^Export$/i });
     if (await exportBtnMain.isVisible().catch(() => false)) {
       await exportBtnMain.click();
-      console.log('Invoice Log Export button clicked from main page');
+      //console.log('Invoice Log Export button clicked from main page');
       clickedExport = true;
     } else {
       const printBtnMain = page.getByRole('button', { name: /^Print$/i });
       if (await printBtnMain.isVisible().catch(() => false)) {
         await printBtnMain.click();
-        console.log('Invoice Log Print button clicked from main page');
+        //console.log('Invoice Log Print button clicked from main page');
         clickedExport = true;
       }
     }
-    if (!clickedExport) console.log('Invoice Log export/print button not found on main page');
+    //if (!clickedExport) console.log('Invoice Log export/print button not found on main page');
 
     // Test 5: Test Invoice Log from hover menu
-    console.log('Testing Invoice Log from hover menu...');
+    //console.log('Testing Invoice Log from hover menu...');
     
     // Navigate back to dashboard to access hover menu
     await page.goto('http://localhost:3000/navi/dashboard');
@@ -195,19 +195,19 @@ test.describe('Reports Tests', () => {
     const exportBtnHover = page.getByRole('button', { name: /^Export$/i });
     if (await exportBtnHover.isVisible().catch(() => false)) {
       await exportBtnHover.click();
-      console.log('Invoice Log Export button clicked from hover menu');
+      //console.log('Invoice Log Export button clicked from hover menu');
       clickedExportHover = true;
     } else {
       const printBtnHover = page.getByRole('button', { name: /^Print$/i });
       if (await printBtnHover.isVisible().catch(() => false)) {
         await printBtnHover.click();
-        console.log('Invoice Log Print button clicked from hover menu');
+        //console.log('Invoice Log Print button clicked from hover menu');
         clickedExportHover = true;
       }
     }
-    if (!clickedExportHover) console.log('Invoice Log export/print button not found from hover menu');
+    //if (!clickedExportHover) console.log('Invoice Log export/print button not found from hover menu');
 
-    console.log('All report tests completed successfully');
+    //console.log('All report tests completed successfully');
   });
 });
 

@@ -1,0 +1,8 @@
+{
+  "suite": "PAC – full input coverage + Apply/Submit (auto-enable Apply)",
+  "title": "Projections: edit all inputs + auto-match PAC Goal + Apply; Generate: edit all inputs + Submit",
+  "timestamp": "2025-11-20T01:09:40.284Z",
+  "status": "passed",
+  "duration": 9041,
+  "errors": ""
+}

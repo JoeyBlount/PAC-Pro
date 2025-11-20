@@ -387,7 +387,7 @@ try {
         <TextField
           label="Search Users"
           variant="outlined"
-          fullWidth
+          width="30%"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           sx={{ flex: 1, minWidth: 220 }}
