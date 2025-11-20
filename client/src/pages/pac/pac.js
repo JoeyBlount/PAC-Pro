@@ -88,14 +88,14 @@ const hasUserInputAmountField = [
 ];
 
 // Backend (Generate tab)
-const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "http://127.0.0.1:5140").replace(/\/+$/, "");
+const BASE_URL = (
+  process.env.REACT_APP_BACKEND_URL || "http://127.0.0.1:5140"
+).replace(/\/+$/, "");
 async function api(path, { method = "GET", body } = {}) {
   const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
   const headers = {
     "Content-Type": "application/json",
-    ...(token
-      ? { Authorization: `Bearer ${token}` }
-      : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -105,8 +105,6 @@ async function api(path, { method = "GET", body } = {}) {
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
-
-
 
 // Add expense(s) to this array to disable projected % text field. Case-senstive.
 const hasUserInputedPercentageField = [
@@ -273,7 +271,7 @@ const PAC = () => {
       // persist previous month rows into current draft so inputs reflect immediately
       try {
         localStorage.setItem(draftKey, JSON.stringify(data.rows));
-      } catch { }
+      } catch {}
       // Do NOT change PAC Goal when resetting to previous month
     } catch (e) {
       console.error("reset to previous month error", e);
@@ -331,8 +329,9 @@ const PAC = () => {
         const userDoc = await getDoc(userRef);
         if (userDoc.exists()) {
           const userData = userDoc.data();
-          return `${userData.firstName || ""} ${userData.lastName || ""
-            }`.trim();
+          return `${userData.firstName || ""} ${
+            userData.lastName || ""
+          }`.trim();
         }
       }
       return auth.currentUser?.displayName || "Unknown User";
@@ -417,7 +416,7 @@ const PAC = () => {
         } else {
           setLastUpdatedTimestamp(null);
         }
-      } catch { }
+      } catch {}
     } catch (error) {
       console.error("Error fetching month lock status:", error);
     }
@@ -911,33 +910,33 @@ const PAC = () => {
   const [hoverInfo, setHoverInfo] = useState(null);
 
   // Categories for visual grouping
- const categories = {
-  Sales: ["Product Sales", "All Net Sales"],
-  "Food & Paper": [
-    "Base Food",
-    "Employee Meal",
-    "Condiment",
-    "Total Waste",
-    "Paper",
-  ],
-  Labor: ["Crew Labor", "Management Labor", "Payroll Tax"],
-  Purchases: [
-    "Advertising",
-    "Travel",
-    "Adv Other",
-    "Promotion",
-    "Outside Services",
-    "Linen",
-    "OP. Supply",
-    "Maint. & Repair",
-    "Small Equipment",
-    "Utilities",
-    "Office",
-    "Cash +/-",
-    "Crew Relations",
-    "Training",
-  ],
-};
+  const categories = {
+    Sales: ["Product Sales", "All Net Sales"],
+    "Food & Paper": [
+      "Base Food",
+      "Employee Meal",
+      "Condiment",
+      "Total Waste",
+      "Paper",
+    ],
+    Labor: ["Crew Labor", "Management Labor", "Payroll Tax"],
+    Purchases: [
+      "Advertising",
+      "Travel",
+      "Adv Other",
+      "Promotion",
+      "Outside Services",
+      "Linen",
+      "OP. Supply",
+      "Maint. & Repair",
+      "Small Equipment",
+      "Utilities",
+      "Office",
+      "Cash +/-",
+      "Crew Relations",
+      "Training",
+    ],
+  };
 
   // Helper functions
   const getCategory = (expense) => {
@@ -950,29 +949,29 @@ const PAC = () => {
     return null;
   };
 
-const getCategoryColor = (category) => {
-  const isDark = theme.palette.mode === "dark";
+  const getCategoryColor = (category) => {
+    const isDark = theme.palette.mode === "dark";
 
-  if (!isDark) {
-    // Light mode
-    const colors = {
-      Sales: "#e3f2fd",
-      "Food & Paper": "#e8f5e9",
-      Labor: "#fff3e0",
-      Purchases: "#f3e5f5",
-    };
-    return colors[category] || "#ffffff";
-  } else {
-    // Dark mode - balanced contrasts
-    const colors = {
-      Sales: "#1a2b3d",          // navy blue tint
-      "Food & Paper": "#1c2a1c", // green tint
-      Labor: "#332a1c",          // warm brown tint
-      Purchases: "#2a1f2f",      // violet tint
-    };
-    return colors[category] || "#121212";
-  }
-};
+    if (!isDark) {
+      // Light mode
+      const colors = {
+        Sales: "#e3f2fd",
+        "Food & Paper": "#e8f5e9",
+        Labor: "#fff3e0",
+        Purchases: "#f3e5f5",
+      };
+      return colors[category] || "#ffffff";
+    } else {
+      // Dark mode - balanced contrasts
+      const colors = {
+        Sales: "#1a2b3d", // navy blue tint
+        "Food & Paper": "#1c2a1c", // green tint
+        Labor: "#332a1c", // warm brown tint
+        Purchases: "#2a1f2f", // violet tint
+      };
+      return colors[category] || "#121212";
+    }
+  };
 
   // this function saves all the user input data from the generate page via backend
   const handleGenerate = async (e) => {
@@ -1188,6 +1187,7 @@ const getCategoryColor = (category) => {
       case "Travel":
         return pacActualData.purchases?.travel || { dollars: 0, percent: 0 };
       case "Advertising Other":
+      case "Adv Other":
         return pacActualData.purchases?.advOther || { dollars: 0, percent: 0 };
       case "Promotion":
         return pacActualData.purchases?.promotion || { dollars: 0, percent: 0 };
@@ -1198,10 +1198,12 @@ const getCategoryColor = (category) => {
       case "Linen":
         return pacActualData.purchases?.linen || { dollars: 0, percent: 0 };
       case "Operating Supply":
+      case "OP. Supply":
         return (
           pacActualData.purchases?.opsSupplies || { dollars: 0, percent: 0 }
         );
       case "Maintenance & Repair":
+      case "Maint. & Repair":
         return (
           pacActualData.purchases?.maintenanceRepair || {
             dollars: 0,
@@ -1650,7 +1652,7 @@ const getCategoryColor = (category) => {
 
                         <TableCell align="center">
                           {hasUserInputAmountField.includes(expense.name) &&
-                            !isPac ? (
+                          !isPac ? (
                             <TextField
                               type="number"
                               size="small"
@@ -2003,10 +2005,14 @@ const getCategoryColor = (category) => {
                             }}
                           />
                           <TableCell align="center">
-                            {fmtUsd(sumActual(groupPurchases))}
+                            {fmtUsd(
+                              pacActualData?.purchases?.total?.dollars || 0
+                            )}
                           </TableCell>
                           <TableCell align="center">
-                            {sumActualPct(groupPurchases).toFixed(2) + "%"}
+                            {(
+                              pacActualData?.purchases?.total?.percent || 0
+                            ).toFixed(2) + "%"}
                           </TableCell>
                         </TableRow>
                       )}
@@ -2047,9 +2053,9 @@ const getCategoryColor = (category) => {
                 title={
                   pacMismatch
                     ? "PAC Projections do not match the goal"
-                    : (!authLoading && !roleAllowed
-                      ? "Your role cannot Apply. Please contact an Admin, Supervisor, or General Manager for assistance."
-                      : undefined)
+                    : !authLoading && !roleAllowed
+                    ? "Your role cannot Apply. Please contact an Admin, Supervisor, or General Manager for assistance."
+                    : undefined
                 }
               >
                 Apply
@@ -2066,11 +2072,11 @@ const getCategoryColor = (category) => {
               >
                 {pacBelow
                   ? `PAC Projections are below goal. Remove ${fmtUsd(
-                    dollarAmountNeeded
-                  )} dollars to meet goal.`
+                      dollarAmountNeeded
+                    )} dollars to meet goal.`
                   : `PAC Projections are above goal. ${fmtUsd(
-                    dollarAmountNeeded
-                  )} over goal.`}
+                      dollarAmountNeeded
+                    )} over goal.`}
                 <Box component="span" sx={{ ml: 1, opacity: 0.8 }}>
                   Current: {fmtPercent(projectedPacPercent)} • Goal:{" "}
                   {fmtPercent(goalNumeric)}
@@ -2079,420 +2085,420 @@ const getCategoryColor = (category) => {
             )}
             {!authLoading && !roleAllowed && (
               <Alert severity="info" sx={{ mt: 1 }}>
-                Your role cannot Apply. Please contact an Admin, Supervisor, or General Manager for assistance.
+                Your role cannot Apply. Please contact an Admin, Supervisor, or
+                General Manager for assistance.
               </Alert>
             )}
           </Box>
         </Container>
-      )
-      }{" "}
+      )}{" "}
       {/* end of Projections page */}
-      {
-        tabIndex === 1 && (
-          <Container>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "24px",
-                marginTop: "20px",
-              }}
-            >
-              {/* Sales */}
-              <div className="pac-section sales-section">
-                <h4>Sales</h4>
-                <div className="input-row">
-                  <label className="input-label">Product Net Sales ($)</label>
-                  <input
-                    type="number"
-                    value={productNetSales}
-                    onChange={(e) => setProductNetSales(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">All Net Sales ($)</label>
-                  <input
-                    type="number"
-                    value={allNetSales}
-                    onChange={(e) => setAllNetSales(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Promotion ($)</label>
-                  <input
-                    type="number"
-                    value={promo}
-                    onChange={(e) => setPromo(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Manager Meal ($)</label>
-                  <input
-                    type="number"
-                    value={managerMeal}
-                    onChange={(e) => setManagerMeal(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Cash +/- ($)</label>
-                  <input
-                    type="number"
-                    value={cash}
-                    onChange={(e) => setCash(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Advertising (%)</label>
-                  <input
-                    type="number"
-                    value={advertising}
-                    onChange={(e) => setAdvertising(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">
-                    Dues and Subscriptions ($)
-                  </label>
-                  <input
-                    type="number"
-                    value={duesAndSubscriptions}
-                    onChange={(e) => setDuesAndSubscriptions(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
+      {tabIndex === 1 && (
+        <Container>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "24px",
+              marginTop: "20px",
+            }}
+          >
+            {/* Sales */}
+            <div className="pac-section sales-section">
+              <h4>Sales</h4>
+              <div className="input-row">
+                <label className="input-label">Product Net Sales ($)</label>
+                <input
+                  type="number"
+                  value={productNetSales}
+                  onChange={(e) => setProductNetSales(e.target.value)}
+                  disabled={inputsDisabled}
+                />
               </div>
-
-              {/* Labor */}
-              <div className="pac-section labor-section">
-                <h4>Labor</h4>
-                <div className="input-row">
-                  <label className="input-label">Crew Labor %</label>
-                  <input
-                    type="number"
-                    value={crewLabor}
-                    onChange={(e) => setCrewLabor(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Total Labor %</label>
-                  <input
-                    type="number"
-                    value={totalLabor}
-                    onChange={(e) => setTotalLabor(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Payroll Tax (%)</label>
-                  <input
-                    type="number"
-                    value={payrollTax}
-                    onChange={(e) => setPayrollTax(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">
-                    Additional Labor Dollars ($)
-                  </label>
-                  <input
-                    type="number"
-                    value={additionalLaborDollars}
-                    onChange={(e) => setAdditionalLaborDollars(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
+              <div className="input-row">
+                <label className="input-label">All Net Sales ($)</label>
+                <input
+                  type="number"
+                  value={allNetSales}
+                  onChange={(e) => setAllNetSales(e.target.value)}
+                  disabled={inputsDisabled}
+                />
               </div>
-
-              {/* Food */}
-              <div className="pac-section food-section">
-                <h4>Food</h4>
-                <div className="input-row">
-                  <label className="input-label">Complete Waste %</label>
-                  <input
-                    type="number"
-                    value={completeWaste}
-                    onChange={(e) => setCompleteWaste(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Raw Waste %</label>
-                  <input
-                    type="number"
-                    value={rawWaste}
-                    onChange={(e) => setRawWaste(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Condiment %</label>
-                  <input
-                    type="number"
-                    value={condiment}
-                    onChange={(e) => setCondiment(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Variance Stat %</label>
-                  <input
-                    type="number"
-                    value={variance}
-                    onChange={(e) => setVariance(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Unexplained %</label>
-                  <input
-                    type="number"
-                    value={unexplained}
-                    onChange={(e) => setUnexplained(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Discounts %</label>
-                  <input
-                    type="number"
-                    value={discounts}
-                    onChange={(e) => setDiscounts(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Base Food %</label>
-                  <input
-                    type="number"
-                    value={baseFood}
-                    onChange={(e) => setBaseFood(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
+              <div className="input-row">
+                <label className="input-label">Promotion ($)</label>
+                <input
+                  type="number"
+                  value={promo}
+                  onChange={(e) => setPromo(e.target.value)}
+                  disabled={inputsDisabled}
+                />
               </div>
-
-              {/* Starting Inventory */}
-              <div className="pac-section starting-inventory-section">
-                <h4>Starting Inventory</h4>
-                <div className="input-row">
-                  <label className="input-label">Food ($)</label>
-                  <input
-                    type="number"
-                    value={startingFood}
-                    onChange={(e) => setStartingFood(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Condiment ($)</label>
-                  <input
-                    type="number"
-                    value={startingCondiment}
-                    onChange={(e) => setStartingCondiment(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Paper ($)</label>
-                  <input
-                    type="number"
-                    value={startingPaper}
-                    onChange={(e) => setStartingPaper(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Non Product ($)</label>
-                  <input
-                    type="number"
-                    value={startingNonProduct}
-                    onChange={(e) => setStartingNonProduct(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label"> Office Supplies ($)</label>
-                  <input
-                    type="number"
-                    value={startingOpsSupplies}
-                    onChange={(e) => setStartingOpsSupplies(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
+              <div className="input-row">
+                <label className="input-label">Manager Meal ($)</label>
+                <input
+                  type="number"
+                  value={managerMeal}
+                  onChange={(e) => setManagerMeal(e.target.value)}
+                  disabled={inputsDisabled}
+                />
               </div>
-
-              {/* Ending Inventory */}
-              <div className="pac-section ending-inventory-section">
-                <h4>Ending Inventory</h4>
-                <div className="input-row">
-                  <label className="input-label">Food ($)</label>
-                  <input
-                    type="number"
-                    value={endingFood}
-                    onChange={(e) => setEndingFood(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Condiment ($)</label>
-                  <input
-                    type="number"
-                    value={endingCondiment}
-                    onChange={(e) => setEndingCondiment(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Paper ($)</label>
-                  <input
-                    type="number"
-                    value={endingPaper}
-                    onChange={(e) => setEndingPaper(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label">Non Product ($)</label>
-                  <input
-                    type="number"
-                    value={endingNonProduct}
-                    onChange={(e) => setEndingNonProduct(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
-                <div className="input-row">
-                  <label className="input-label"> Office Supplies ($)</label>
-                  <input
-                    type="number"
-                    value={endingOpsSupplies}
-                    onChange={(e) => setEndingOpsSupplies(e.target.value)}
-                    disabled={inputsDisabled}
-                  />
-                </div>
+              <div className="input-row">
+                <label className="input-label">Cash +/- ($)</label>
+                <input
+                  type="number"
+                  value={cash}
+                  onChange={(e) => setCash(e.target.value)}
+                  disabled={inputsDisabled}
+                />
               </div>
-
-              {/* Month Lock Status Alert */}
-              {isMonthLocked() && (
-                <Alert
-                  severity="warning"
-                  icon={<LockIcon />}
-                  sx={{ mt: 2, mb: 2 }}
-                >
-                  This month is locked and cannot be modified. Only administrators
-                  can unlock it.
-                </Alert>
-              )}
-
-              {/* Submit and Lock buttons */}
-              <Box
-                display="flex"
-                gap={2}
-                justifyContent="center"
-                sx={{ mt: 2, mb: 8 }}
-              >
-                <Button
-                  variant="contained"
-                  color="primary"
-                  size="large"
-                  sx={{
-                    width: "250px",
-                    backgroundColor: "#1976d2",
-                    "&:hover": {
-                      backgroundColor: "#42a5f5",
-                    },
-                  }}
-                  onClick={handleGenerate}
-                  disabled={isCurrentPeriodLocked() || authLoading || !roleAllowed}
-                  title={
-                    isCurrentPeriodLocked()
-                      ? "This month is locked and cannot be modified."
-                      : (!authLoading && !roleAllowed
-                        ? "Your role cannot Submit. Please contact an Admin, Supervisor, or General Manager for assistance."
-                        : undefined)
-                  }
-                >
-                  Submit
-                </Button>
-
-                <Button
-                  variant={isMonthLocked() ? "contained" : "outlined"}
-                  color={isMonthLocked() ? "error" : "primary"}
-                  size="large"
-                  startIcon={isMonthLocked() ? <LockOpenIcon /> : <LockIcon />}
-                  sx={{
-                    width: "250px",
-                  }}
-                  onClick={handleLockMonth}
-                  disabled={
-                    (!isMonthLocked() && !canLockMonth) ||
-                    (isMonthLocked() && !canUnlockMonth)
-                  }
-                >
-                  {isMonthLocked() ? "Unlock Month" : "Lock Month"}
-                </Button>
-              </Box>
-              {!authLoading && !roleAllowed && (
-                <Alert severity="info" sx={{ mt: 1 }}>
-                  Your role cannot Submit. Please contact an Admin, Supervisor, or General Manager for assistance.
-                </Alert>
-              )}
+              <div className="input-row">
+                <label className="input-label">Advertising (%)</label>
+                <input
+                  type="number"
+                  value={advertising}
+                  onChange={(e) => setAdvertising(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">
+                  Dues and Subscriptions ($)
+                </label>
+                <input
+                  type="number"
+                  value={duesAndSubscriptions}
+                  onChange={(e) => setDuesAndSubscriptions(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
             </div>
-          </Container>
-        )
-      } {" "}
-      {/* end of Generate page */}
-      {
-        tabIndex === 2 && (
-          <Container>
-            {/* Month status and timestamp display */}
+
+            {/* Labor */}
+            <div className="pac-section labor-section">
+              <h4>Labor</h4>
+              <div className="input-row">
+                <label className="input-label">Crew Labor %</label>
+                <input
+                  type="number"
+                  value={crewLabor}
+                  onChange={(e) => setCrewLabor(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Total Labor %</label>
+                <input
+                  type="number"
+                  value={totalLabor}
+                  onChange={(e) => setTotalLabor(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Payroll Tax (%)</label>
+                <input
+                  type="number"
+                  value={payrollTax}
+                  onChange={(e) => setPayrollTax(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">
+                  Additional Labor Dollars ($)
+                </label>
+                <input
+                  type="number"
+                  value={additionalLaborDollars}
+                  onChange={(e) => setAdditionalLaborDollars(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+            </div>
+
+            {/* Food */}
+            <div className="pac-section food-section">
+              <h4>Food</h4>
+              <div className="input-row">
+                <label className="input-label">Complete Waste %</label>
+                <input
+                  type="number"
+                  value={completeWaste}
+                  onChange={(e) => setCompleteWaste(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Raw Waste %</label>
+                <input
+                  type="number"
+                  value={rawWaste}
+                  onChange={(e) => setRawWaste(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Condiment %</label>
+                <input
+                  type="number"
+                  value={condiment}
+                  onChange={(e) => setCondiment(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Variance Stat %</label>
+                <input
+                  type="number"
+                  value={variance}
+                  onChange={(e) => setVariance(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Unexplained %</label>
+                <input
+                  type="number"
+                  value={unexplained}
+                  onChange={(e) => setUnexplained(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Discounts %</label>
+                <input
+                  type="number"
+                  value={discounts}
+                  onChange={(e) => setDiscounts(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Base Food %</label>
+                <input
+                  type="number"
+                  value={baseFood}
+                  onChange={(e) => setBaseFood(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+            </div>
+
+            {/* Starting Inventory */}
+            <div className="pac-section starting-inventory-section">
+              <h4>Starting Inventory</h4>
+              <div className="input-row">
+                <label className="input-label">Food ($)</label>
+                <input
+                  type="number"
+                  value={startingFood}
+                  onChange={(e) => setStartingFood(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Condiment ($)</label>
+                <input
+                  type="number"
+                  value={startingCondiment}
+                  onChange={(e) => setStartingCondiment(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Paper ($)</label>
+                <input
+                  type="number"
+                  value={startingPaper}
+                  onChange={(e) => setStartingPaper(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Non Product ($)</label>
+                <input
+                  type="number"
+                  value={startingNonProduct}
+                  onChange={(e) => setStartingNonProduct(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label"> Office Supplies ($)</label>
+                <input
+                  type="number"
+                  value={startingOpsSupplies}
+                  onChange={(e) => setStartingOpsSupplies(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+            </div>
+
+            {/* Ending Inventory */}
+            <div className="pac-section ending-inventory-section">
+              <h4>Ending Inventory</h4>
+              <div className="input-row">
+                <label className="input-label">Food ($)</label>
+                <input
+                  type="number"
+                  value={endingFood}
+                  onChange={(e) => setEndingFood(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Condiment ($)</label>
+                <input
+                  type="number"
+                  value={endingCondiment}
+                  onChange={(e) => setEndingCondiment(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Paper ($)</label>
+                <input
+                  type="number"
+                  value={endingPaper}
+                  onChange={(e) => setEndingPaper(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Non Product ($)</label>
+                <input
+                  type="number"
+                  value={endingNonProduct}
+                  onChange={(e) => setEndingNonProduct(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label"> Office Supplies ($)</label>
+                <input
+                  type="number"
+                  value={endingOpsSupplies}
+                  onChange={(e) => setEndingOpsSupplies(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+            </div>
+
+            {/* Month Lock Status Alert */}
+            {isMonthLocked() && (
+              <Alert
+                severity="warning"
+                icon={<LockIcon />}
+                sx={{ mt: 2, mb: 2 }}
+              >
+                This month is locked and cannot be modified. Only administrators
+                can unlock it.
+              </Alert>
+            )}
+
+            {/* Submit and Lock buttons */}
             <Box
               display="flex"
-              justifyContent="space-between"
-              alignItems="center"
-              sx={{ mb: 2 }}
+              gap={2}
+              justifyContent="center"
+              sx={{ mt: 2, mb: 8 }}
             >
-              <Box display="flex" gap={2} alignItems="center">
-                {isMonthLocked() && (
-                  <Chip
-                    icon={<LockIcon />}
-                    label={`Month Locked by ${monthLockStatus?.locked_by || "Unknown"
-                      }`}
-                    color="warning"
-                    variant="outlined"
-                  />
-                )}
-                {lastUpdatedTimestamp && (
-                  <Chip
-                    label={`Last Updated: ${lastUpdatedTimestamp.toLocaleString()}`}
-                    color="info"
-                    variant="outlined"
-                  />
-                )}
-              </Box>
-            </Box>
+              <Button
+                variant="contained"
+                color="primary"
+                size="large"
+                sx={{
+                  width: "250px",
+                  backgroundColor: "#1976d2",
+                  "&:hover": {
+                    backgroundColor: "#42a5f5",
+                  },
+                }}
+                onClick={handleGenerate}
+                disabled={
+                  isCurrentPeriodLocked() || authLoading || !roleAllowed
+                }
+                title={
+                  isCurrentPeriodLocked()
+                    ? "This month is locked and cannot be modified."
+                    : !authLoading && !roleAllowed
+                    ? "Your role cannot Submit. Please contact an Admin, Supervisor, or General Manager for assistance."
+                    : undefined
+                }
+              >
+                Submit
+              </Button>
 
-            <PacTab
-              storeId={selectedStore || "store_001"}
-              year={year}
-              month={month}
-              projections={projections}
-              isMonthLocked={isMonthLocked()}
-              monthLockStatus={monthLockStatus}
-              lastUpdatedTimestamp={lastUpdatedTimestamp}
-            />
-          </Container>
-        )
-      } {" "}
+              <Button
+                variant={isMonthLocked() ? "contained" : "outlined"}
+                color={isMonthLocked() ? "error" : "primary"}
+                size="large"
+                startIcon={isMonthLocked() ? <LockOpenIcon /> : <LockIcon />}
+                sx={{
+                  width: "250px",
+                }}
+                onClick={handleLockMonth}
+                disabled={
+                  (!isMonthLocked() && !canLockMonth) ||
+                  (isMonthLocked() && !canUnlockMonth)
+                }
+              >
+                {isMonthLocked() ? "Unlock Month" : "Lock Month"}
+              </Button>
+            </Box>
+            {!authLoading && !roleAllowed && (
+              <Alert severity="info" sx={{ mt: 1 }}>
+                Your role cannot Submit. Please contact an Admin, Supervisor, or
+                General Manager for assistance.
+              </Alert>
+            )}
+          </div>
+        </Container>
+      )}{" "}
+      {/* end of Generate page */}
+      {tabIndex === 2 && (
+        <Container>
+          {/* Month status and timestamp display */}
+          <Box
+            display="flex"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ mb: 2 }}
+          >
+            <Box display="flex" gap={2} alignItems="center">
+              {isMonthLocked() && (
+                <Chip
+                  icon={<LockIcon />}
+                  label={`Month Locked by ${
+                    monthLockStatus?.locked_by || "Unknown"
+                  }`}
+                  color="warning"
+                  variant="outlined"
+                />
+              )}
+              {lastUpdatedTimestamp && (
+                <Chip
+                  label={`Last Updated: ${lastUpdatedTimestamp.toLocaleString()}`}
+                  color="info"
+                  variant="outlined"
+                />
+              )}
+            </Box>
+          </Box>
+
+          <PacTab
+            storeId={selectedStore || "store_001"}
+            year={year}
+            month={month}
+            projections={projections}
+            isMonthLocked={isMonthLocked()}
+            monthLockStatus={monthLockStatus}
+            lastUpdatedTimestamp={lastUpdatedTimestamp}
+          />
+        </Container>
+      )}{" "}
       {/* end of Actual page */}
-    </Box >
+    </Box>
   );
 };
 
