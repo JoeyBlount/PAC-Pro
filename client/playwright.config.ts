@@ -27,7 +27,7 @@ export default defineConfig({
     },
     {
       name: 'e2e',
-      testDir: 'tests/e2e',
+      testMatch: ['tests/e2e/**/*.spec.ts'],
       // Ensure setup runs first to refresh auth.json
       dependencies: ['setup'],
       workers: 1,
