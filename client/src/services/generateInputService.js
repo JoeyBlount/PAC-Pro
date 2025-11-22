@@ -184,8 +184,18 @@ export const saveGenerateInput = async (
         `[Generate Input] Triggering PAC actual recalculation for ${storeID} - ${month} ${year}`
       );
       const months = [
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December",
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
       ];
       const monthIndex = months.indexOf(month);
       if (monthIndex === -1) {
@@ -193,11 +203,18 @@ export const saveGenerateInput = async (
       }
       const monthNumber = monthIndex + 1;
       const yearMonth = `${year}${String(monthNumber).padStart(2, "0")}`;
-      
-      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+
+      // Ensure user is authenticated before making API call
+      if (!auth.currentUser) {
+        throw new Error(
+          "User not authenticated. Cannot compute PAC actual without authentication."
+        );
+      }
+
+      const token = await auth.currentUser.getIdToken();
       const headers = {
         "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        Authorization: `Bearer ${token}`,
       };
       const response = await fetch(apiUrl(`/api/pac/actual/compute`), {
         method: "POST",
@@ -208,12 +225,14 @@ export const saveGenerateInput = async (
           submitted_by: submittedBy || "System",
         }),
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Failed to compute PAC actual: ${errorText || response.statusText}`);
+        throw new Error(
+          `Failed to compute PAC actual: ${errorText || response.statusText}`
+        );
       }
-      
+
       console.log(
         `[Generate Input] PAC actual recalculation completed for ${storeID} - ${month} ${year}`
       );
