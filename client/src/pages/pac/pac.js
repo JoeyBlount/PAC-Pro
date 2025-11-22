@@ -31,10 +31,7 @@ import PacTab from "./PacTab";
 import { useAuth } from "../../context/AuthContext";
 import MonthLockService from "../../services/monthLockService";
 import { saveGenerateInput } from "../../services/generateInputService";
-import {
-  computeAndSavePacActual,
-  getPacActual,
-} from "../../services/pacActualService";
+// PAC Actual functions now handled by backend API
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 import { apiUrl } from "../../utils/api";
@@ -168,8 +165,19 @@ const PAC = () => {
   const [year, setYear] = useState(currentYear);
 
   // Separate state for actual data dropdowns in projections tab
-  const [actualMonth, setActualMonth] = useState(currentMonth);
-  const [actualYear, setActualYear] = useState(currentYear);
+  // Default to previous month when page loads (calculated from current month/year)
+  // Note: getPrevMonthYear is defined later, so we calculate it inline here
+  const now = new Date();
+  const nowMonthIdx = now.getMonth();
+  const nowYear = now.getFullYear();
+  const prevMonthIdx = nowMonthIdx === 0 ? 11 : nowMonthIdx - 1;
+  const prevYearForActual = nowMonthIdx === 0 ? nowYear - 1 : nowYear;
+
+  const [actualMonth, setActualMonth] = useState(months[prevMonthIdx]);
+  const [actualYear, setActualYear] = useState(prevYearForActual);
+
+  // State to store last year's PAC actual data for year-over-year comparison
+  const [lastYearPacActualData, setLastYearPacActualData] = useState(null);
 
   // Handle navigation from Reports page
   useEffect(() => {
@@ -213,6 +221,86 @@ const PAC = () => {
       fontWeight: 700,
     },
   };
+
+  // PAC Actual API wrappers
+  async function getPacActual(storeID, year, month) {
+    const months = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+    const monthIndex = months.indexOf(month);
+    if (monthIndex === -1) {
+      throw new Error(`Invalid month name: ${month}`);
+    }
+    const monthNumber = monthIndex + 1;
+    const yearMonth = `${year}${String(monthNumber).padStart(2, "0")}`;
+
+    // Use fetch directly to handle 404 gracefully
+    const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+    const headers = {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+    const res = await fetch(
+      `${BASE_URL}/api/pac/actual/${storeID}/${yearMonth}`,
+      {
+        method: "GET",
+        headers,
+      }
+    );
+
+    if (res.status === 404) {
+      return null; // Data not found, return null
+    }
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(
+        `Failed to fetch PAC actual: ${errorText || res.statusText}`
+      );
+    }
+    return res.json();
+  }
+
+  async function computeAndSavePacActual(storeID, year, month, submittedBy) {
+    const months = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+    const monthIndex = months.indexOf(month);
+    if (monthIndex === -1) {
+      throw new Error(`Invalid month name: ${month}`);
+    }
+    const monthNumber = monthIndex + 1;
+    const yearMonth = `${year}${String(monthNumber).padStart(2, "0")}`;
+    return api("/api/pac/actual/compute", {
+      method: "POST",
+      body: {
+        store_id: storeID,
+        year_month: yearMonth,
+        submitted_by: submittedBy || "System",
+      },
+    });
+  }
 
   // projections API wrappers
   async function seedProjections(store_id, year, month) {
@@ -380,9 +468,19 @@ const PAC = () => {
   useEffect(() => {
     if (!month || !year) return;
     const idx = months.indexOf(month); // 0..11
+    if (idx === -1) return; // Invalid month
     const d = new Date(year, idx - 1, 1); // previous month of the *selected* period
-    setHistMonth(months[d.getMonth()]);
-    setHistYear(d.getFullYear());
+    const prevMonth = months[d.getMonth()];
+    const prevYear = d.getFullYear();
+
+    // Only update if values actually changed to avoid unnecessary re-renders
+    setHistMonth((prev) => (prev !== prevMonth ? prevMonth : prev));
+    setHistYear((prev) => (prev !== prevYear ? prevYear : prev));
+
+    // Also update actualMonth/actualYear to previous month when main month/year changes
+    // This ensures historical dropdowns stay in sync with the selected period
+    setActualMonth((prev) => (prev !== prevMonth ? prevMonth : prev));
+    setActualYear((prev) => (prev !== prevYear ? prevYear : prev));
   }, [month, year]);
 
   useEffect(() => {
@@ -506,40 +604,105 @@ const PAC = () => {
   useEffect(() => {
     if (!selectedStore || tabIndex !== 0) return;
 
+    let isCancelled = false;
+
     (async () => {
       try {
         const data = await seedProjections(selectedStore, year, month);
+
+        // Check if cancelled (user changed month/year again)
+        if (isCancelled) return;
+
         // { source, pacGoal, rows }
         setPacGoal(String(data.pacGoal ?? ""));
-        setProjections(
-          Array.isArray(data.rows) ? data.rows : makeEmptyProjectionRows()
-        );
+        const loadedRows = Array.isArray(data.rows)
+          ? data.rows
+          : makeEmptyProjectionRows();
+
+        // Log for debugging
+        const productSales = loadedRows.find((r) => r.name === "Product Sales");
+        console.log("Loaded projections:", {
+          source: data.source,
+          productSales: productSales?.projectedDollar,
+          allNetSales: loadedRows.find((r) => r.name === "All Net Sales")
+            ?.projectedDollar,
+          rowCount: loadedRows.length,
+        });
+
+        setProjections(loadedRows);
       } catch (e) {
-        console.error("seedProjections error", e);
-        // fallback: keep current projections
+        if (!isCancelled) {
+          console.error("seedProjections error", e);
+          // fallback: keep current projections
+        }
       }
     })();
+
+    // Cleanup function to cancel in-flight requests
+    return () => {
+      isCancelled = true;
+    };
   }, [selectedStore, tabIndex, month, year]);
 
   useEffect(() => {
-    if (!selectedStore) return;
-    try {
-      const raw = localStorage.getItem(draftKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      const toApply = Array.isArray(parsed) ? parsed : projections;
-      (async () => {
-        try {
-          const res = await applyRows(toApply);
-          setProjections(Array.isArray(res.rows) ? res.rows : toApply);
-        } catch {
-          setProjections(toApply);
+    if (!selectedStore || tabIndex !== 0) return;
+
+    // Only load from localStorage if we have a draft for this specific period
+    // This should run after the seedProjections effect, so we add a delay
+    // to ensure API data loads first. Only apply draft if there's no saved data.
+    let isCancelled = false;
+    const timeoutId = setTimeout(async () => {
+      if (isCancelled) return;
+
+      try {
+        // Check if there's saved data for this period first
+        const data = await seedProjections(selectedStore, year, month);
+        const hasSavedData =
+          data &&
+          data.source === "current" &&
+          Array.isArray(data.rows) &&
+          data.rows.length > 0;
+
+        // Only load localStorage draft if there's no saved data for this period
+        // If there's saved data, don't overwrite it with localStorage
+        if (!hasSavedData) {
+          const raw = localStorage.getItem(draftKey);
+          if (!raw) return;
+          const parsed = JSON.parse(raw);
+          const toApply = Array.isArray(parsed) ? parsed : [];
+
+          if (toApply.length > 0) {
+            try {
+              const res = await applyRows(toApply);
+              if (!isCancelled) {
+                setProjections(Array.isArray(res.rows) ? res.rows : toApply);
+              }
+            } catch {
+              if (!isCancelled) {
+                setProjections(toApply);
+              }
+            }
+          }
+        } else {
+          // If there's saved data, clear any localStorage draft for this period to avoid confusion
+          try {
+            localStorage.removeItem(draftKey);
+          } catch (e) {
+            // Ignore localStorage errors
+          }
         }
-      })();
-    } catch (e) {
-      console.warn("Failed to read draft from localStorage", e);
-    }
-  }, [selectedStore, draftKey]);
+      } catch (e) {
+        if (!isCancelled) {
+          console.warn("Failed to read draft from localStorage", e);
+        }
+      }
+    }, 200); // Delay to let seedProjections complete first
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [selectedStore, draftKey, tabIndex, year, month]);
 
   // Function to load existing generate input data for autofill
   const loadExistingGenerateData = async () => {
@@ -722,24 +885,67 @@ const PAC = () => {
   }, [selectedStore, actualMonth, actualYear]);
 
   useEffect(() => {
+    let isCancelled = false;
+
     const loadHistoricalData = async () => {
-      if (!selectedStore || !histYear || !histMonth || tabIndex !== 0) return;
+      // Use actualMonth/actualYear for historical columns (user-selected), fallback to histMonth/histYear
+      const dataMonth = actualMonth || histMonth;
+      const dataYear = actualYear || histYear;
+
+      if (!selectedStore || !dataYear || !dataMonth || tabIndex !== 0) return;
+
+      // Capture current values to avoid stale closures
+      const currentHistYear = dataYear;
+      const currentHistMonth = dataMonth;
+      const currentStore = selectedStore;
+
       try {
         // Load PAC actual data for the selected month/year instead of historical data
-        const formattedStoreId = selectedStore.startsWith("store_")
-          ? selectedStore
-          : `store_${selectedStore.padStart(3, "0")}`;
+        const formattedStoreId = currentStore.startsWith("store_")
+          ? currentStore
+          : `store_${currentStore.padStart(3, "0")}`;
 
         const pacActualData = await getPacActual(
           formattedStoreId,
-          histYear,
-          histMonth
+          currentHistYear,
+          currentHistMonth
         );
+
+        // Check if this request was cancelled (user changed dropdowns)
+        if (isCancelled) return;
+
+        // Set pacActualData to state so getPacActualValue can access it
+        setPacActualData(pacActualData);
+
+        // Load last year's PAC actual data for year-over-year comparison
+        const lastYear = currentHistYear - 1;
+        let lastYearData = null;
+        try {
+          lastYearData = await getPacActual(
+            formattedStoreId,
+            lastYear,
+            currentHistMonth
+          );
+          console.log("Last year PAC actual data loaded:", lastYearData);
+        } catch (e) {
+          // Last year's data might not exist, that's okay
+          console.log("Last year's PAC actual data not found", e);
+        }
+
+        // Check again if cancelled
+        if (isCancelled) return;
+
+        setLastYearPacActualData(lastYearData);
 
         if (pacActualData) {
           setProjections((prev) =>
             prev.map((expense) => {
-              const pacActualValue = getPacActualValue(expense.name);
+              // Pass data directly to avoid state timing issues
+              const pacActualValue = getPacActualValue(
+                expense.name,
+                pacActualData,
+                lastYearData
+              );
               return {
                 ...expense,
                 historicalDollar: pacActualValue.dollars || 0,
@@ -750,10 +956,14 @@ const PAC = () => {
         } else {
           // Fallback to historical data if PAC actual data not found
           const res = await fetchHistoricalRows(
-            selectedStore,
-            histYear,
-            histMonth
+            currentStore,
+            currentHistYear,
+            currentHistMonth
           );
+
+          // Check again if cancelled
+          if (isCancelled) return;
+
           const histRows = Array.isArray(res.rows) ? res.rows : [];
           setProjections((prev) =>
             prev.map((expense) => {
@@ -767,11 +977,19 @@ const PAC = () => {
           );
         }
       } catch (e) {
-        console.error("PAC actual data fetch error", e);
+        if (!isCancelled) {
+          console.error("PAC actual data fetch error", e);
+        }
       }
     };
+
     loadHistoricalData();
-  }, [selectedStore, tabIndex, histMonth, histYear]);
+
+    // Cleanup function to cancel in-flight requests
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedStore, tabIndex, histMonth, histYear, actualMonth, actualYear]);
 
   const debouncedSave = (next) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -1148,96 +1366,136 @@ const PAC = () => {
     : 0;
   const dollarAmountNeeded = Math.abs(goalPacDollar - currentPacDollar);
 
+  // Helper function to calculate year-over-year percentage change
+  const calculateYearOverYearChange = (currentValue, lastYearValue) => {
+    if (
+      lastYearValue === null ||
+      lastYearValue === undefined ||
+      lastYearValue === 0
+    )
+      return 0;
+    return ((currentValue - lastYearValue) / lastYearValue) * 100;
+  };
+
   // Helper function to get PAC actual values for a given expense name
-  const getPacActualValue = (expenseName) => {
-    if (!pacActualData) return { dollars: 0, percent: 0 };
+  // Can accept optional data parameters to avoid state timing issues
+  const getPacActualValue = (
+    expenseName,
+    dataOverride = null,
+    lastYearDataOverride = null
+  ) => {
+    const data = dataOverride || pacActualData;
+    const lastYearData =
+      lastYearDataOverride !== null
+        ? lastYearDataOverride
+        : lastYearPacActualData;
+
+    if (!data) return { dollars: 0, percent: 0 };
 
     // Map expense names to PAC actual data structure
     switch (expenseName) {
-      case "Product Sales":
-        return pacActualData.sales?.productSales || { dollars: 0, percent: 0 };
-      case "All Net Sales":
-        return pacActualData.sales?.allNetSales || { dollars: 0, percent: 0 };
+      case "Product Sales": {
+        const current = data.sales?.productSales || {
+          dollars: 0,
+          percent: 0,
+        };
+        const lastYear = lastYearData?.sales?.productSales;
+        const lastYearDollars = lastYear?.dollars;
+        // For Product Sales, always return year-over-year change (0 if no last year data)
+        const yoyChange = calculateYearOverYearChange(
+          current.dollars || 0,
+          lastYearDollars
+        );
+        console.log("Product Sales YOY:", {
+          currentDollars: current.dollars,
+          lastYearDollars: lastYearDollars,
+          lastYearData: lastYearData,
+          yoyChange,
+        });
+        return {
+          dollars: current.dollars,
+          percent: yoyChange,
+        };
+      }
+      case "All Net Sales": {
+        const current = data.sales?.allNetSales || {
+          dollars: 0,
+          percent: 0,
+        };
+        const lastYear = lastYearData?.sales?.allNetSales;
+        const lastYearDollars = lastYear?.dollars;
+        // For All Net Sales, always return year-over-year change (0 if no last year data)
+        const yoyChange = calculateYearOverYearChange(
+          current.dollars || 0,
+          lastYearDollars
+        );
+        console.log("All Net Sales YOY:", {
+          currentDollars: current.dollars,
+          lastYearDollars: lastYearDollars,
+          lastYearData: lastYearData,
+          yoyChange,
+        });
+        return {
+          dollars: current.dollars,
+          percent: yoyChange,
+        };
+      }
       case "Base Food":
-        return (
-          pacActualData.foodAndPaper?.baseFood || { dollars: 0, percent: 0 }
-        );
+        return data.foodAndPaper?.baseFood || { dollars: 0, percent: 0 };
       case "Employee Meal":
-        return (
-          pacActualData.foodAndPaper?.employeeMeal || { dollars: 0, percent: 0 }
-        );
+        return data.foodAndPaper?.employeeMeal || { dollars: 0, percent: 0 };
       case "Condiment":
-        return (
-          pacActualData.foodAndPaper?.condiment || { dollars: 0, percent: 0 }
-        );
+        return data.foodAndPaper?.condiment || { dollars: 0, percent: 0 };
       case "Total Waste":
-        return (
-          pacActualData.foodAndPaper?.totalWaste || { dollars: 0, percent: 0 }
-        );
+        return data.foodAndPaper?.totalWaste || { dollars: 0, percent: 0 };
       case "Paper":
-        return pacActualData.foodAndPaper?.paper || { dollars: 0, percent: 0 };
+        return data.foodAndPaper?.paper || { dollars: 0, percent: 0 };
       case "Crew Labor":
-        return pacActualData.labor?.crewLabor || { dollars: 0, percent: 0 };
+        return data.labor?.crewLabor || { dollars: 0, percent: 0 };
       case "Management Labor":
-        return (
-          pacActualData.labor?.managementLabor || { dollars: 0, percent: 0 }
-        );
+        return data.labor?.managementLabor || { dollars: 0, percent: 0 };
       case "Payroll Tax":
-        return pacActualData.labor?.payrollTax || { dollars: 0, percent: 0 };
+        return data.labor?.payrollTax || { dollars: 0, percent: 0 };
       case "Travel":
-        return pacActualData.purchases?.travel || { dollars: 0, percent: 0 };
+        return data.purchases?.travel || { dollars: 0, percent: 0 };
       case "Advertising Other":
       case "Adv Other":
-        return pacActualData.purchases?.advOther || { dollars: 0, percent: 0 };
+        return data.purchases?.advOther || { dollars: 0, percent: 0 };
       case "Promotion":
-        return pacActualData.purchases?.promotion || { dollars: 0, percent: 0 };
+        return data.purchases?.promotion || { dollars: 0, percent: 0 };
       case "Outside Services":
-        return (
-          pacActualData.purchases?.outsideServices || { dollars: 0, percent: 0 }
-        );
+        return data.purchases?.outsideServices || { dollars: 0, percent: 0 };
       case "Linen":
-        return pacActualData.purchases?.linen || { dollars: 0, percent: 0 };
+        return data.purchases?.linen || { dollars: 0, percent: 0 };
       case "Operating Supply":
       case "OP. Supply":
-        return (
-          pacActualData.purchases?.opsSupplies || { dollars: 0, percent: 0 }
-        );
+        return data.purchases?.opsSupplies || { dollars: 0, percent: 0 };
       case "Maintenance & Repair":
       case "Maint. & Repair":
         return (
-          pacActualData.purchases?.maintenanceRepair || {
+          data.purchases?.maintenanceRepair || {
             dollars: 0,
             percent: 0,
           }
         );
       case "Small Equipment":
-        return (
-          pacActualData.purchases?.smallEquipment || { dollars: 0, percent: 0 }
-        );
+        return data.purchases?.smallEquipment || { dollars: 0, percent: 0 };
       case "Utilities":
-        return pacActualData.purchases?.utilities || { dollars: 0, percent: 0 };
+        return data.purchases?.utilities || { dollars: 0, percent: 0 };
       case "Office":
-        return pacActualData.purchases?.office || { dollars: 0, percent: 0 };
+        return data.purchases?.office || { dollars: 0, percent: 0 };
       case "Cash +/-":
-        return (
-          pacActualData.purchases?.cashPlusMinus || { dollars: 0, percent: 0 }
-        );
+        return data.purchases?.cashPlusMinus || { dollars: 0, percent: 0 };
       case "Crew Relations":
-        return (
-          pacActualData.purchases?.crewRelations || { dollars: 0, percent: 0 }
-        );
+        return data.purchases?.crewRelations || { dollars: 0, percent: 0 };
       case "Training":
-        return pacActualData.purchases?.training || { dollars: 0, percent: 0 };
+        return data.purchases?.training || { dollars: 0, percent: 0 };
       case "Advertising":
-        return (
-          pacActualData.purchases?.advertising || { dollars: 0, percent: 0 }
-        );
+        return data.purchases?.advertising || { dollars: 0, percent: 0 };
       case "Total Controllable":
-        return (
-          pacActualData.totals?.totalControllable || { dollars: 0, percent: 0 }
-        );
+        return data.totals?.totalControllable || { dollars: 0, percent: 0 };
       case "P.A.C.":
-        return pacActualData.totals?.pac || { dollars: 0, percent: 0 };
+        return data.totals?.pac || { dollars: 0, percent: 0 };
       default:
         return { dollars: 0, percent: 0 };
     }
@@ -1908,11 +2166,30 @@ const PAC = () => {
                         />
 
                         <TableCell align="center">
-                          {fmtUsd(getPacActualValue(expense.name).dollars || 0)}
+                          {fmtUsd(expense.historicalDollar || 0)}
                         </TableCell>
                         <TableCell align="center">
-                          {getPacActualValue(expense.name).percent.toFixed(2) +
-                            "%"}
+                          {(() => {
+                            // Use historicalPercent from projections state (already calculated correctly in loadHistoricalData)
+                            const percent = expense.historicalPercent;
+
+                            // For Product Sales and All Net Sales, show year-over-year change
+                            if (
+                              expense.name === "Product Sales" ||
+                              expense.name === "All Net Sales"
+                            ) {
+                              // historicalPercent already contains the year-over-year change
+                              if (typeof percent === "number") {
+                                const sign = percent >= 0 ? "+" : "";
+                                return `${sign}${percent.toFixed(2)}%`;
+                              }
+                              return "-";
+                            }
+                            // For all other expenses, show the regular percent
+                            return typeof percent === "number"
+                              ? percent.toFixed(2) + "%"
+                              : percent || "-";
+                          })()}
                         </TableCell>
                       </TableRow>
 

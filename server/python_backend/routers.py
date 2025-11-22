@@ -535,6 +535,180 @@ async def health_check() -> Dict[str, str]:
     return {"status": "healthy", "service": "PAC Calculation API"}
 
 
+# ---- PAC Actual Routes ----
+class PacActualComputeIn(BaseModel):
+    store_id: str
+    year_month: str  # YYYYMM format
+    submitted_by: str = "System"
+
+
+@router.post("/actual/compute")
+async def compute_and_save_pac_actual(
+    payload: PacActualComputeIn,
+    _auth: Dict[str, Any] = Depends(require_auth),
+) -> Dict[str, Any]:
+    """
+    Compute and save PAC actual data to Firebase.
+    This replaces the frontend pacActualService.js computeAndSavePacActual function.
+    """
+    try:
+        # Guard Firebase presence/initialization
+        try:
+            import firebase_admin
+            from firebase_admin import firestore
+            if not firebase_admin._apps:
+                raise HTTPException(status_code=503, detail="Firebase not initialized")
+        except ModuleNotFoundError:
+            raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+        db = firestore.client()
+        
+        # Normalize store ID using the service function
+        from services.pac_calculation_service import normalize_store_id
+        store_id = normalize_store_id(payload.store_id)
+        
+        year_month = payload.year_month
+        if len(year_month) != 6 or not year_month.isdigit():
+            raise HTTPException(status_code=400, detail="year_month must be in YYYYMM format")
+        
+        year = int(year_month[:4])
+        month_num = int(year_month[4:])
+        if month_num < 1 or month_num > 12:
+            raise HTTPException(status_code=400, detail="Invalid month in year_month")
+        
+        month_names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+        month = month_names[month_num - 1]
+        
+        doc_id = f"{store_id}_{year_month}"
+        
+        # Fetch data from collections
+        generate_input_doc = db.collection("generate_input").document(doc_id).get()
+        invoice_log_totals_doc = db.collection("invoice_log_totals").document(doc_id).get()
+        pac_projections_doc = db.collection("pac-projections").document(doc_id).get()
+        
+        if not generate_input_doc.exists:
+            raise HTTPException(status_code=404, detail="No generate input data found")
+        
+        generate_input = generate_input_doc.to_dict() or {}
+        invoice_log_totals = invoice_log_totals_doc.to_dict() if invoice_log_totals_doc.exists else {"totals": {}}
+        pac_projections = pac_projections_doc.to_dict() if pac_projections_doc.exists else {}
+        
+        # Use the PAC actual calculation function
+        from services.pac_calculation_service import calculate_pac_actual
+        
+        # Calculate PAC actual using the original JS logic
+        pac_actual_data = calculate_pac_actual(
+            generate_input,
+            invoice_log_totals,
+            pac_projections
+        )
+        
+        # Determine last updated timestamp and user
+        timestamps = []
+        if generate_input.get("updatedAt"):
+            timestamps.append({
+                "timestamp": generate_input.get("updatedAt"),
+                "user": generate_input.get("submittedBy", payload.submitted_by),
+            })
+        if invoice_log_totals.get("updatedAt"):
+            timestamps.append({
+                "timestamp": invoice_log_totals.get("updatedAt"),
+                "user": invoice_log_totals.get("updatedBy", payload.submitted_by),
+            })
+        if pac_projections.get("updatedAt"):
+            timestamps.append({
+                "timestamp": pac_projections.get("updatedAt"),
+                "user": pac_projections.get("updatedBy", payload.submitted_by),
+            })
+        
+        most_recent = timestamps[0] if timestamps else {"timestamp": None, "user": payload.submitted_by}
+        for ts in timestamps[1:]:
+            if ts["timestamp"] and (not most_recent["timestamp"] or ts["timestamp"] > most_recent["timestamp"]):
+                most_recent = ts
+        
+        # Build the PAC actual document structure matching the JS service
+        pac_actual_doc = {
+            "storeID": store_id,
+            "store": f"Store {store_id.split('_')[1] if '_' in store_id else store_id}",
+            "year": year,
+            "month": month,
+            "monthNumber": month_num,
+            "lastUpdatedAt": firestore.SERVER_TIMESTAMP,
+            "lastUpdatedBy": payload.submitted_by,
+            "sourceData": {
+                "generateInputUpdatedAt": generate_input.get("updatedAt"),
+                "generateInputUpdatedBy": generate_input.get("submittedBy", payload.submitted_by),
+                "invoiceLogTotalsUpdatedAt": invoice_log_totals.get("updatedAt"),
+                "invoiceLogTotalsUpdatedBy": invoice_log_totals.get("updatedBy", payload.submitted_by),
+                "pacProjectionsUpdatedAt": pac_projections.get("updatedAt"),
+                "pacProjectionsUpdatedBy": pac_projections.get("updatedBy", payload.submitted_by),
+                "mostRecentSourceUpdatedAt": most_recent.get("timestamp"),
+                "mostRecentSourceUpdatedBy": most_recent.get("user"),
+            },
+            **pac_actual_data,
+        }
+        
+        # Save to Firestore
+        db.collection("pac_actual").document(doc_id).set(pac_actual_doc, merge=True)
+        
+        return {"success": True, "doc_id": doc_id, "data": pac_actual_doc}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error computing and saving PAC actual: {e}")
+        raise HTTPException(status_code=500, detail=f"Error computing PAC actual: {str(e)}")
+
+
+@router.get("/actual/{store_id}/{year_month}")
+async def get_pac_actual(
+    store_id: str,
+    year_month: str,
+    _auth: Dict[str, Any] = Depends(require_auth),
+) -> Dict[str, Any]:
+    """
+    Get PAC actual data from Firebase.
+    This replaces the frontend pacActualService.js getPacActual function.
+    """
+    try:
+        # Guard Firebase presence/initialization
+        try:
+            import firebase_admin
+            from firebase_admin import firestore
+            if not firebase_admin._apps:
+                raise HTTPException(status_code=503, detail="Firebase not initialized")
+        except ModuleNotFoundError:
+            raise HTTPException(status_code=503, detail="Firebase not installed/available")
+
+        db = firestore.client()
+        
+        # Normalize store ID using the service function
+        from services.pac_calculation_service import normalize_store_id
+        store_id = normalize_store_id(store_id)
+        
+        if len(year_month) != 6 or not year_month.isdigit():
+            raise HTTPException(status_code=400, detail="year_month must be in YYYYMM format")
+        
+        doc_id = f"{store_id}_{year_month}"
+        doc_ref = db.collection("pac_actual").document(doc_id)
+        doc = doc_ref.get()
+        
+        if not doc.exists:
+            # Return 404, frontend will handle as null
+            raise HTTPException(status_code=404, detail="PAC actual data not found")
+        
+        return doc.to_dict()
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting PAC actual: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting PAC actual: {str(e)}")
+
+
 # ---- Invoice OCR Route (under /api/pac) ----
 @router.post("/invoice/read")
 async def read_invoice(

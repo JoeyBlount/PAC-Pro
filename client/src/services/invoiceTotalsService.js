@@ -9,7 +9,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { invoiceCatList } from "../pages/settings/InvoiceSettings";
-import { computeAndSavePacActual } from "./pacActualService";
+// PAC Actual computation now handled by backend API
 
 /**
  * Service to manage invoice totals aggregation
@@ -132,11 +132,28 @@ export const recomputeMonthlyTotals = async (
         "December",
       ];
       const monthName = months[targetMonth - 1];
+      const yearMonth = `${targetYear}${String(targetMonth).padStart(2, "0")}`;
 
       console.log(
         `[Invoice Totals] Triggering PAC actual recalculation for ${storeID} - ${monthName} ${targetYear}`
       );
-      await computeAndSavePacActual(storeID, targetYear, monthName, "System");
+      
+      const { apiUrl } = await import("../utils/api");
+      const response = await fetch(apiUrl(`/api/pac/actual/compute`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          store_id: storeID,
+          year_month: yearMonth,
+          submitted_by: "System",
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to compute PAC actual: ${errorText || response.statusText}`);
+      }
+      
       console.log(
         `[Invoice Totals] PAC actual recalculation completed for ${storeID} - ${monthName} ${targetYear}`
       );
