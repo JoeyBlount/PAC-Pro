@@ -1,4 +1,4 @@
-import { db } from "../config/firebase-config";
+import { db, auth } from "../config/firebase-config";
 import {
   collection,
   query,
@@ -9,6 +9,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { invoiceCatList } from "../pages/settings/InvoiceSettings";
+import { apiUrl } from "../utils/api";
 // PAC Actual computation now handled by backend API
 
 /**
@@ -137,23 +138,36 @@ export const recomputeMonthlyTotals = async (
       console.log(
         `[Invoice Totals] Triggering PAC actual recalculation for ${storeID} - ${monthName} ${targetYear}`
       );
-      
-      const { apiUrl } = await import("../utils/api");
+
+      // Ensure user is authenticated before making API call
+      if (!auth.currentUser) {
+        throw new Error(
+          "User not authenticated. Cannot compute PAC actual without authentication."
+        );
+      }
+
+      const token = await auth.currentUser.getIdToken();
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      };
       const response = await fetch(apiUrl(`/api/pac/actual/compute`), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           store_id: storeID,
           year_month: yearMonth,
           submitted_by: "System",
         }),
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Failed to compute PAC actual: ${errorText || response.statusText}`);
+        throw new Error(
+          `Failed to compute PAC actual: ${errorText || response.statusText}`
+        );
       }
-      
+
       console.log(
         `[Invoice Totals] PAC actual recalculation completed for ${storeID} - ${monthName} ${targetYear}`
       );

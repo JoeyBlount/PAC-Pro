@@ -1,5 +1,6 @@
-import { db } from "../config/firebase-config";
+import { db, auth } from "../config/firebase-config";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { apiUrl } from "../utils/api";
 // PAC Actual computation now handled by backend API
 
 /**
@@ -193,10 +194,14 @@ export const saveGenerateInput = async (
       const monthNumber = monthIndex + 1;
       const yearMonth = `${year}${String(monthNumber).padStart(2, "0")}`;
       
-      const { apiUrl } = await import("../utils/api");
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
       const response = await fetch(apiUrl(`/api/pac/actual/compute`), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           store_id: storeID,
           year_month: yearMonth,
