@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-import { getPacActual } from "../../services/pacActualService";
+// PAC Actual functions now handled by backend API
 import {
   Container,
   Table,
@@ -20,6 +20,29 @@ import {
 import "./pac.css";
 import { useTheme } from "@mui/material/styles";
 import { apiUrl } from "../../utils/api";
+import { auth } from "../../config/firebase-config";
+
+// Helper function for authenticated API calls
+async function apiCall(path, options = {}) {
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers || {}),
+  };
+  const response = await fetch(apiUrl(path), {
+    ...options,
+    headers,
+  });
+  if (!response.ok) {
+    if (response.status === 404) {
+      return null;
+    }
+    throw new Error(`API call failed: ${response.statusText}`);
+  }
+  return response.json();
+}
+
 // Add print styles
 const printStyles = `
   @media print {
@@ -1431,18 +1454,10 @@ const PacTab = ({
 
   const fetchProjectionsData = async (formattedStoreId, yearMonth) => {
     try {
-      const response = await fetch(
-        apiUrl(`/api/pac/projections/${formattedStoreId}/${yearMonth}`)
+      const data = await apiCall(
+        `/api/pac/projections/${formattedStoreId}/${yearMonth}`
       );
-      if (response.ok) {
-        const data = await response.json();
-        return data;
-      } else {
-        console.warn(
-          `No projections data found for ${formattedStoreId} - ${yearMonth}`
-        );
-        return null;
-      }
+      return data;
     } catch (error) {
       console.warn(`Error fetching projections: ${error.message}`);
       return null;
@@ -1462,19 +1477,41 @@ const PacTab = ({
         : `store_${storeId.padStart(3, "0")}`;
 
       // Fetch actual, projections, and PAC actual data in parallel
-      const [actualResponse, projectionsData, pacActualData] =
-        await Promise.all([
-          fetch(apiUrl(`/api/pac/calc/${formattedStoreId}/${yearMonth}`)),
-          fetchProjectionsData(formattedStoreId, yearMonth),
-          getPacActual(formattedStoreId, year, month),
-        ]);
+      const months = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+      ];
+      const monthIndex = months.indexOf(month);
+      const monthNumber = monthIndex >= 0 ? monthIndex + 1 : 1;
+      const pacActualYearMonth = `${year}${String(monthNumber).padStart(
+        2,
+        "0"
+      )}`;
 
-      if (!actualResponse.ok) {
-        throw new Error(
-          `Failed to fetch PAC data: ${actualResponse.statusText}`
-        );
+      const [actualData, projectionsData, pacActualData] = await Promise.all([
+        apiCall(`/api/pac/calc/${formattedStoreId}/${yearMonth}`).catch(
+          () => null
+        ),
+        fetchProjectionsData(formattedStoreId, yearMonth),
+        apiCall(
+          `/api/pac/actual/${formattedStoreId}/${pacActualYearMonth}`
+        ).catch(() => null),
+      ]);
+
+      if (!actualData) {
+        throw new Error("Failed to fetch PAC data");
       }
-      const data = await actualResponse.json();
+      const data = actualData;
 
       // Convert snake_case from backend to camelCase for frontend
       const convertedData = {
@@ -1956,49 +1993,8 @@ const PacTab = ({
   };
 
   const getProjectedPercent = (accountName) => {
-    if (!projectionsData) return "-";
-
-    const expenseMap = {
-      "Base Food": projectionsData.controllable_expenses?.base_food?.percent,
-      "Employee Meal":
-        projectionsData.controllable_expenses?.employee_meal?.percent,
-      Condiment: projectionsData.controllable_expenses?.condiment?.percent,
-      "Total Waste":
-        projectionsData.controllable_expenses?.total_waste?.percent,
-      Paper: projectionsData.controllable_expenses?.paper?.percent,
-      "Crew Labor": projectionsData.controllable_expenses?.crew_labor?.percent,
-      "Management Labor":
-        projectionsData.controllable_expenses?.management_labor?.percent,
-      "Payroll Tax":
-        projectionsData.controllable_expenses?.payroll_tax?.percent,
-      Travel: projectionsData.controllable_expenses?.travel?.percent,
-      Advertising: projectionsData.controllable_expenses?.advertising?.percent,
-      "Advertising Other":
-        projectionsData.controllable_expenses?.advertising_other?.percent,
-      Promotion: projectionsData.controllable_expenses?.promotion?.percent,
-      "Outside Services":
-        projectionsData.controllable_expenses?.outside_services?.percent,
-      Linen: projectionsData.controllable_expenses?.linen?.percent,
-      "Operating Supply":
-        projectionsData.controllable_expenses?.operating_supply?.percent ??
-        projectionsData.controllable_expenses?.op_supply?.percent,
-      "Maintenance & Repair":
-        projectionsData.controllable_expenses?.maintenance_repair?.percent,
-      "Small Equipment":
-        projectionsData.controllable_expenses?.small_equipment?.percent,
-      Utilities: projectionsData.controllable_expenses?.utilities?.percent,
-      Office: projectionsData.controllable_expenses?.office?.percent,
-      "Cash +/-":
-        projectionsData.controllable_expenses?.cash_adjustments?.percent,
-      "Crew Relations":
-        projectionsData.controllable_expenses?.crew_relations?.percent,
-      Training: projectionsData.controllable_expenses?.training?.percent,
-      "Total Controllable": projectionsData.total_controllable_percent,
-      "P.A.C.": projectionsData.pac_percent,
-    };
-
-    const raw = expenseMap[accountName];
-    return raw !== undefined && raw !== null ? formatPercentage(raw) : "-";
+    // Use getProjectedValue to calculate percent from dollars
+    return getProjectedValue(accountName, "percent");
   };
 
   // Helper function to get projected values from projections data
@@ -2066,10 +2062,7 @@ const PacTab = ({
       "P.A.C.": "pac_percent",
     };
 
-    const fieldMap = type === "percent" ? percentFieldMap : dollarFieldMap;
-    const fieldPath = fieldMap[expenseName];
-    if (!fieldPath) return "-";
-
+    // Helper to resolve a value from a path or array of paths
     const resolveValue = (pathOrPaths) => {
       const paths = Array.isArray(pathOrPaths) ? pathOrPaths : [pathOrPaths];
       for (const path of paths) {
@@ -2083,14 +2076,31 @@ const PacTab = ({
       return undefined;
     };
 
-    const value = resolveValue(fieldPath);
-    if (value === undefined) return "-";
+    // For percent type, calculate from dollars / product sales * 100
+    if (type === "percent") {
+      const dollarFieldPath = dollarFieldMap[expenseName];
+      if (!dollarFieldPath) return "-";
 
-    if (type === "dollar") {
-      return formatCurrency(parseFloat(value));
+      const projectedDollars = resolveValue(dollarFieldPath);
+      const productSales = projectionsData.product_net_sales || 0;
+
+      if (projectedDollars === undefined || projectedDollars === null)
+        return "-";
+      if (productSales === 0) return "0.00%";
+
+      const calculatedPercent =
+        (parseFloat(projectedDollars) / parseFloat(productSales)) * 100;
+      return formatPercentage(calculatedPercent);
     }
 
-    return formatPercentage(parseFloat(value));
+    // For dollar type, use the dollar field map
+    const fieldPath = dollarFieldMap[expenseName];
+    if (!fieldPath) return "-";
+
+    const value = resolveValue(fieldPath);
+    if (value === undefined || value === null) return "-";
+
+    return formatCurrency(parseFloat(value));
   };
 
   if (!storeId) {

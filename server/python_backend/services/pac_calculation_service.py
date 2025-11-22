@@ -1,14 +1,16 @@
 """
 PAC Calculation Service - Python implementation of C# PacCalculationService
+Includes both standard PAC calculations and PAC actual calculations
 """
 from decimal import Decimal
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from models import (
     PacInputData, PacCalculationResult, AmountUsedData, 
     ControllableExpenses, ExpenseLine, InventoryData, PurchaseData
 )
 from .data_ingestion_service import DataIngestionService
 from .account_mapping_service import AccountMappingService
+import re
 
 
 class PacCalculationService:
@@ -423,3 +425,287 @@ class PacCalculationService:
             "pac_percent": pac_percent,
             "pac_dollars": pac_dollars
         }
+
+
+# ============================================================================
+# PAC Actual Calculation Functions
+# ============================================================================
+
+def normalize_store_id(store_id: str) -> str:
+    """Normalize various store id formats to canonical 'store_XXX'"""
+    if not store_id:
+        return store_id
+    raw = str(store_id).strip()
+    match = re.search(r'(\d{1,3})$', raw)
+    if match:
+        num = str(int(match.group(1))).zfill(3)
+        return f"store_{num}"
+    return raw.lower()
+
+
+def calculate_pac_actual(
+    generate_input: Dict[str, Any],
+    invoice_log_totals: Dict[str, Any],
+    pac_projections: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Calculate PAC actual values based on generate input and invoice data.
+    This matches the original JavaScript calculatePacActual function logic.
+    
+    Args:
+        generate_input: Data from generate_input collection
+        invoice_log_totals: Data from invoice_log_totals collection
+        pac_projections: Optional data from pac-projections collection
+        
+    Returns:
+        Dictionary with PAC actual calculations matching JS structure
+    """
+    sales = generate_input.get("sales", {})
+    food = generate_input.get("food", {})
+    labor = generate_input.get("labor", {})
+    inventory_starting = generate_input.get("inventoryStarting", {})
+    inventory_ending = generate_input.get("inventoryEnding", {})
+    invoice_totals = invoice_log_totals.get("totals", {}) if invoice_log_totals else {}
+    
+    # Convert to numbers, defaulting to 0
+    def to_num(val):
+        try:
+            return float(val) if val is not None else 0.0
+        except (ValueError, TypeError):
+            return 0.0
+    
+    product_sales = to_num(sales.get("productNetSales"))
+    all_net_sales = to_num(sales.get("allNetSales"))
+    
+    # Calculate intermediate values (matching JS logic exactly)
+    other_food_components = (
+        to_num(sales.get("promo")) * 0.3 +  # Promotion * 30%
+        to_num(sales.get("managerMeal")) * 0.3 +  # Manager Meal * 30%
+        (to_num(food.get("rawWaste")) / 100) * product_sales +  # Raw Waste % * Product Sales
+        (to_num(food.get("completeWaste")) / 100) * product_sales  # Complete Waste % * Product Sales
+    )
+    
+    rti = (
+        (to_num(food.get("condiment")) / 100) * product_sales +  # Condiment % * Product Sales
+        to_num(inventory_ending.get("condiment")) -  # Ending Inventory Condiment
+        to_num(inventory_starting.get("condiment")) -  # Beginning Inventory Condiment
+        to_num(invoice_totals.get("CONDIMENT"))  # Invoice Log Totals Condiment
+    )
+    
+    # Food & Paper calculations
+    base_food = (
+        to_num(inventory_starting.get("food")) +  # Beginning Inventory Food
+        to_num(invoice_totals.get("FOOD")) -  # Invoice Log Totals Food
+        to_num(inventory_ending.get("food")) -  # Ending Inventory Food
+        rti -  # RTI
+        other_food_components  # Other Food Components
+    )
+    
+    employee_meal = to_num(sales.get("managerMeal")) * 0.3
+    condiment = (to_num(food.get("condiment")) / 100) * product_sales
+    total_waste = (
+        (to_num(food.get("completeWaste")) / 100) * product_sales +
+        (to_num(food.get("rawWaste")) / 100) * product_sales
+    )
+    paper = (
+        to_num(inventory_starting.get("paper")) +  # Beginning Inventory Paper
+        to_num(invoice_totals.get("PAPER")) -  # Invoice Log Totals Paper
+        to_num(inventory_ending.get("paper"))  # Ending Inventory Paper
+    )
+    
+    # Purchases calculations (from invoice log totals)
+    promotion_from_generate_input = to_num(sales.get("promo")) * 0.3
+    advertising_from_generate_input = (to_num(sales.get("advertising")) / 100) * all_net_sales
+    
+    # Include invoice log totals for advertising and promotion if they exist
+    promotion_from_invoices = to_num(invoice_totals.get("PROMOTION"))
+    advertising_from_invoices = to_num(invoice_totals.get("ADVERTISING"))
+    
+    # Combine both sources for total values
+    promotion = promotion_from_generate_input + promotion_from_invoices
+    advertising = advertising_from_generate_input + advertising_from_invoices
+    
+    cash_plus_minus = -(to_num(sales.get("cash")))  # Flip the sign
+    
+    # Labor calculations
+    crew_labor_dollars = (to_num(labor.get("crewLabor")) / 100) * product_sales
+    management_labor_dollars = (
+        ((to_num(labor.get("totalLabor")) - to_num(labor.get("crewLabor"))) / 100) *
+        product_sales
+    )
+    payroll_tax_dollars = (
+        (crew_labor_dollars + management_labor_dollars) *
+        (to_num(labor.get("payrollTax")) / 100)
+    )
+    # Additional Labor Dollars (does NOT affect payroll tax calculation)
+    additional_labor_dollars = to_num(labor.get("additionalLaborDollars"))
+    
+    # Calculate totals
+    food_and_paper_total = base_food + employee_meal + condiment + total_waste + paper
+    labor_total = crew_labor_dollars + management_labor_dollars + payroll_tax_dollars + additional_labor_dollars
+    # Dues and Subscriptions (dollar amount from generate input)
+    dues_and_subscriptions = to_num(sales.get("duesAndSubscriptions"))
+    
+    purchases_total = (
+        to_num(invoice_totals.get("TRAVEL")) +
+        advertising +  # Advertising (generate input % + invoice log totals)
+        to_num(invoice_totals.get("ADV-OTHER")) +
+        promotion +  # Promotion (generate input % + invoice log totals)
+        to_num(invoice_totals.get("OUTSIDE SVC")) +
+        to_num(invoice_totals.get("LINEN")) +
+        to_num(invoice_totals.get("OP. SUPPLY")) +
+        to_num(invoice_totals.get("M+R")) +
+        to_num(invoice_totals.get("SML EQUIP")) +
+        to_num(invoice_totals.get("UTILITIES")) +
+        dues_and_subscriptions +  # Dues and Subscriptions (dollar amount)
+        to_num(invoice_totals.get("OFFICE")) +
+        cash_plus_minus +
+        to_num(invoice_totals.get("CREW RELATIONS")) +
+        to_num(invoice_totals.get("TRAINING"))
+    )
+    
+    total_controllable = food_and_paper_total + labor_total + purchases_total
+    pac_total = product_sales - total_controllable
+    
+    # Calculate percentages
+    def calculate_percentage(dollars):
+        return (dollars / product_sales * 100) if product_sales > 0 else 0
+    
+    return {
+        "sales": {
+            "productSales": {
+                "dollars": product_sales,
+                "percent": 100.0,  # Product sales is always 100% of itself
+            },
+            "allNetSales": {
+                "dollars": all_net_sales,
+                "percent": calculate_percentage(all_net_sales),
+            },
+        },
+        "foodAndPaper": {
+            "baseFood": {
+                "dollars": base_food,
+                "percent": calculate_percentage(base_food),
+            },
+            "employeeMeal": {
+                "dollars": employee_meal,
+                "percent": calculate_percentage(employee_meal),
+            },
+            "condiment": {
+                "dollars": condiment,
+                "percent": calculate_percentage(condiment),
+            },
+            "totalWaste": {
+                "dollars": total_waste,
+                "percent": calculate_percentage(total_waste),
+            },
+            "paper": {
+                "dollars": paper,
+                "percent": calculate_percentage(paper),
+            },
+            "total": {
+                "dollars": food_and_paper_total,
+                "percent": calculate_percentage(food_and_paper_total),
+            },
+        },
+        "labor": {
+            "crewLabor": {
+                "dollars": crew_labor_dollars,
+                "percent": calculate_percentage(crew_labor_dollars),
+            },
+            "managementLabor": {
+                "dollars": management_labor_dollars,
+                "percent": calculate_percentage(management_labor_dollars),
+            },
+            "payrollTax": {
+                "dollars": payroll_tax_dollars,
+                "percent": calculate_percentage(payroll_tax_dollars),
+            },
+            "additionalLaborDollars": {
+                "dollars": additional_labor_dollars,
+                "percent": calculate_percentage(additional_labor_dollars),
+            },
+            "total": {
+                "dollars": labor_total,
+                "percent": calculate_percentage(labor_total),
+            },
+        },
+        "purchases": {
+            "travel": {
+                "dollars": to_num(invoice_totals.get("TRAVEL")),
+                "percent": calculate_percentage(to_num(invoice_totals.get("TRAVEL"))),
+            },
+            "advOther": {
+                "dollars": to_num(invoice_totals.get("ADV-OTHER")),
+                "percent": calculate_percentage(to_num(invoice_totals.get("ADV-OTHER"))),
+            },
+            "promotion": {
+                "dollars": promotion,
+                "percent": calculate_percentage(promotion),
+            },
+            "outsideServices": {
+                "dollars": to_num(invoice_totals.get("OUTSIDE SVC")),
+                "percent": calculate_percentage(to_num(invoice_totals.get("OUTSIDE SVC"))),
+            },
+            "linen": {
+                "dollars": to_num(invoice_totals.get("LINEN")),
+                "percent": calculate_percentage(to_num(invoice_totals.get("LINEN"))),
+            },
+            "opsSupplies": {
+                "dollars": to_num(invoice_totals.get("OP. SUPPLY")),
+                "percent": calculate_percentage(to_num(invoice_totals.get("OP. SUPPLY"))),
+            },
+            "maintenanceRepair": {
+                "dollars": to_num(invoice_totals.get("M+R")),
+                "percent": calculate_percentage(to_num(invoice_totals.get("M+R"))),
+            },
+            "smallEquipment": {
+                "dollars": to_num(invoice_totals.get("SML EQUIP")),
+                "percent": calculate_percentage(to_num(invoice_totals.get("SML EQUIP"))),
+            },
+            "utilities": {
+                "dollars": to_num(invoice_totals.get("UTILITIES")),
+                "percent": calculate_percentage(to_num(invoice_totals.get("UTILITIES"))),
+            },
+            "office": {
+                "dollars": to_num(invoice_totals.get("OFFICE")),
+                "percent": calculate_percentage(to_num(invoice_totals.get("OFFICE"))),
+            },
+            "cashPlusMinus": {
+                "dollars": cash_plus_minus,
+                "percent": calculate_percentage(cash_plus_minus),
+            },
+            "crewRelations": {
+                "dollars": to_num(invoice_totals.get("CREW RELATIONS")),
+                "percent": calculate_percentage(to_num(invoice_totals.get("CREW RELATIONS"))),
+            },
+            "training": {
+                "dollars": to_num(invoice_totals.get("TRAINING")),
+                "percent": calculate_percentage(to_num(invoice_totals.get("TRAINING"))),
+            },
+            "duesAndSubscriptions": {
+                "dollars": dues_and_subscriptions,
+                "percent": calculate_percentage(dues_and_subscriptions),
+            },
+            "advertising": {
+                "dollars": advertising,
+                "percent": calculate_percentage(advertising),
+            },
+            "total": {
+                "dollars": purchases_total,
+                "percent": calculate_percentage(purchases_total),
+            },
+        },
+        "totals": {
+            "otherFoodComponents": other_food_components,
+            "rti": rti,
+            "totalControllable": {
+                "dollars": total_controllable,
+                "percent": calculate_percentage(total_controllable),
+            },
+            "pac": {
+                "dollars": pac_total,
+                "percent": 100 - calculate_percentage(total_controllable),
+            },
+        },
+    }

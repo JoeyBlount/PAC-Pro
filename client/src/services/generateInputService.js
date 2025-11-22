@@ -1,6 +1,7 @@
-import { db } from "../config/firebase-config";
+import { db, auth } from "../config/firebase-config";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
-import { computeAndSavePacActual } from "./pacActualService";
+import { apiUrl } from "../utils/api";
+// PAC Actual computation now handled by backend API
 
 /**
  * Service to manage generate input data
@@ -182,7 +183,56 @@ export const saveGenerateInput = async (
       console.log(
         `[Generate Input] Triggering PAC actual recalculation for ${storeID} - ${month} ${year}`
       );
-      await computeAndSavePacActual(storeID, year, month, submittedBy);
+      const months = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+      ];
+      const monthIndex = months.indexOf(month);
+      if (monthIndex === -1) {
+        throw new Error(`Invalid month name: ${month}`);
+      }
+      const monthNumber = monthIndex + 1;
+      const yearMonth = `${year}${String(monthNumber).padStart(2, "0")}`;
+
+      // Ensure user is authenticated before making API call
+      if (!auth.currentUser) {
+        throw new Error(
+          "User not authenticated. Cannot compute PAC actual without authentication."
+        );
+      }
+
+      const token = await auth.currentUser.getIdToken();
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      };
+      const response = await fetch(apiUrl(`/api/pac/actual/compute`), {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          store_id: storeID,
+          year_month: yearMonth,
+          submitted_by: submittedBy || "System",
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Failed to compute PAC actual: ${errorText || response.statusText}`
+        );
+      }
+
       console.log(
         `[Generate Input] PAC actual recalculation completed for ${storeID} - ${month} ${year}`
       );
