@@ -106,6 +106,15 @@ async function api(path, { method = "GET", body } = {}) {
   return res.json();
 }
 
+// Normalize store id
+const normalizeStoreId = (value) => {
+  if (!value) return null;
+  const s = String(value).trim();
+  if (s.startsWith("store_")) return s;
+  // left-pad numbers like "1" -> "001"
+  const numeric = s.replace(/\D/g, "");
+  return `store_${numeric.padStart(3, "0")}`;
+};
 
 
 // Add expense(s) to this array to disable projected % text field. Case-senstive.
@@ -218,12 +227,13 @@ const PAC = () => {
 
   // projections API wrappers
   const seedProjections = async ({ storeId, year, month, month_index_1 }) => {
-    if (!storeId) throw new Error("seedProjections: storeId is required");
+    if (!selectedStore) throw new Error("seedProjections: storeId is required");
     const m = Number(month_index_1 ?? month);
     if (!Number.isInteger(m) || m < 1 || m > 12) {
       throw new Error("seedProjections: month/month_index_1 must be 1–12");
     }
-
+    const storeId = normalizeStoreId(selectedStore);
+    if (!storeId) return;
     const payload = {
       store_id: String(storeId),
       year: Number(year),
@@ -721,7 +731,7 @@ const PAC = () => {
       if (!selectedStore || !actualMonth || !actualYear) return;
 
       try {
-        const formattedStoreId = selectedStore.startsWith("store_")
+        const formattedStoreId = normalizeStoreId(selectedStore)
           ? selectedStore
           : `store_${selectedStore.padStart(3, "0")}`;
 

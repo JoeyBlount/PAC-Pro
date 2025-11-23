@@ -12,30 +12,30 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [authMethod, setAuthMethod] = useState(null); // 'firebase' or 'microsoft'
 
-  // 
+
   const fetchUserInfo = async () => {
-  const u = auth.currentUser;
-  const token = u ? await u.getIdToken() : null;
+    const u = auth.currentUser;
+    const token = u ? await u.getIdToken() : null;
 
-  // include email param to satisfy a required query arg on the backend
-  const url = apiUrl(`/api/auth/user-info${u?.email ? `?email=${encodeURIComponent(u.email)}` : ''}`);
+    // include email param to satisfy a required query arg on the backend
+    const url = apiUrl(`/api/auth/user-info${u?.email ? `?email=${encodeURIComponent(u.email)}` : ''}`);
 
-  const headers = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
+    const headers = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(url, {
-    method: 'GET',
-    headers,
-    credentials: 'include',
-  });
+    const res = await fetch(url, {
+      method: 'GET',
+      headers,
+      credentials: 'include',
+    });
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    console.warn('user-info failed', res.status, text);
-    throw new Error('Failed to fetch user info');
-  }
-  return res.json();
-};
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.warn('user-info failed', res.status, text);
+      throw new Error('Failed to fetch user info');
+    }
+    return res.json();
+  };
 
 
   const validateMicrosoftSession = async () => {
@@ -58,67 +58,64 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    const initializeAuth = async () => {
+    let isMounted = true;
+    let unsub = null;
+
+    (async () => {
       setLoading(true);
-      try {
-        // 1) Try Microsoft cookie session first
-        const microsoftSession = await validateMicrosoftSession();
-        if (microsoftSession?.valid && microsoftSession.user) {
-          const microsoftUser = {
-            email: microsoftSession.user.email,
-            displayName: microsoftSession.user.name || microsoftSession.user.email,
-            authMethod: 'microsoft',
-          };
-          setCurrentUser(microsoftUser);
-          setUserRole(microsoftSession.user.role || null);
-          setAuthMethod('microsoft');
-          setLoading(false);
-          return;
-        }
 
-        // 2) Fall back to Firebase client auth
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-          try {
-            if (firebaseUser?.email) {
-              setCurrentUser({ ...firebaseUser, authMethod: 'firebase' });
+      // 1) Try Microsoft cookie session first
+      const microsoftSession = await validateMicrosoftSession();
+      if (isMounted && microsoftSession?.valid && microsoftSession.user) {
+        const microsoftUser = {
+          email: microsoftSession.user.email,
+          displayName: microsoftSession.user.name || microsoftSession.user.email,
+          authMethod: "microsoft",
+        };
+        setCurrentUser(microsoftUser);
+        setUserRole(microsoftSession.user.role || null);
+        setAuthMethod("microsoft");
+        setLoading(false); // ✅ done; no Firebase listener needed
+        return;
+      }
 
-              // --- FIX: no email param; we use Bearer token via fetchUserInfo() ---
-              const info = await fetchUserInfo();
-              setUserRole(info?.role ?? null);
-              setAuthMethod('firebase');
+      // 2) Fall back to Firebase client auth
+      unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (!isMounted) return;
+        try {
+          if (firebaseUser?.email) {
+            // set provisional user so UI can render immediately
+            setCurrentUser({ ...firebaseUser, authMethod: "firebase" });
+            setAuthMethod("firebase");
 
-              const fullName = composeName(info);
-              if ((!firebaseUser.displayName || firebaseUser.displayName.trim() === '') && fullName) {
-                setCurrentUser({ ...firebaseUser, displayName: fullName, authMethod: 'firebase' });
-              }
-            } else {
-              setCurrentUser(null);
-              setUserRole(null);
-              setAuthMethod(null);
+            // fetch role/profile with Bearer token
+            const info = await fetchUserInfo().catch((e) => {
+              console.warn("fetchUserInfo failed:", e);
+              return null;
+            });
+            setUserRole(info?.role ?? null);
+
+            // fill displayName if missing
+            const fullName = composeName(info);
+            if ((!firebaseUser.displayName || firebaseUser.displayName.trim() === "") && fullName) {
+              setCurrentUser({ ...firebaseUser, displayName: fullName, authMethod: "firebase" });
             }
-          } catch (e) {
-            console.warn('Auth init failed:', e);
+          } else {
             setCurrentUser(null);
             setUserRole(null);
             setAuthMethod(null);
-          } finally {
-            setLoading(false);
           }
-        });
+        } finally {
+          setLoading(false);
+        }
+      });
+    })();
 
-        return () => unsubscribe();
-      } catch (e) {
-        console.warn('Auth init outer failed:', e);
-        setCurrentUser(null);
-        setUserRole(null);
-        setAuthMethod(null);
-      } finally {
-        setLoading(false);
-      }
+    return () => {
+      isMounted = false;
+      if (typeof unsub === "function") unsub();
     };
-
-    initializeAuth();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const value = { currentUser, userRole, loading, authMethod };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
