@@ -232,7 +232,7 @@ const PAC = () => {
 
   async function saveProjections(store_id, year, month, pacGoal, projections) {
     const month_index_1 = months.indexOf(month) + 1;
-    return api("/api/pac/projections/save", {
+    return apiFetchJson("/api/pac/projections/save", {
       method: "POST",
       body: {
         store_id,
@@ -245,12 +245,12 @@ const PAC = () => {
   }
 
   async function applyRows(rows) {
-    return api("/api/pac/apply", { method: "POST", body: { rows } });
+    return apiFetchJson("/api/pac/apply", { method: "POST", body: { rows } });
   }
 
   async function fetchHistoricalRows(store_id, year, month) {
     const month_index_1 = months.indexOf(month) + 1;
-    return api("/api/pac/historical", {
+    return apiFetchJson("/api/pac/historical", {
       method: "POST",
       body: { store_id, year, month_index_1 },
     });
@@ -476,7 +476,7 @@ const PAC = () => {
 
         const firstName = (await getUserFullName()).split(" ")[0] || "Someone";
 
-        await fetch(apiUrl("/api/pac/notifications/send"), {
+        await aoiFetchJson(apiUrl("/api/pac/notifications/send"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

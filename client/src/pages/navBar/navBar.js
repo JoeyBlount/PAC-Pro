@@ -123,23 +123,21 @@ export function NavBar() {
         }
 
         // Load allowed stores from backend
-        const res = await apiFetchJson(apiUrl('/api/pac/nav/allowed-stores'), {
-          method: 'GET',
-          headers: headers,
-          credentials: 'include',
-        });
+        try {
+          const data = await apiFetchJson(apiUrl('/api/pac/nav/allowed-stores'), {
+            method: 'GET',
+            headers,
+            credentials: 'include',
+          });
 
-        if (!res.ok) {
-          const errText = await res.text();
-          throw new Error(`Failed to load stores: ${res.status} - ${errText}`);
-        }
-        const data = await res.json();
-        const storesData = data.stores || [];
-        setStores(storesData);
+          const storesData = data?.stores ?? [];
+          setStores(storesData);
 
-        // Set default selected store if not set
-        if (!selectedStore && storesData.length > 0) {
-          setSelectedStore(storesData[0].id);
+          if (!selectedStore && storesData.length > 0) {
+            setSelectedStore(storesData[0].id);
+          }
+        } catch (err) {
+          console.error('Error loading allowed stores:', err);
         }
 
         // Set user data for display - use currentUser from AuthContext
@@ -266,7 +264,7 @@ export function NavBar() {
       await apiFetchJson('/api/auth/logout', { method: 'POST' });
     } catch { }              // if cookie missing, this can 4xx—safe to ignore
 
-    window.location.assign('/login');
+    window.location.assign('');
   }
 
   // Notifications Related
@@ -280,64 +278,52 @@ export function NavBar() {
     if (!auth.currentUser) return;
     // console.log("Current user email:", auth.currentUser?.email);
     setLoadingNotificaitons(true);
-
-    const fetchNotifications = async () => {
+    (async () => {
       try {
-        const res = await apiFetchJson(apiUrl(`/api/pac/notifications?toEmail=${encodeURIComponent(auth.currentUser.email)}`));
-        const data = await res.json();
-        setNotifications(data);
+        const data = await apiFetchJson(
+          apiUrl(`/api/pac/notifications?toEmail=${encodeURIComponent(auth.currentUser.email)}`)
+        );
+        // backend may return an array or {notifications:[...]}
+        const list = Array.isArray(data) ? data : (data?.notifications ?? []);
+        setNotifications(list);
       } catch (err) {
-        console.error("Error loading notification settings:", err);
+        console.error("Error loading notifications:", err);
       } finally {
-        setLoadingNotificaitons(false);
+        setLoadingNotifications(false);
       }
-    }
+    })();
+  }, [auth.currentUser?.email]);
 
-    fetchNotifications();
-  }, []);
-
-  // Mark single notification as read
+  // mark single as read
   const markAsRead = async (notifId) => {
     try {
-      const res = await apiFetchJson(apiUrl(`/api/pac/notifications/${notifId}/read`),
-        { method: "POST" });
-      if (res.ok) {
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === notifId ? { ...n, read: true } : n))
-        );
-      }
+      await apiFetchJson(apiUrl(`/api/pac/notifications/${notifId}/read`), { method: "POST" });
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notifId ? { ...n, read: true } : n))
+      );
     } catch (err) {
       console.error("Error marking notification as read:", err);
     }
   };
 
-  // Mark all notifications as read
+  // mark all as read
   const markAllAsRead = async () => {
     try {
-      const res = await apiFetchJson(
+      await apiFetchJson(
         apiUrl(`/api/pac/notifications/mark_all_read?toEmail=${encodeURIComponent(auth.currentUser.email)}`),
-        { method: "POST" });
-      if (res.ok) {
-        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-      }
+        { method: "POST" }
+      );
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     } catch (err) {
       console.error("Error marking all notifications as read:", err);
     }
   };
 
-  // Notification dropdown
   const open = Boolean(anchorEl);
-  const handleNotifClick = (event) => setAnchorEl(event.currentTarget);
+  const handleNotifClick = (e) => setAnchorEl(e.currentTarget);
   const handleNotifClose = () => setAnchorEl(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
-
-  const typeToIcon = {
-    invoice_submitted: <ReceiptLong fontSize="small" color="primary" />,
-    invoice_deleted: <Delete fontSize="small" color="error" />,
-    projection_generated: <Analytics fontSize="small" color="success" />,
-    welcome: <PersonAdd fontSize="small" color="secondary" />,
-  };
 
   // Annoucement things
   const [openAnn, setOpenAnn] = useState(false);
