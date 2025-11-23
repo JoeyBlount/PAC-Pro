@@ -217,18 +217,31 @@ const PAC = () => {
   };
 
   // projections API wrappers
-  async function seedProjections(store_id, year, monthName) {
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    const month_index_1 = months.indexOf(monthName) + 1;
-    if (month_index_1 < 1) throw new Error(`Invalid month: ${monthName}`);
+  const seedProjections = async ({ storeId, year, month, month_index_1 }) => {
+    if (!storeId) throw new Error("seedProjections: storeId is required");
+    const m = Number(month_index_1 ?? month);
+    if (!Number.isInteger(m) || m < 1 || m > 12) {
+      throw new Error("seedProjections: month/month_index_1 must be 1–12");
+    }
 
-    const payload = { store_id, year, month: month_index_1 };
+    const payload = {
+      store_id: String(storeId),
+      year: Number(year),
+      month_index_1: m,
+    };
 
-    return apiFetchJson('/api/pac/projections/seed', {
-      method: 'POST',
-      body: payload,
+    const data = await apiFetchJson(apiUrl("/api/pac/projections/seed"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
-  }
+
+    return {
+      source: data?.source ?? "current",
+      pacGoal: Number(data?.pacGoal ?? 0),
+      rows: Array.isArray(data?.rows) ? data.rows : [],
+    };
+  };
 
   async function saveProjections(store_id, year, month, pacGoal, projections) {
     const month_index_1 = months.indexOf(month) + 1;
