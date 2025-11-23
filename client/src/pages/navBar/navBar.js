@@ -262,7 +262,7 @@ export function NavBar() {
       try { await signOut(auth); } catch {}
 
       // Clear backend Microsoft session cookie
-      const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "http://localhost:8080").replace(/\/+$/, "");
+      const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "https://pac-pro-506342087804.us-west2.run.app").replace(/\/+$/, "");
       await fetch(`${BASE_URL}/api/auth/logout`, {
         method: 'POST',
         credentials: 'include'
