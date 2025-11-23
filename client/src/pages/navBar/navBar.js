@@ -123,7 +123,7 @@ export function NavBar() {
         }
 
         // Load allowed stores from backend
-        const res = await apiFetch(apiUrl('/api/pac/nav/allowed-stores'), {
+        const res = await apiFetchJson(apiUrl('/api/pac/nav/allowed-stores'), {
           method: 'GET',
           headers: headers,
           credentials: 'include',
@@ -283,7 +283,7 @@ export function NavBar() {
 
     const fetchNotifications = async () => {
       try {
-        const res = await apiFetch(apiUrl(`/api/pac/notifications?toEmail=${encodeURIComponent(auth.currentUser.email)}`));
+        const res = await apiFetchJson(apiUrl(`/api/pac/notifications?toEmail=${encodeURIComponent(auth.currentUser.email)}`));
         const data = await res.json();
         setNotifications(data);
       } catch (err) {
@@ -299,7 +299,7 @@ export function NavBar() {
   // Mark single notification as read
   const markAsRead = async (notifId) => {
     try {
-      const res = await apiFetch(apiUrl(`/api/pac/notifications/${notifId}/read`),
+      const res = await apiFetchJson(apiUrl(`/api/pac/notifications/${notifId}/read`),
         { method: "POST" });
       if (res.ok) {
         setNotifications((prev) =>
@@ -314,7 +314,7 @@ export function NavBar() {
   // Mark all notifications as read
   const markAllAsRead = async () => {
     try {
-      const res = await apiFetch(
+      const res = await apiFetchJson(
         apiUrl(`/api/pac/notifications/mark_all_read?toEmail=${encodeURIComponent(auth.currentUser.email)}`),
         { method: "POST" });
       if (res.ok) {

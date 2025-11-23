@@ -97,7 +97,7 @@ async function api(path, { method = "GET", body } = {}) {
       ? { Authorization: `Bearer ${token}` }
       : {}),
   };
-  const res = await apiFetch(`${BASE_URL}${path}`, {
+  const res = await apiFetchJson(`${BASE_URL}${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : null,
