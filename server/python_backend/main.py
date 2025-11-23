@@ -69,6 +69,9 @@ UI_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://pacpro-ef499.web.app",
+    "https://pac-pro-197980862836.us-west2.run.app/"
+
 ]
 app.add_middleware(
     CORSMiddleware,
