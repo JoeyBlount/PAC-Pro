@@ -70,7 +70,7 @@ UI_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "https://pacpro-ef499.web.app",
-    "https://pac-pro-197980862836.us-west2.run.app/"
+    "https://pac-pro-506342087804.us-west2.run.app"
 
 ]
 app.add_middleware(

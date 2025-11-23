@@ -162,7 +162,7 @@ const InvoiceLogs = () => {
     return 0;
   };
 
-  const API_URL = ((process.env.REACT_APP_BACKEND_URL || "https://pac-pro-197980862836.us-west2.run.app").replace(/\/+$/, "")) + "/api/pac"; // or your deployed backend URL
+  const API_URL = ((process.env.REACT_APP_BACKEND_URL || "https://pac-pro-506342087804.us-west2.run.app").replace(/\/+$/, "")) + "/api/pac"; // or your deployed backend URL
 
   async function sendNotification(event, context) {
     try {
