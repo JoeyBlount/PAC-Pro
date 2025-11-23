@@ -226,7 +226,7 @@ const PAC = () => {
   };
 
   // projections API wrappers
-  const seedProjections = async ({ selectedStore, year, month, month_index_1 }) => {
+  const seedProjections = async ({ year, month, month_index_1 }) => {
     if (!selectedStore) throw new Error("seedProjections: storeId is required");
     const m = Number(month_index_1 ?? month);
     if (!Number.isInteger(m) || m < 1 || m > 12) {
@@ -289,7 +289,6 @@ const PAC = () => {
     const prevMonthName = months[prevDate.getMonth()];
     try {
       const data = await seedProjections(
-        selectedStore,
         prevYear,
         prevMonthName
       );
@@ -537,7 +536,7 @@ const PAC = () => {
 
     (async () => {
       try {
-        const data = await seedProjections(selectedStore, year, month);
+        const data = await seedProjections(year, month);
         // { source, pacGoal, rows }
         setPacGoal(String(data.pacGoal ?? ""));
         setProjections(
