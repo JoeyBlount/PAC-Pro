@@ -1,0 +1,31 @@
+# VCS
+.git/
+.gitignore
+
+# Python
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
+*.pyc
+*.pyo
+*.pyd
+
+# Env / secrets 
+*.env
+.env*
+config/firebase-service-account.json
+
+# Frontend big dirs (root-level copies)
+client/node_modules/
+client/.next/
+client/.nuxt/
+client/dist/
+client/build/
+client/.cache/
+client/coverage/
+
+# Misc
+.DS_Store
+Thumbs.db

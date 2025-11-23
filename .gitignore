@@ -74,6 +74,9 @@ storage.rules
 firebase-service-account.json
 firebase-service-account-*.json
 
+# --- gcloud ----
+pac-pro-9f4db054f2f3.json
+
 # --- OS files ---
 Thumbs.db
 ehthumbs.db

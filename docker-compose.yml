@@ -1,0 +1,32 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pac-pro-api
+    environment:
+      PORT: "8080"
+      PROJECT_ROOT: /app
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./server/python_backend:/app/server/python_backend
+      - ./server/python_backend/config/firebase-service-account.json:/app/server/python_backend/config/firebase-service-account.json:ro
+
+  web:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.dev
+    container_name: pac-pro-web
+    depends_on:
+      - api
+    environment:
+      REACT_APP_API_BASE: "http://localhost:8080"   # if your app reads this
+      HOST: "0.0.0.0"
+      PORT: "3000"
+    ports:
+      - "3000:3000"  # for CRA
+    volumes:
+      - ./client:/web
+      - /web/node_modules
+    command: sh -c "npm start"

@@ -6,7 +6,7 @@ import secrets
 from typing import Optional, Tuple
 
 import jwt
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse, JSONResponse
 from itsdangerous import URLSafeSerializer, BadSignature
 import httpx
@@ -347,8 +347,6 @@ async def validate_microsoft_token(request: Request):
 
 
 @router.post("/logout")
-async def logout(request: Request):
-    frontend = _get_frontend_base()
-    response = RedirectResponse(url=f"{frontend}/", status_code=302)
+async def logout(response: Response):
     response.delete_cookie("session_token", path="/")
-    return response
+    return JSONResponse({"ok": True})

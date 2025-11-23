@@ -1,0 +1,20 @@
+# VCS
+.git/
+.gitignore
+
+# Dependencies / outputs
+node_modules/
+dist/
+build/
+.next/
+.nuxt/
+.cache/
+coverage/
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
+
+# Env files 
+*.env
+.env*

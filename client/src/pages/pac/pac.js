@@ -88,7 +88,7 @@ const hasUserInputAmountField = [
 ];
 
 // Backend (Generate tab)
-const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "http://127.0.0.1:5140").replace(/\/+$/, "");
+const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "http://localhost:8080").replace(/\/+$/, "");
 async function api(path, { method = "GET", body } = {}) {
   const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
   const headers = {
