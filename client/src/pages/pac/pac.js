@@ -226,7 +226,7 @@ const PAC = () => {
   };
 
   // projections API wrappers
-  const seedProjections = async ({ storeId, year, month, month_index_1 }) => {
+  const seedProjections = async ({ selectedStore, year, month, month_index_1 }) => {
     if (!selectedStore) throw new Error("seedProjections: storeId is required");
     const m = Number(month_index_1 ?? month);
     if (!Number.isInteger(m) || m < 1 || m > 12) {
