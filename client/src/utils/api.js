@@ -1,3 +1,4 @@
+import { auth } from '../config/firebase-config';
 // Centralized API URL and helpers for frontend fetch calls
 const RAW_BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://pac-pro-197980862836.us-west2.run.app';
 
@@ -9,19 +10,30 @@ export function getBackendUrl() {
 export function apiUrl(path) {
   let p = path.startsWith('/') ? path : `/${path}`;
   p = p.replace(/^\/api\/api(\/|$)/, '/api$1');
-
   const base = (process.env.REACT_APP_API_BASE || '').trim();
   if (process.env.NODE_ENV === 'production' || !base) return p; // keep relative in prod
   return `${base}${p}`;
 }
 
-export async function apiFetch(path, options = {}) {
-  const url = apiUrl(path);
-  const res = await fetch(url, options);
-  if (!res.ok) throw new Error(`API ${res.status} ${url}`);
-  return res;
+export async function apiFetchJson(path, { method = 'GET', headers = {}, body } = {}) {
+  const token = await auth.currentUser?.getIdToken?.();
+  const finalHeaders = {
+    ...(body != null ? { 'Content-Type': 'application/json' } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...headers,
+  };
+  const res = await fetch(apiUrl(path), {
+    method,
+    headers: finalHeaders,
+    credentials: 'include',
+    body: body != null ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`API ${res.status} ${path}: ${text}`);
+  }
+  return res.json().catch(() => ({}));
 }
-
 
 // Optional helper: JSON fetch with sensible defaults
 export async function fetchJson(path, options = {}) {

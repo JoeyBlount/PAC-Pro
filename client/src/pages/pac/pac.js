@@ -37,7 +37,7 @@ import {
 } from "../../services/pacActualService";
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
-import { apiUrl, apiFetch } from "../../utils/api";
+import { apiUrl, apiFetchJson } from "../../utils/api";
 
 const expenseList = [
   "Product Sales",
@@ -217,11 +217,16 @@ const PAC = () => {
   };
 
   // projections API wrappers
-  async function seedProjections(store_id, year, month) {
-    const month_index_1 = months.indexOf(month) + 1;
-    return api("/api/pac/projections/seed", {
-      method: "POST",
-      body: { store_id, year, month_index_1 },
+  async function seedProjections(store_id, year, monthName) {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const month_index_1 = months.indexOf(monthName) + 1;
+    if (month_index_1 < 1) throw new Error(`Invalid month: ${monthName}`);
+
+    const payload = { store_id, year, month: month_index_1 };
+
+    return apiFetchJson('/api/pac/projections/seed', {
+      method: 'POST',
+      body: payload,
     });
   }
 
@@ -911,33 +916,33 @@ const PAC = () => {
   const [hoverInfo, setHoverInfo] = useState(null);
 
   // Categories for visual grouping
- const categories = {
-  Sales: ["Product Sales", "All Net Sales"],
-  "Food & Paper": [
-    "Base Food",
-    "Employee Meal",
-    "Condiment",
-    "Total Waste",
-    "Paper",
-  ],
-  Labor: ["Crew Labor", "Management Labor", "Payroll Tax"],
-  Purchases: [
-    "Advertising",
-    "Travel",
-    "Adv Other",
-    "Promotion",
-    "Outside Services",
-    "Linen",
-    "OP. Supply",
-    "Maint. & Repair",
-    "Small Equipment",
-    "Utilities",
-    "Office",
-    "Cash +/-",
-    "Crew Relations",
-    "Training",
-  ],
-};
+  const categories = {
+    Sales: ["Product Sales", "All Net Sales"],
+    "Food & Paper": [
+      "Base Food",
+      "Employee Meal",
+      "Condiment",
+      "Total Waste",
+      "Paper",
+    ],
+    Labor: ["Crew Labor", "Management Labor", "Payroll Tax"],
+    Purchases: [
+      "Advertising",
+      "Travel",
+      "Adv Other",
+      "Promotion",
+      "Outside Services",
+      "Linen",
+      "OP. Supply",
+      "Maint. & Repair",
+      "Small Equipment",
+      "Utilities",
+      "Office",
+      "Cash +/-",
+      "Crew Relations",
+      "Training",
+    ],
+  };
 
   // Helper functions
   const getCategory = (expense) => {
@@ -950,29 +955,29 @@ const PAC = () => {
     return null;
   };
 
-const getCategoryColor = (category) => {
-  const isDark = theme.palette.mode === "dark";
+  const getCategoryColor = (category) => {
+    const isDark = theme.palette.mode === "dark";
 
-  if (!isDark) {
-    // Light mode
-    const colors = {
-      Sales: "#e3f2fd",
-      "Food & Paper": "#e8f5e9",
-      Labor: "#fff3e0",
-      Purchases: "#f3e5f5",
-    };
-    return colors[category] || "#ffffff";
-  } else {
-    // Dark mode - balanced contrasts
-    const colors = {
-      Sales: "#1a2b3d",          // navy blue tint
-      "Food & Paper": "#1c2a1c", // green tint
-      Labor: "#332a1c",          // warm brown tint
-      Purchases: "#2a1f2f",      // violet tint
-    };
-    return colors[category] || "#121212";
-  }
-};
+    if (!isDark) {
+      // Light mode
+      const colors = {
+        Sales: "#e3f2fd",
+        "Food & Paper": "#e8f5e9",
+        Labor: "#fff3e0",
+        Purchases: "#f3e5f5",
+      };
+      return colors[category] || "#ffffff";
+    } else {
+      // Dark mode - balanced contrasts
+      const colors = {
+        Sales: "#1a2b3d",          // navy blue tint
+        "Food & Paper": "#1c2a1c", // green tint
+        Labor: "#332a1c",          // warm brown tint
+        Purchases: "#2a1f2f",      // violet tint
+      };
+      return colors[category] || "#121212";
+    }
+  };
 
   // this function saves all the user input data from the generate page via backend
   const handleGenerate = async (e) => {

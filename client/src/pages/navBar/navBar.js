@@ -43,7 +43,7 @@ import {
 } from "@mui/icons-material";
 import { StoreContext } from "../../context/storeContext";
 import AnnoucementDialog from "./annoucement";
-import { apiUrl, apiFetch } from "../../utils/api";
+import { apiUrl, apiFetchJson } from "../../utils/api";
 
 // Helper to format timestamps into "x minutes ago"
 function formatRelativeTime(timestamp) {
@@ -180,7 +180,7 @@ export function NavBar() {
       ) {
         setSideNavOpen(false);
       }
-      
+
       // Handle reports dropdown click outside
       if (
         reportsRef.current &&
@@ -210,13 +210,13 @@ export function NavBar() {
     console.log('Navigating to report:', report.name, 'at path:', report.path);
     navigate(report.path);
     setReportsDropdownOpen(false);
-    
+
     // Auto-trigger print/export after a delay to allow page load
     setTimeout(() => {
       console.log('Attempting to auto-trigger print/export for:', report.name);
       if (report.id === 'pac-actual-report') {
         const tabButtons = document.querySelectorAll('[role="tab"], .MuiTab-root, button[data-tab]');
-        const actualTab = Array.from(tabButtons).find(btn => 
+        const actualTab = Array.from(tabButtons).find(btn =>
           btn.textContent.toLowerCase().includes('actual') ||
           btn.getAttribute('data-tab') === '2'
         );
@@ -224,11 +224,11 @@ export function NavBar() {
           console.log('Switching to Actual tab...');
           actualTab.click();
         }
-        
-        
+
+
         setTimeout(() => {
           const buttons = document.querySelectorAll('button');
-          const printBtn = Array.from(buttons).find(btn => 
+          const printBtn = Array.from(buttons).find(btn =>
             btn.textContent.toLowerCase().includes('print report') ||
             btn.textContent.toLowerCase().includes('print')
           );
@@ -242,7 +242,7 @@ export function NavBar() {
       } else if (report.id === 'invoice-log-report') {
         // For Invoice Log, just open the export dialog
         const buttons = document.querySelectorAll('button');
-        const exportBtn = Array.from(buttons).find(btn => 
+        const exportBtn = Array.from(buttons).find(btn =>
           btn.textContent.toLowerCase().includes('export')
         );
         if (exportBtn) {
@@ -252,31 +252,21 @@ export function NavBar() {
           console.log('No export button found');
         }
       }
-    }, 1500); 
+    }, 1500);
   }
 
   // Sign out logic
   async function handleSignOut() {
     try {
-      // Sign out of Firebase if logged in
-      try { await signOut(auth); } catch {}
+      await signOut(auth);  // clears Firebase client session
+    } catch { }              // ignore if already signed out
 
-      // Clear backend Microsoft session cookie
-      const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "https://pac-pro-197980862836.us-west2.run.app").replace(/\/+$/, "");
-      await apiFetch(`${BASE_URL}/api/auth/logout`, {
-        method: 'POST',
-        credentials: 'include'
-      });
+    // clear server cookie/session
+    try {
+      await apiFetchJson('/api/auth/logout', { method: 'POST' });
+    } catch { }              // if cookie missing, this can 4xx—safe to ignore
 
-      // Clear local storage and redirect
-      localStorage.removeItem("user");
-      navigate("/");
-    } catch (e) {
-      console.error("Error signing out: ", e);
-      // Force redirect even on error
-      localStorage.removeItem("user");
-      navigate("/");
-    }
+    window.location.assign('/login');
   }
 
   // Notifications Related
@@ -307,9 +297,9 @@ export function NavBar() {
   }, []);
 
   // Mark single notification as read
-  const markAsRead = async(notifId) => {
+  const markAsRead = async (notifId) => {
     try {
-      const res = await apiFetch(apiUrl(`/api/pac/notifications/${notifId}/read`), 
+      const res = await apiFetch(apiUrl(`/api/pac/notifications/${notifId}/read`),
         { method: "POST" });
       if (res.ok) {
         setNotifications((prev) =>
@@ -351,11 +341,11 @@ export function NavBar() {
 
   // Annoucement things
   const [openAnn, setOpenAnn] = useState(false);
-  
+
   return (
     <>
       {/* TOP NAV BAR */}
-     <div
+      <div
         className="topNavBar"
         style={{
           background: isDark
@@ -431,7 +421,7 @@ export function NavBar() {
               style: { maxHeight: 400, width: "340px" },
             }}
           >
-            { loadingNotifications && (
+            {loadingNotifications && (
               <MenuItem disabled>Loading Notifications</MenuItem>
             )}
 
@@ -554,8 +544,8 @@ export function NavBar() {
                 {sideNavOpen && "Submit Invoice"}
               </Button>
             </Tooltip>
-            <div 
-              className="reports-container" 
+            <div
+              className="reports-container"
               ref={reportsRef}
               onMouseEnter={() => {
                 if (reportsHoverTimeout) {
@@ -580,10 +570,10 @@ export function NavBar() {
                   {sideNavOpen && "Reports"}
                 </Button>
               </Tooltip>
-              
+
               {/* Reports Dropdown */}
               {reportsDropdownOpen && (
-                <div 
+                <div
                   className="reports-dropdown"
                   onMouseEnter={() => {
                     if (reportsHoverTimeout) {

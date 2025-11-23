@@ -5,6 +5,7 @@ import time
 import secrets
 from typing import Optional, Tuple
 
+from grpc import Status
 import jwt
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse, JSONResponse
@@ -56,7 +57,7 @@ def _get_cookie_settings(request: Request) -> dict:
     return {
         "httponly": True,
         "secure": is_secure,
-        "samesite": "lax",
+        "samesite": "none",
         "path": "/",
     }
 
@@ -346,7 +347,14 @@ async def validate_microsoft_token(request: Request):
         raise HTTPException(status_code=500, detail="Failed to validate token with Microsoft Graph")
 
 
+@router.post("/login-finish")
+def login_finish(request: Request, response: Response, token: str):
+    response.set_cookie("session_token", token, **_get_cookie_settings(request))
+    return {"ok": True}
+
 @router.post("/logout")
-async def logout(response: Response):
-    response.delete_cookie("session_token", path="/")
-    return JSONResponse({"ok": True})
+def logout(request: Request, response: Response):
+    # Use EXACT same settings as set_cookie
+    response.delete_cookie("session_token", **_get_cookie_settings(request))
+    # No redirect — let the client navigate to /login
+    return Response(status_code=Status.HTTP_204_NO_CONTENT)
