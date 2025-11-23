@@ -37,7 +37,7 @@ import {
 } from "../../services/pacActualService";
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
-import { apiUrl } from "../../utils/api";
+import { apiUrl, apiFetch } from "../../utils/api";
 
 const expenseList = [
   "Product Sales",
