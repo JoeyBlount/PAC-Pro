@@ -7,17 +7,21 @@ export function getBackendUrl() {
 }
 
 export function apiUrl(path) {
-  const cleaned = path.startsWith('/') ? path : `/${path}`;
+  let p = path.startsWith('/') ? path : `/${path}`;
+  p = p.replace(/^\/api\/api(\/|$)/, '/api$1');
 
-  // In dev, use relative path so CRA dev server proxies to pac-pro-api:8080
-  if (process.env.NODE_ENV !== 'production') {
-    return cleaned; // -> "/api/..." goes to http://localhost:3000/api/... and proxy forwards it
-  }
-
-  // In prod, use explicit base; allow override by env
-  const base = process.env.REACT_APP_API_BASE || window.__API_BASE__ || '';
-  return `${base}${cleaned}`;
+  const base = (process.env.REACT_APP_API_BASE || '').trim();
+  if (process.env.NODE_ENV === 'production' || !base) return p; // keep relative in prod
+  return `${base}${p}`;
 }
+
+export async function apiFetch(path, options = {}) {
+  const url = apiUrl(path);
+  const res = await fetch(url, options);
+  if (!res.ok) throw new Error(`API ${res.status} ${url}`);
+  return res;
+}
+
 
 // Optional helper: JSON fetch with sensible defaults
 export async function fetchJson(path, options = {}) {

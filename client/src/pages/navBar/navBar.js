@@ -123,7 +123,7 @@ export function NavBar() {
         }
 
         // Load allowed stores from backend
-        const res = await fetch(apiUrl('/api/pac/nav/allowed-stores'), {
+        const res = await apiFetch(apiUrl('/api/pac/nav/allowed-stores'), {
           method: 'GET',
           headers: headers,
           credentials: 'include',
@@ -263,7 +263,7 @@ export function NavBar() {
 
       // Clear backend Microsoft session cookie
       const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "https://pac-pro-197980862836.us-west2.run.app").replace(/\/+$/, "");
-      await fetch(`${BASE_URL}/api/auth/logout`, {
+      await apiFetch(`${BASE_URL}/api/auth/logout`, {
         method: 'POST',
         credentials: 'include'
       });
@@ -293,7 +293,7 @@ export function NavBar() {
 
     const fetchNotifications = async () => {
       try {
-        const res = await fetch(apiUrl(`/api/pac/notifications?toEmail=${encodeURIComponent(auth.currentUser.email)}`));
+        const res = await apiFetch(apiUrl(`/api/pac/notifications?toEmail=${encodeURIComponent(auth.currentUser.email)}`));
         const data = await res.json();
         setNotifications(data);
       } catch (err) {
@@ -309,7 +309,7 @@ export function NavBar() {
   // Mark single notification as read
   const markAsRead = async(notifId) => {
     try {
-      const res = await fetch(apiUrl(`/api/pac/notifications/${notifId}/read`), 
+      const res = await apiFetch(apiUrl(`/api/pac/notifications/${notifId}/read`), 
         { method: "POST" });
       if (res.ok) {
         setNotifications((prev) =>
@@ -324,7 +324,7 @@ export function NavBar() {
   // Mark all notifications as read
   const markAllAsRead = async () => {
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         apiUrl(`/api/pac/notifications/mark_all_read?toEmail=${encodeURIComponent(auth.currentUser.email)}`),
         { method: "POST" });
       if (res.ok) {
