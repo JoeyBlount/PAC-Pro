@@ -88,7 +88,7 @@ const hasUserInputAmountField = [
 ];
 
 // Backend (Generate tab)
-const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "https://pac-pro-506342087804.us-west2.run.app").replace(/\/+$/, "");
+const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "https://pac-pro-197980862836.us-west2.run.app").replace(/\/+$/, "");
 async function api(path, { method = "GET", body } = {}) {
   const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
   const headers = {
