@@ -476,7 +476,7 @@ const PAC = () => {
 
         const firstName = (await getUserFullName()).split(" ")[0] || "Someone";
 
-        await aoiFetchJson(apiUrl("/api/pac/notifications/send"), {
+        await apiFetchJson(apiUrl("/api/pac/notifications/send"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

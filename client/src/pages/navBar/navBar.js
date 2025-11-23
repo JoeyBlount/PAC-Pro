@@ -270,14 +270,14 @@ export function NavBar() {
   // Notifications Related
   const [notifications, setNotifications] = useState([]);
   const [anchorEl, setAnchorEl] = useState(null);
-  const [loadingNotifications, setLoadingNotificaitons] = useState([]);
+  const [loadingNotifications, setLoadingNotifications] = useState([]);
 
 
   // Notifications listener
   useEffect(() => {
     if (!auth.currentUser) return;
     // console.log("Current user email:", auth.currentUser?.email);
-    setLoadingNotificaitons(true);
+    setLoadingNotifications(true);
     (async () => {
       try {
         const data = await apiFetchJson(
@@ -324,6 +324,13 @@ export function NavBar() {
   const handleNotifClose = () => setAnchorEl(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const typeToIcon = {
+    invoice_submitted: <ReceiptLong fontSize="small" color="primary" />,
+    invoice_deleted: <Delete fontSize="small" color="error" />,
+    projection_generated: <Analytics fontSize="small" color="success" />,
+    welcome: <PersonAdd fontSize="small" color="secondary" />,
+  };
 
   // Annoucement things
   const [openAnn, setOpenAnn] = useState(false);
