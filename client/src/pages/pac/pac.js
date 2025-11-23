@@ -88,24 +88,6 @@ const hasUserInputAmountField = [
 ];
 
 // Backend (Generate tab)
-const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "https://pac-pro-506342087804.us-west2.run.app").replace(/\/+$/, "");
-async function api(path, { method = "GET", body } = {}) {
-  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-  const headers = {
-    "Content-Type": "application/json",
-    ...(token
-      ? { Authorization: `Bearer ${token}` }
-      : {}),
-  };
-  const res = await apiFetchJson(`${BASE_URL}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : null,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
-
 // Normalize store id
 const normalizeStoreId = (value) => {
   if (!value) return null;
@@ -255,27 +237,33 @@ const PAC = () => {
 
   async function saveProjections(store_id, year, month, pacGoal, projections) {
     const month_index_1 = months.indexOf(month) + 1;
-    return apiFetchJson("/api/pac/projections/save", {
+    return apiFetchJson(apiUrl("/api/pac/projections/save"), {
       method: "POST",
-      body: {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         store_id,
         year,
         month_index_1,
         pacGoal: Number(pacGoal) || 0,
         projections,
-      },
+      }),
     });
   }
 
   async function applyRows(rows) {
-    return apiFetchJson("/api/pac/apply", { method: "POST", body: { rows } });
+    return apiFetchJson(apiUrl("/api/pac/apply"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows }),
+    });
   }
 
   async function fetchHistoricalRows(store_id, year, month) {
     const month_index_1 = months.indexOf(month) + 1;
-    return apiFetchJson("/api/pac/historical", {
+    return apiFetchJson(apiUrl("/api/pac/historical"), {
       method: "POST",
-      body: { store_id, year, month_index_1 },
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ store_id, year, month_index_1 }),
     });
   }
 
@@ -288,10 +276,10 @@ const PAC = () => {
     const prevYear = prevDate.getFullYear();
     const prevMonthName = months[prevDate.getMonth()];
     try {
-      const data = await seedProjections(
-        prevYear,
-        prevMonthName
-      );
+      const data = await seedProjections({
+        year: prevYear,
+        month: months.indexOf(prevMonthName) + 1, // 1..12
+      });
       if (!data || !Array.isArray(data.rows) || data.rows.length === 0) {
         alert("No previous submission found.");
         return;
@@ -536,15 +524,14 @@ const PAC = () => {
 
     (async () => {
       try {
-        const data = await seedProjections(year, month);
-        // { source, pacGoal, rows }
+        const month1to12 = months.indexOf(month) + 1; // 1..12
+        if (!Number.isInteger(month1to12) || month1to12 < 1) return;
+
+        const data = await seedProjections({ year, month: month1to12 });
         setPacGoal(String(data.pacGoal ?? ""));
-        setProjections(
-          Array.isArray(data.rows) ? data.rows : makeEmptyProjectionRows()
-        );
+        setProjections(Array.isArray(data.rows) ? data.rows : makeEmptyProjectionRows());
       } catch (e) {
         console.error("seedProjections error", e);
-        // fallback: keep current projections
       }
     })();
   }, [selectedStore, tabIndex, month, year]);
@@ -730,9 +717,7 @@ const PAC = () => {
       if (!selectedStore || !actualMonth || !actualYear) return;
 
       try {
-        const formattedStoreId = normalizeStoreId(selectedStore)
-          ? selectedStore
-          : `store_${selectedStore.padStart(3, "0")}`;
+        const formattedStoreId = normalizeStoreId(selectedStore);
 
         const pacActualData = await getPacActual(
           formattedStoreId,
@@ -754,9 +739,7 @@ const PAC = () => {
       if (!selectedStore || !histYear || !histMonth || tabIndex !== 0) return;
       try {
         // Load PAC actual data for the selected month/year instead of historical data
-        const formattedStoreId = selectedStore.startsWith("store_")
-          ? selectedStore
-          : `store_${selectedStore.padStart(3, "0")}`;
+        const formattedStoreId = normalizeStoreId(selectedStore);
 
         const pacActualData = await getPacActual(
           formattedStoreId,
@@ -765,6 +748,7 @@ const PAC = () => {
         );
 
         if (pacActualData) {
+          setPacActualData(pacActualData);
           setProjections((prev) =>
             prev.map((expense) => {
               const pacActualValue = getPacActualValue(expense.name);
@@ -1215,6 +1199,7 @@ const PAC = () => {
       case "Travel":
         return pacActualData.purchases?.travel || { dollars: 0, percent: 0 };
       case "Advertising Other":
+      case "Adv Other":
         return pacActualData.purchases?.advOther || { dollars: 0, percent: 0 };
       case "Promotion":
         return pacActualData.purchases?.promotion || { dollars: 0, percent: 0 };
@@ -1225,10 +1210,12 @@ const PAC = () => {
       case "Linen":
         return pacActualData.purchases?.linen || { dollars: 0, percent: 0 };
       case "Operating Supply":
+      case "OP. Supply":
         return (
           pacActualData.purchases?.opsSupplies || { dollars: 0, percent: 0 }
         );
       case "Maintenance & Repair":
+      case "Maint. & Repair":
         return (
           pacActualData.purchases?.maintenanceRepair || {
             dollars: 0,
