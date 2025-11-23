@@ -5,9 +5,8 @@ import time
 import secrets
 from typing import Optional, Tuple
 
-from grpc import Status
 import jwt
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse, JSONResponse
 from itsdangerous import URLSafeSerializer, BadSignature
 import httpx
@@ -357,4 +356,4 @@ def logout(request: Request, response: Response):
     # Use EXACT same settings as set_cookie
     response.delete_cookie("session_token", **_get_cookie_settings(request))
     # No redirect — let the client navigate to /login
-    return Response(status_code=Status.HTTP_204_NO_CONTENT)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
