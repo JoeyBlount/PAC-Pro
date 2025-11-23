@@ -224,8 +224,7 @@ const PAC = () => {
 
     const data = await apiFetchJson(apiUrl("/api/pac/projections/seed"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: payload
     });
 
     return {
@@ -239,22 +238,20 @@ const PAC = () => {
     const month_index_1 = months.indexOf(month) + 1;
     return apiFetchJson(apiUrl("/api/pac/projections/save"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+      body: {
         store_id,
         year,
         month_index_1,
         pacGoal: Number(pacGoal) || 0,
         projections,
-      }),
+      },
     });
   }
 
   async function applyRows(rows) {
     return apiFetchJson(apiUrl("/api/pac/apply"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rows }),
+      body:{ rows },
     });
   }
 
@@ -262,8 +259,7 @@ const PAC = () => {
     const month_index_1 = months.indexOf(month) + 1;
     return apiFetchJson(apiUrl("/api/pac/historical"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ store_id, year, month_index_1 }),
+      body: { store_id, year, month_index_1 },
     });
   }
 
@@ -488,8 +484,7 @@ const PAC = () => {
 
         await apiFetchJson(apiUrl("/api/pac/notifications/send"), {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+          body: {
             context: {
               event: monthLockStatus, // or result if your API expects the new status
               firstName,
@@ -497,7 +492,7 @@ const PAC = () => {
               year,
               store: selectedStore,
             },
-          }),
+          },
         });
       } else {
         alert(result.message);
