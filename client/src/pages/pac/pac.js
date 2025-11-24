@@ -388,6 +388,7 @@ const PAC = () => {
   const [unexplained, setUnexplained] = useState(0);
   const [discounts, setDiscounts] = useState(0);
   const [baseFood, setBaseFood] = useState(0);
+  const [empMgrMealsPercent, setEmpMgrMealsPercent] = useState(0);
 
   const [startingFood, setStartingFood] = useState(0);
   const [startingCondiment, setStartingCondiment] = useState(0);
@@ -764,6 +765,7 @@ const PAC = () => {
           setUnexplained(existingData.food?.unexplained || 0);
           setDiscounts(existingData.food?.discounts || 0);
           setBaseFood(existingData.food?.baseFood || 0);
+          setEmpMgrMealsPercent(existingData.food?.empMgrMealsPercent || 0);
 
           // Inventory - Starting
           setStartingFood(existingData.inventoryStarting?.food || 0);
@@ -830,6 +832,7 @@ const PAC = () => {
     setUnexplained(0);
     setDiscounts(0);
     setBaseFood(0);
+    setEmpMgrMealsPercent(0);
 
     // Inventory - Starting
     setStartingFood(0);
@@ -1219,6 +1222,7 @@ const PAC = () => {
       Number(unexplained) ||
       Number(discounts) ||
       Number(baseFood) ||
+      Number(empMgrMealsPercent) ||
       Number(startingFood) ||
       Number(startingCondiment) ||
       Number(startingPaper) ||
@@ -1278,6 +1282,7 @@ const PAC = () => {
       addIfNonZero("unexplained", unexplained);
       addIfNonZero("discounts", discounts);
       addIfNonZero("baseFood", baseFood);
+      addIfNonZero("empMgrMealsPercent", empMgrMealsPercent);
       addIfNonZero("startingFood", startingFood);
       addIfNonZero("startingCondiment", startingCondiment);
       addIfNonZero("startingPaper", startingPaper);
@@ -1288,6 +1293,18 @@ const PAC = () => {
       addIfNonZero("endingPaper", endingPaper);
       addIfNonZero("endingNonProduct", endingNonProduct);
       addIfNonZero("endingOpsSupplies", endingOpsSupplies);
+
+      // Calculate Food Over Base
+      // Formula: Raw Waste + Complete Waste + Condiment + Stat Variance + Unexplained
+      // (Unexplained subtracts if negative, handled by addition)
+      const foodOverBaseCalc =
+        (Number(rawWaste) || 0) +
+        (Number(completeWaste) || 0) +
+        (Number(condiment) || 0) +
+        (Number(variance) || 0) +
+        (Number(unexplained) || 0);
+
+      addIfNonZero("foodOverBase", foodOverBaseCalc);
 
       await saveGenerateInput(
         selectedStore,
@@ -2556,6 +2573,15 @@ const PAC = () => {
                   type="number"
                   value={baseFood}
                   onChange={(e) => setBaseFood(e.target.value)}
+                  disabled={inputsDisabled}
+                />
+              </div>
+              <div className="input-row">
+                <label className="input-label">Emp/Mgr Meals %</label>
+                <input
+                  type="number"
+                  value={empMgrMealsPercent}
+                  onChange={(e) => setEmpMgrMealsPercent(e.target.value)}
                   disabled={inputsDisabled}
                 />
               </div>

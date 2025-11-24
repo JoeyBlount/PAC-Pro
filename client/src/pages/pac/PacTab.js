@@ -1379,6 +1379,62 @@ const PacTab = ({
           </tr>
         </tbody>
       </table>
+      
+      <br/>
+      <div style="page-break-inside: avoid;">
+        <h3 class="print-header" style="text-align: left; margin-bottom: 5px;">Gross Profit</h3>
+        <table class="print-table" style="width: 50%;">
+            <tr>
+                <td style="width: 60%; font-weight: bold;">Gross Profit %</td>
+                <td style="text-align: right; font-weight: bold;">${formatPercentage(
+                  actualData.grossProfit?.percent || 0
+                )}</td>
+            </tr>
+        </table>
+      </div>
+      
+      <br/>
+      <div style="page-break-inside: avoid;">
+        <h3 class="print-header" style="text-align: left; margin-bottom: 5px;">Food Cost</h3>
+        <table class="print-table" style="width: 50%;">
+            <tr>
+                <td style="width: 60%;">Base Food</td>
+                <td style="text-align: right;">${formatPercentage(
+                  actualData.foodCost?.baseFood || 0
+                )}</td>
+            </tr>
+            <tr>
+                <td>Discount</td>
+                <td style="text-align: right;">${formatPercentage(
+                  actualData.foodCost?.discount || 0
+                )}</td>
+            </tr>
+            <tr>
+                <td>Raw Waste</td>
+                <td style="text-align: right;">${formatPercentage(
+                  actualData.foodCost?.rawWaste || 0
+                )}</td>
+            </tr>
+            <tr>
+                <td>Complete Waste</td>
+                <td style="text-align: right;">${formatPercentage(
+                  actualData.foodCost?.completeWaste || 0
+                )}</td>
+            </tr>
+            <tr>
+                <td>Stat Variance</td>
+                <td style="text-align: right;">${formatPercentage(
+                  actualData.foodCost?.statVariance || 0
+                )}</td>
+            </tr>
+            <tr>
+                <td style="font-weight: bold; border-top: 1px solid #ccc;">Food Over Base</td>
+                <td style="text-align: right; font-weight: bold; border-top: 1px solid #ccc;">${formatPercentage(
+                  actualData.foodCost?.foodOverBase || 0
+                )}</td>
+            </tr>
+        </table>
+      </div>
     `;
   };
 
@@ -1783,6 +1839,8 @@ const PacTab = ({
         totalControllablePercent: tt.totalControllable?.percent ?? 0,
         pacPercent: tt.pac?.percent ?? 0,
         pacDollars: tt.pac?.dollars ?? 0,
+        grossProfit: tt.grossProfit || { percent: 0 },
+        foodCost: pacActualData.foodCost || {},
       };
     }
     // Fallback: map backend shape into the same structure to avoid runtime errors
@@ -2760,6 +2818,88 @@ const PacTab = ({
           )
         ),
       },
+      {
+        Account: "",
+        "Actual $": "",
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      // Gross Profit
+      {
+        Account: "Gross Profit",
+        "Actual $": "",
+        "Actual %": formatPercentage(actualData.grossProfit?.percent || 0),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "",
+        "Actual $": "",
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      // Food Cost
+      {
+        Account: "Food Cost Breakdown",
+        "Actual $": "",
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Base Food (Input)",
+        "Actual $": "",
+        "Actual %": formatPercentage(actualData.foodCost?.baseFood || 0),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Discount",
+        "Actual $": "",
+        "Actual %": formatPercentage(actualData.foodCost?.discount || 0),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Raw Waste",
+        "Actual $": "",
+        "Actual %": formatPercentage(actualData.foodCost?.rawWaste || 0),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Complete Waste",
+        "Actual $": "",
+        "Actual %": formatPercentage(actualData.foodCost?.completeWaste || 0),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Stat Variance",
+        "Actual $": "",
+        "Actual %": formatPercentage(actualData.foodCost?.statVariance || 0),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Food Over Base",
+        "Actual $": "",
+        "Actual %": formatPercentage(actualData.foodCost?.foodOverBase || 0),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
     ];
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -3571,6 +3711,91 @@ const PacTab = ({
                   "pac"
                 )}
               </TableCell>
+            </TableRow>
+
+            {/* GROSS PROFIT */}
+            <TableRow>
+              <TableCell
+                colSpan={6}
+                sx={{
+                  fontWeight: "bold",
+                  fontSize: "1.1rem",
+                  pt: 4,
+                  pb: 1,
+                  borderBottom: "2px solid #e0e0e0",
+                }}
+              >
+                Gross Profit
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell sx={{ pl: 4, fontWeight: "bold" }}>
+                Gross Profit %
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatPercentage(actualData.grossProfit?.percent || 0)}
+              </TableCell>
+              <TableCell colSpan={4}></TableCell>
+            </TableRow>
+
+            {/* FOOD COST */}
+            <TableRow>
+              <TableCell
+                colSpan={6}
+                sx={{
+                  fontWeight: "bold",
+                  fontSize: "1.1rem",
+                  pt: 4,
+                  pb: 1,
+                  borderBottom: "2px solid #e0e0e0",
+                }}
+              >
+                Food Cost
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell sx={{ pl: 4 }}>Base Food</TableCell>
+              <TableCell align="right">
+                {formatPercentage(actualData.foodCost?.baseFood || 0)}
+              </TableCell>
+              <TableCell colSpan={4}></TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell sx={{ pl: 4 }}>Discount</TableCell>
+              <TableCell align="right">
+                {formatPercentage(actualData.foodCost?.discount || 0)}
+              </TableCell>
+              <TableCell colSpan={4}></TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell sx={{ pl: 4 }}>Raw Waste</TableCell>
+              <TableCell align="right">
+                {formatPercentage(actualData.foodCost?.rawWaste || 0)}
+              </TableCell>
+              <TableCell colSpan={4}></TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell sx={{ pl: 4 }}>Complete Waste</TableCell>
+              <TableCell align="right">
+                {formatPercentage(actualData.foodCost?.completeWaste || 0)}
+              </TableCell>
+              <TableCell colSpan={4}></TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell sx={{ pl: 4 }}>Stat Variance</TableCell>
+              <TableCell align="right">
+                {formatPercentage(actualData.foodCost?.statVariance || 0)}
+              </TableCell>
+              <TableCell colSpan={4}></TableCell>
+            </TableRow>
+            <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+              <TableCell sx={{ pl: 4, fontWeight: "bold" }}>
+                Food Over Base
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatPercentage(actualData.foodCost?.foodOverBase || 0)}
+              </TableCell>
+              <TableCell colSpan={4}></TableCell>
             </TableRow>
           </TableBody>
         </Table>

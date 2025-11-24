@@ -654,7 +654,11 @@ async def compute_and_save_pac_actual(
         # Save to Firestore
         db.collection("pac_actual").document(doc_id).set(pac_actual_doc, merge=True)
         
-        return {"success": True, "doc_id": doc_id, "data": pac_actual_doc}
+        # Replace SERVER_TIMESTAMP with current time for response serialization
+        response_doc = pac_actual_doc.copy()
+        response_doc["lastUpdatedAt"] = datetime.now().isoformat()
+        
+        return {"success": True, "doc_id": doc_id, "data": response_doc}
         
     except HTTPException:
         raise

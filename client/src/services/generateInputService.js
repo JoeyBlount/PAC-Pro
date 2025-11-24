@@ -129,6 +129,12 @@ export const saveGenerateInput = async (
         unexplained: getValue("food", "unexplained", "unexplained"),
         discounts: getValue("food", "discounts", "discounts"),
         baseFood: getValue("food", "baseFood", "baseFood"),
+        foodOverBase: getValue("food", "foodOverBase", "foodOverBase"),
+        empMgrMealsPercent: getValue(
+          "food",
+          "empMgrMealsPercent",
+          "empMgrMealsPercent"
+        ),
       },
 
       // Inventory - Starting - only update fields that are provided

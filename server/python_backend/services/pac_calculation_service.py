@@ -571,6 +571,35 @@ def calculate_pac_actual(
     def calculate_percentage(dollars):
         return (dollars / product_sales * 100) if product_sales > 0 else 0
     
+    # New Modules Calculations
+    
+    # Gross Profit
+    # Formula: 100 - FoodandPaper Total %
+    food_and_paper_percent = calculate_percentage(food_and_paper_total)
+    gross_profit_percent = 100 - food_and_paper_percent
+    
+    # Food Cost Module
+    # Inputs from Generate page (Food section)
+    # Assumes these are stored as percentages in the input
+    base_food_input = to_num(food.get("baseFood"))
+    discounts_input = to_num(food.get("discounts"))
+    raw_waste_input = to_num(food.get("rawWaste"))
+    complete_waste_input = to_num(food.get("completeWaste"))
+    stat_variance_input = to_num(food.get("variance"))
+    unexplained_input = to_num(food.get("unexplained"))
+    condiment_input = to_num(food.get("condiment"))
+    emp_mgr_meals_percent = to_num(food.get("empMgrMealsPercent"))
+    
+    # Food Over Base = Raw Waste + Complete Waste + Condiment + Stat Variance + Unexplained
+    # (Unexplained subtracts if negative, handled by addition)
+    food_over_base = (
+        raw_waste_input + 
+        complete_waste_input + 
+        condiment_input + 
+        stat_variance_input + 
+        unexplained_input
+    )
+    
     return {
         "sales": {
             "productSales": {
@@ -707,5 +736,18 @@ def calculate_pac_actual(
                 "dollars": pac_total,
                 "percent": 100 - calculate_percentage(total_controllable),
             },
+            "grossProfit": {
+                "title": "Gross Profit",
+                "percent": gross_profit_percent
+            },
         },
+        "foodCost": {
+            "baseFood": base_food_input,
+            "discount": discounts_input,
+            "rawWaste": raw_waste_input,
+            "completeWaste": complete_waste_input,
+            "statVariance": stat_variance_input,
+            "foodOverBase": food_over_base,
+            "empMgrMealsPercent": emp_mgr_meals_percent
+        }
     }
