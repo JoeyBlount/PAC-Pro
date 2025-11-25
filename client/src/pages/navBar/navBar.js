@@ -13,6 +13,7 @@ import {
   Button,
   Tooltip,
   Badge,
+  Box,
   Menu,
   ListItemIcon,
   ListItemText,
@@ -180,7 +181,7 @@ export function NavBar() {
       ) {
         setSideNavOpen(false);
       }
-      
+
       // Handle reports dropdown click outside
       if (
         reportsRef.current &&
@@ -210,13 +211,13 @@ export function NavBar() {
     console.log('Navigating to report:', report.name, 'at path:', report.path);
     navigate(report.path);
     setReportsDropdownOpen(false);
-    
+
     // Auto-trigger print/export after a delay to allow page load
     setTimeout(() => {
       console.log('Attempting to auto-trigger print/export for:', report.name);
       if (report.id === 'pac-actual-report') {
         const tabButtons = document.querySelectorAll('[role="tab"], .MuiTab-root, button[data-tab]');
-        const actualTab = Array.from(tabButtons).find(btn => 
+        const actualTab = Array.from(tabButtons).find(btn =>
           btn.textContent.toLowerCase().includes('actual') ||
           btn.getAttribute('data-tab') === '2'
         );
@@ -224,11 +225,11 @@ export function NavBar() {
           console.log('Switching to Actual tab...');
           actualTab.click();
         }
-        
-        
+
+
         setTimeout(() => {
           const buttons = document.querySelectorAll('button');
-          const printBtn = Array.from(buttons).find(btn => 
+          const printBtn = Array.from(buttons).find(btn =>
             btn.textContent.toLowerCase().includes('print report') ||
             btn.textContent.toLowerCase().includes('print')
           );
@@ -242,7 +243,7 @@ export function NavBar() {
       } else if (report.id === 'invoice-log-report') {
         // For Invoice Log, just open the export dialog
         const buttons = document.querySelectorAll('button');
-        const exportBtn = Array.from(buttons).find(btn => 
+        const exportBtn = Array.from(buttons).find(btn =>
           btn.textContent.toLowerCase().includes('export')
         );
         if (exportBtn) {
@@ -252,14 +253,14 @@ export function NavBar() {
           console.log('No export button found');
         }
       }
-    }, 1500); 
+    }, 1500);
   }
 
   // Sign out logic
   async function handleSignOut() {
     try {
       // Sign out of Firebase if logged in
-      try { await signOut(auth); } catch {}
+      try { await signOut(auth); } catch { }
 
       // Clear backend Microsoft session cookie
       const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "http://localhost:5140").replace(/\/+$/, "");
@@ -307,9 +308,9 @@ export function NavBar() {
   }, []);
 
   // Mark single notification as read
-  const markAsRead = async(notifId) => {
+  const markAsRead = async (notifId) => {
     try {
-      const res = await fetch(apiUrl(`/api/pac/notifications/${notifId}/read`), 
+      const res = await fetch(apiUrl(`/api/pac/notifications/${notifId}/read`),
         { method: "POST" });
       if (res.ok) {
         setNotifications((prev) =>
@@ -351,11 +352,11 @@ export function NavBar() {
 
   // Annoucement things
   const [openAnn, setOpenAnn] = useState(false);
-  
+
   return (
     <>
       {/* TOP NAV BAR */}
-     <div
+      <div
         className="topNavBar"
         style={{
           background: isDark
@@ -380,17 +381,23 @@ export function NavBar() {
 
           <div className="storeSelectorWrapper">
             <FormControl variant="outlined" size="small">
-              <InputLabel id="store-select-label">
-                <Storefront />
-              </InputLabel>
+              {/* Plain text label so it doesn't overlap the value */}
+              <InputLabel id="store-select-label">Store</InputLabel>
+
               <Select
                 labelId="store-select-label"
                 id="store-select"
-                value={selectedStore}
+                value={selectedStore || ""}
                 onChange={handleStoreChange}
                 label="Store"
-                style={{ minWidth: 180 }}
-                renderValue={() => getSelectedStoreText()}
+                style={{ minWidth: 220 }}
+                displayEmpty
+                renderValue={() => (
+                  <span style={{ display: "flex", alignItems: "center" }}>
+                    <Storefront style={{ marginRight: 8, fontSize: 20 }} />
+                    {getSelectedStoreText()}
+                  </span>
+                )}
               >
                 {stores.map((store) => (
                   <MenuItem key={store.id} value={store.id}>
@@ -431,7 +438,7 @@ export function NavBar() {
               style: { maxHeight: 400, width: "340px" },
             }}
           >
-            { loadingNotifications && (
+            {loadingNotifications && (
               <MenuItem disabled>Loading Notifications</MenuItem>
             )}
 
@@ -554,8 +561,8 @@ export function NavBar() {
                 {sideNavOpen && "Submit Invoice"}
               </Button>
             </Tooltip>
-            <div 
-              className="reports-container" 
+            <div
+              className="reports-container"
               ref={reportsRef}
               onMouseEnter={() => {
                 if (reportsHoverTimeout) {
@@ -580,10 +587,10 @@ export function NavBar() {
                   {sideNavOpen && "Reports"}
                 </Button>
               </Tooltip>
-              
+
               {/* Reports Dropdown */}
               {reportsDropdownOpen && (
-                <div 
+                <div
                   className="reports-dropdown"
                   onMouseEnter={() => {
                     if (reportsHoverTimeout) {
