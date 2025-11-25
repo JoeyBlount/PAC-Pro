@@ -3,8 +3,8 @@ import path from 'path';
 test.use({ storageState: './auth.json' });
 test.use({ headless: true, channel: 'chrome' });
 
-test.describe('Deadline Management – add, modify, delete', () => {
-  test('adds "Test", renames to "Modified", then deletes it', async ({ page }, testInfo) => {
+test.describe('Deadline Management', () => {
+  test('Add "Test", rename to "Modified", then delete it', async ({ page }, testInfo) => {
     test.setTimeout(150_000);
 
     page.on('dialog', async (dialog) => {

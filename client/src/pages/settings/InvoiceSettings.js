@@ -19,7 +19,7 @@ export const invoiceCatList = [
 ];
 
 const InvoiceSettings = () => {
-  const { userRole, currentUser } = useAuth(); // Get current user's role
+  const { userRole, getToken } = useAuth(); // Get current user's role
   const [categories, setCategories] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState("");
@@ -36,7 +36,7 @@ const InvoiceSettings = () => {
   // Fetch categories from backend
   const getCategories = async () => {
     try {
-      const token = currentUser ? await currentUser.getIdToken() : null;
+      const token = await getToken();
       const response = await fetch(apiUrl('/api/pac/invoice-settings/categories'), {
         headers: {
           'Content-Type': 'application/json',
@@ -80,7 +80,7 @@ const InvoiceSettings = () => {
       );
       setCategories(optimisticCategories);
 
-      const token = currentUser ? await currentUser.getIdToken() : null;
+      const token = await getToken();
       const response = await fetch(apiUrl(`/api/pac/invoice-settings/category/${encodeURIComponent(id)}`) , {
         method: 'PUT',
         headers: { 

@@ -1,7 +1,7 @@
 /* =====================================
    THEME VARIABLES
 ===================================== */
-body[data-theme='light'] {
+body[data-theme="light"] {
   --text-color: #000000;
   --muted-text: #333333;
 
@@ -22,16 +22,16 @@ body[data-theme='light'] {
   --button-blue-hover: #1565c0;
 }
 
-body[data-theme='dark'] {
+body[data-theme="dark"] {
   --text-color: #e0e0e0;
   --muted-text: #cccccc;
 
   /* Category backgrounds — darker and transparent */
-  --bg-sales: rgba(13, 71, 161, 0.25);        /* deep blue tint */
-  --bg-labor: rgba(27, 94, 32, 0.25);         /* dark green tint */
-  --bg-food: rgba(91, 26, 40, 0.3);           /* muted pink/red tint */
-  --bg-starting: rgba(123, 111, 9, 0.3);      /* dark gold tint */
-  --bg-ending: rgba(107, 43, 6, 0.3);         /* dark orange tint */
+  --bg-sales: rgba(13, 71, 161, 0.25); /* deep blue tint */
+  --bg-labor: rgba(27, 94, 32, 0.25); /* dark green tint */
+  --bg-food: rgba(91, 26, 40, 0.3); /* muted pink/red tint */
+  --bg-starting: rgba(123, 111, 9, 0.3); /* dark gold tint */
+  --bg-ending: rgba(107, 43, 6, 0.3); /* dark orange tint */
 
   --bg-category-header: #2b2b2b;
   --bg-positive: rgba(76, 175, 80, 0.25);
@@ -120,6 +120,17 @@ body[data-theme='dark'] {
   font-size: 12px;
 }
 
+/* Disabled state styling for generate page inputs */
+.pac-section input:disabled,
+.pac-section select:disabled,
+.pac-section textarea:disabled {
+  background-color: #e5e5e5;
+  color: #7a7a7a;
+  border: 1px solid #c9c9c9;
+  cursor: not-allowed;
+  opacity: 1; /* ensure full visibility even when disabled */
+}
+
 /* =====================================
    PAC TAB STYLES
 ===================================== */
@@ -150,7 +161,7 @@ body[data-theme='dark'] {
   padding: 10px;
   border: 1px solid var(--popup-border);
   border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
   z-index: 100;
   pointer-events: none;
   color: var(--text-color);
@@ -185,24 +196,32 @@ body[data-theme='dark'] {
   border: 1px solid var(--popup-border);
 }
 /* Dark mode input fields */
-body[data-theme='dark'] input,
-body[data-theme='dark'] select,
-body[data-theme='dark'] textarea,
-body[data-theme='dark'] .MuiInputBase-root {
+body[data-theme="dark"] input,
+body[data-theme="dark"] select,
+body[data-theme="dark"] textarea,
+body[data-theme="dark"] .MuiInputBase-root {
   background-color: #2a2a2a !important;
   color: #e0e0e0 !important;
   border: 1px solid #444 !important;
 }
 
-body[data-theme='dark'] input:disabled,
-body[data-theme='dark'] select:disabled {
+body[data-theme="dark"] input:disabled,
+body[data-theme="dark"] select:disabled {
   background-color: #1f1f1f !important;
   color: #888 !important;
 }
 
+body[data-theme="dark"] .pac-section input:disabled,
+body[data-theme="dark"] .pac-section select:disabled,
+body[data-theme="dark"] .pac-section textarea:disabled {
+  background-color: #1e1e1e !important;
+  color: #9a9a9a !important;
+  border-color: #555 !important;
+}
+
 /* Dark mode fix for white divider line */
-body[data-theme='dark'] table,
-body[data-theme='dark'] th,
-body[data-theme='dark'] td {
+body[data-theme="dark"] table,
+body[data-theme="dark"] th,
+body[data-theme="dark"] td {
   border-color: #333 !important;
 }

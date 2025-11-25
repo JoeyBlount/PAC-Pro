@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 test.use({ storageState: './auth.json' });
 test.use({ headless: true, channel: 'chrome' });
 
-test.describe('Invoice Settings Tests', () => {
-  test('should edit account number for specific category and revert back', async ({ page }, testInfo) => {
+test.describe('Invoice Settings', () => {
+  test('Edit account number for specific category and revert back', async ({ page }, testInfo) => {
     test.setTimeout(60000);
 
     await page.goto('http://localhost:3000');
@@ -45,7 +45,7 @@ test.describe('Invoice Settings Tests', () => {
     await expect(foodRow()).toBeVisible({ timeout: 10000 });
     const originalAccountNumberRaw = (await accountCell().textContent()) || '';
     const originalAccountNumber = originalAccountNumberRaw.trim();
-    console.log('Original FOOD account number:', originalAccountNumber);
+    //console.log('Original FOOD account number:', originalAccountNumber);
 
     const targetNewValue = originalAccountNumber === '9999' ? '9998' : '9999';
 
@@ -106,7 +106,7 @@ test.describe('Invoice Settings Tests', () => {
 
     // Verify the account number was reverted back
     await expect(accountCell()).toHaveText(originalAccountNumber, { timeout: 10000 });
-    console.log('Reverted FOOD account number:', await accountCell().textContent());
+    //console.log('Reverted FOOD account number:', await accountCell().textContent());
 
     // Re-check after reload
     await page.reload();

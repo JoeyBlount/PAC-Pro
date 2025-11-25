@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 test.use({ storageState: './auth.json' });
 test.use({ headless: true, channel: 'chrome' });
 
-test.describe('Store Management – add, modify, and delete Test store', () => {
-  test('cleans old data, adds Test store, modifies to "Modified", and deletes it', async ({ page }, testInfo) => {
+test.describe('Store Management', () => {
+  test('Clean old data, add Test store, modifie to "Modified", and delete it', async ({ page }, testInfo) => {
     test.setTimeout(120_000);
 
     // Login using saved state (click Google if still on login)

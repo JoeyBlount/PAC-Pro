@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
-import * as XLSX from 'xlsx';
-import { saveAs } from 'file-saver';
-import { getPacActual } from "../../services/pacActualService";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
+// PAC Actual functions now handled by backend API
 import {
   Container,
   Table,
@@ -18,8 +18,31 @@ import {
   Button,
 } from "@mui/material";
 import "./pac.css";
-import { useTheme } from "@mui/material/styles"; 
+import { useTheme } from "@mui/material/styles";
 import { apiUrl } from "../../utils/api";
+import { auth } from "../../config/firebase-config";
+
+// Helper function for authenticated API calls
+async function apiCall(path, options = {}) {
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers || {}),
+  };
+  const response = await fetch(apiUrl(path), {
+    ...options,
+    headers,
+  });
+  if (!response.ok) {
+    if (response.status === 404) {
+      return null;
+    }
+    throw new Error(`API call failed: ${response.statusText}`);
+  }
+  return response.json();
+}
+
 // Add print styles
 const printStyles = `
   @media print {
@@ -248,6 +271,21 @@ const PacTab = ({
       return diff < 0 ? "text-red" : diff > 0 ? "text-green" : "";
     };
 
+    // Helper function to get color class for difference column based on diff value and type
+    const getDiffPercentColorClass = (diff, type = "default") => {
+      if (diff === "-" || diff === null || diff === undefined) return "";
+      const diffNum = typeof diff === "number" ? diff : parseFloat(diff);
+      if (isNaN(diffNum)) return "";
+
+      if (type === "sales" || type === "pac") {
+        // Sales and P.A.C.: green when positive, red when negative
+        return diffNum > 0 ? "text-green" : diffNum < 0 ? "text-red" : "";
+      } else {
+        // Other items: red when actual > projected (bad), green when actual < projected (good)
+        return diffNum > 0 ? "text-red" : diffNum < 0 ? "text-green" : "";
+      }
+    };
+
     // Generate status information for print
     let statusInfo = "";
     if (isMonthLocked) {
@@ -265,18 +303,9 @@ const PacTab = ({
       </div>`;
     }
 
-    //Timestamp for last updated.
-    const printGeneratedTime = new Date().toLocaleString("en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-
     return `
       <div class="print-header">
         PAC Report - ${storeId} - ${month} ${year}
-      </div>
-      <div class="print-timestamp" style="text-align: center; margin-bottom: 10px; ">
-        Last Updated: ${printGeneratedTime}
       </div>
       ${statusInfo}
       <table class="print-table">
@@ -297,35 +326,42 @@ const PacTab = ({
           </tr>
           <tr>
             <td style="padding-left: 20px;">Product Net Sales</td>
-            <td class="${getColorClass(
-              actualData.productNetSales,
-              getProjectedValueAsNumber("Product Net Sales")
-            )}">${formatCurrency(actualData.productNetSales)}</td>
+            <td>${formatCurrency(actualData.productNetSales)}</td>
             <td>-</td>
             <td>${getProjectedValue("Product Net Sales", "dollar")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td>-</td>
+            <td class="${getDiffPercentColorClass(
               ((actualData.productNetSales -
                 getProjectedValueAsNumber("Product Net Sales")) /
                 Math.max(getProjectedValueAsNumber("Product Net Sales"), 1)) *
                 100,
               "sales"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      ((actualData.productNetSales -
+        getProjectedValueAsNumber("Product Net Sales")) /
+        Math.max(getProjectedValueAsNumber("Product Net Sales"), 1)) *
+        100,
+      "sales"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">All Net Sales</td>
-            <td class="${getColorClass(
-              actualData.allNetSales,
-              getProjectedValueAsNumber("All Net Sales")
-            )}">${formatCurrency(actualData.allNetSales)}</td>
+            <td>${formatCurrency(actualData.allNetSales)}</td>
             <td>-</td>
             <td>${getProjectedValue("All Net Sales", "dollar")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td>-</td>
+            <td class="${getDiffPercentColorClass(
               ((actualData.allNetSales -
                 getProjectedValueAsNumber("All Net Sales")) /
                 Math.max(getProjectedValueAsNumber("All Net Sales"), 1)) *
                 100,
               "sales"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      ((actualData.allNetSales - getProjectedValueAsNumber("All Net Sales")) /
+        Math.max(getProjectedValueAsNumber("All Net Sales"), 1)) *
+        100,
+      "sales"
+    )}</td>
           </tr>
           
           <!-- Food & Paper Section -->
@@ -334,18 +370,15 @@ const PacTab = ({
           </tr>
           <tr>
             <td style="padding-left: 20px;">Base Food</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.baseFood.dollars,
-              getProjectedValueAsNumber("Base Food")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.baseFood.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.baseFood.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.baseFood?.percent || 0
             )}</td>
             <td>${getProjectedValue("Base Food", "dollar")}</td>
             <td>${getProjectedValue("Base Food", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.baseFood?.percent || 0,
                 parseFloat(
@@ -356,22 +389,27 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.baseFood?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Base Food", "percent")).replace("%", "")
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Employee Meal</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.employeeMeal.dollars,
-              getProjectedValueAsNumber("Employee Meal")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.employeeMeal.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.employeeMeal.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.employeeMeal?.percent || 0
             )}</td>
             <td>${getProjectedValue("Employee Meal", "dollar")}</td>
             <td>${getProjectedValue("Employee Meal", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.employeeMeal?.percent || 0,
                 parseFloat(
@@ -382,22 +420,27 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.employeeMeal?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Employee Meal", "percent")).replace("%", "")
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Condiment</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.condiment.dollars,
-              getProjectedValueAsNumber("Condiment")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.condiment.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.condiment.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.condiment?.percent || 0
             )}</td>
             <td>${getProjectedValue("Condiment", "dollar")}</td>
             <td>${getProjectedValue("Condiment", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.condiment?.percent || 0,
                 parseFloat(
@@ -408,22 +451,27 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.condiment?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Condiment", "percent")).replace("%", "")
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Total Waste</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.totalWaste.dollars,
-              getProjectedValueAsNumber("Total Waste")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.totalWaste.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.totalWaste.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.totalWaste?.percent || 0
             )}</td>
             <td>${getProjectedValue("Total Waste", "dollar")}</td>
             <td>${getProjectedValue("Total Waste", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.totalWaste?.percent || 0,
                 parseFloat(
@@ -434,22 +482,27 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.totalWaste?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Total Waste", "percent")).replace("%", "")
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Paper</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.paper.dollars,
-              getProjectedValueAsNumber("Paper")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.paper.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.paper.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.paper?.percent || 0
             )}</td>
             <td>${getProjectedValue("Paper", "dollar")}</td>
             <td>${getProjectedValue("Paper", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.paper?.percent || 0,
                 parseFloat(
@@ -457,7 +510,15 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.paper?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Paper", "percent")).replace("%", "")
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           
           <!-- Food & Paper Total -->
@@ -465,44 +526,51 @@ const PacTab = ({
             <td style="padding-left: 20px; font-weight: bold; background-color: #e8f5e8;">Food & Paper Total</td>
             <td style="font-weight: bold; background-color: #e8f5e8;">${formatCurrency(
               (actualData.controllableExpenses.baseFood?.dollars || 0) +
+                (actualData.controllableExpenses.employeeMeal?.dollars || 0) +
                 (actualData.controllableExpenses.condiment?.dollars || 0) +
                 (actualData.controllableExpenses.totalWaste?.dollars || 0) +
                 (actualData.controllableExpenses.paper?.dollars || 0)
             )}</td>
             <td style="font-weight: bold; background-color: #e8f5e8;">${formatPercentage(
               (actualData.controllableExpenses.baseFood?.percent || 0) +
+                (actualData.controllableExpenses.employeeMeal?.percent || 0) +
                 (actualData.controllableExpenses.condiment?.percent || 0) +
                 (actualData.controllableExpenses.totalWaste?.percent || 0) +
                 (actualData.controllableExpenses.paper?.percent || 0)
             )}</td>
             <td style="font-weight: bold; background-color: #e8f5e8;">${formatCurrency(
-              getProjectedValueAsNumber("Base Food") +
-                getProjectedValueAsNumber("Condiment") +
-                getProjectedValueAsNumber("Total Waste") +
-                getProjectedValueAsNumber("Paper")
+              (getProjectedValueAsNumber("Base Food") || 0) +
+                (getProjectedValueAsNumber("Employee Meal") || 0) +
+                (getProjectedValueAsNumber("Condiment") || 0) +
+                (getProjectedValueAsNumber("Total Waste") || 0) +
+                (getProjectedValueAsNumber("Paper") || 0)
             )}</td>
             <td style="font-weight: bold; background-color: #e8f5e8;">${formatPercentage(
-              parseFloat(
-                String(getProjectedValue("Base Food", "percent")).replace(
-                  "%",
-                  ""
-                )
-              ) +
-                parseFloat(
-                  String(getProjectedValue("Condiment", "percent")).replace(
-                    "%",
-                    ""
-                  )
-                ) +
-                parseFloat(
-                  String(getProjectedValue("Total Waste", "percent")).replace(
-                    "%",
-                    ""
-                  )
-                ) +
-                parseFloat(
-                  String(getProjectedValue("Paper", "percent")).replace("%", "")
-                )
+              (() => {
+                const val = getProjectedValue("Base Food", "percent");
+                const num = parseFloat(String(val || "0").replace("%", ""));
+                return isNaN(num) ? 0 : num;
+              })() +
+                (() => {
+                  const val = getProjectedValue("Employee Meal", "percent");
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })() +
+                (() => {
+                  const val = getProjectedValue("Condiment", "percent");
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })() +
+                (() => {
+                  const val = getProjectedValue("Total Waste", "percent");
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })() +
+                (() => {
+                  const val = getProjectedValue("Paper", "percent");
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })()
             )}</td>
             <td style="font-weight: bold; background-color: #e8f5e8;">-</td>
           </tr>
@@ -513,18 +581,15 @@ const PacTab = ({
           </tr>
           <tr>
             <td style="padding-left: 20px;">Crew Labor</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.crewLabor.dollars,
-              getProjectedValueAsNumber("Crew Labor")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.crewLabor.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.crewLabor.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.crewLabor?.percent || 0
             )}</td>
             <td>${getProjectedValue("Crew Labor", "dollar")}</td>
             <td>${getProjectedValue("Crew Labor", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.crewLabor?.percent || 0,
                 parseFloat(
@@ -535,22 +600,27 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.crewLabor?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Crew Labor", "percent")).replace("%", "")
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Management Labor</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.managementLabor.dollars,
-              getProjectedValueAsNumber("Management Labor")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.managementLabor.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.managementLabor.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.managementLabor?.percent || 0
             )}</td>
             <td>${getProjectedValue("Management Labor", "dollar")}</td>
             <td>${getProjectedValue("Management Labor", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.managementLabor?.percent || 0,
                 parseFloat(
@@ -560,22 +630,30 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.managementLabor?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Management Labor", "percent")).replace(
+            "%",
+            ""
+          )
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Payroll Tax</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.payrollTax.dollars,
-              getProjectedValueAsNumber("Payroll Tax")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.payrollTax.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.payrollTax.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.payrollTax?.percent || 0
             )}</td>
             <td>${getProjectedValue("Payroll Tax", "dollar")}</td>
             <td>${getProjectedValue("Payroll Tax", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.payrollTax?.percent || 0,
                 parseFloat(
@@ -586,15 +664,25 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.payrollTax?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Payroll Tax", "percent")).replace("%", "")
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Additional Labor Dollars</td>
             <td>${formatCurrency(
-              actualData.controllableExpenses.additionalLaborDollars?.dollars || 0
+              actualData.controllableExpenses.additionalLaborDollars?.dollars ||
+                0
             )}</td>
             <td>${formatPercentage(
-              actualData.controllableExpenses.additionalLaborDollars?.percent || 0
+              actualData.controllableExpenses.additionalLaborDollars?.percent ||
+                0
             )}</td>
             <td>-</td>
             <td>-</td>
@@ -609,14 +697,16 @@ const PacTab = ({
                 (actualData.controllableExpenses.managementLabor?.dollars ||
                   0) +
                 (actualData.controllableExpenses.payrollTax?.dollars || 0) +
-                (actualData.controllableExpenses.additionalLaborDollars?.dollars || 0)
+                (actualData.controllableExpenses.additionalLaborDollars
+                  ?.dollars || 0)
             )}</td>
             <td style="font-weight: bold; background-color: #e3f2fd;">${formatPercentage(
               (actualData.controllableExpenses.crewLabor?.percent || 0) +
                 (actualData.controllableExpenses.managementLabor?.percent ||
                   0) +
                 (actualData.controllableExpenses.payrollTax?.percent || 0) +
-                (actualData.controllableExpenses.additionalLaborDollars?.percent || 0)
+                (actualData.controllableExpenses.additionalLaborDollars
+                  ?.percent || 0)
             )}</td>
             <td style="font-weight: bold; background-color: #e3f2fd;">${formatCurrency(
               getProjectedValueAsNumber("Crew Labor") +
@@ -651,18 +741,15 @@ const PacTab = ({
           </tr>
           <tr>
             <td style="padding-left: 20px;">Travel</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.travel.dollars,
-              getProjectedValueAsNumber("Travel")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.travel.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.travel.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.travel?.percent || 0
             )}</td>
             <td>${getProjectedValue("Travel", "dollar")}</td>
             <td>${getProjectedValue("Travel", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.travel?.percent || 0,
                 parseFloat(
@@ -673,22 +760,27 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.travel?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Travel", "percent")).replace("%", "")
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Advertising</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.advertising.dollars,
-              getProjectedValueAsNumber("Advertising")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.advertising.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.advertising.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.advertising?.percent || 0
             )}</td>
             <td>${getProjectedValue("Advertising", "dollar")}</td>
             <td>${getProjectedValue("Advertising", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.advertising?.percent || 0,
                 parseFloat(
@@ -699,22 +791,27 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.advertising?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Advertising", "percent")).replace("%", "")
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Advertising Other</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.advOther.dollars,
-              getProjectedValueAsNumber("Advertising Other")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.advOther.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.advOther.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.advOther?.percent || 0
             )}</td>
             <td>${getProjectedValue("Advertising Other", "dollar")}</td>
             <td>${getProjectedValue("Advertising Other", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.advOther?.percent || 0,
                 parseFloat(
@@ -724,22 +821,30 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.advOther?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Advertising Other", "percent")).replace(
+            "%",
+            ""
+          )
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Promotion</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.promotion.dollars,
-              getProjectedValueAsNumber("Promotion")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.promotion.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.promotion.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.promotion?.percent || 0
             )}</td>
             <td>${getProjectedValue("Promotion", "dollar")}</td>
             <td>${getProjectedValue("Promotion", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.promotion?.percent || 0,
                 parseFloat(
@@ -750,22 +855,27 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.promotion?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Promotion", "percent")).replace("%", "")
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Outside Services</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.outsideServices.dollars,
-              getProjectedValueAsNumber("Outside Services")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.outsideServices.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.outsideServices.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.outsideServices?.percent || 0
             )}</td>
             <td>${getProjectedValue("Outside Services", "dollar")}</td>
             <td>${getProjectedValue("Outside Services", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.outsideServices?.percent || 0,
                 parseFloat(
@@ -775,22 +885,30 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.outsideServices?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Outside Services", "percent")).replace(
+            "%",
+            ""
+          )
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Linen</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.linen.dollars,
-              getProjectedValueAsNumber("Linen")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.linen.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.linen.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.linen?.percent || 0
             )}</td>
             <td>${getProjectedValue("Linen", "dollar")}</td>
             <td>${getProjectedValue("Linen", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.linen?.percent || 0,
                 parseFloat(
@@ -798,22 +916,27 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.linen?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Linen", "percent")).replace("%", "")
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Operating Supply</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.opsSupplies.dollars,
-              getProjectedValueAsNumber("Operating Supply")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.opsSupplies.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.opsSupplies.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.opsSupplies?.percent || 0
             )}</td>
             <td>${getProjectedValue("Operating Supply", "dollar")}</td>
             <td>${getProjectedValue("Operating Supply", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.opsSupplies?.percent || 0,
                 parseFloat(
@@ -823,22 +946,30 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.opsSupplies?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Operating Supply", "percent")).replace(
+            "%",
+            ""
+          )
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Maintenance & Repair</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.maintenanceRepair.dollars,
-              getProjectedValueAsNumber("Maintenance & Repair")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.maintenanceRepair.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.maintenanceRepair.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.maintenanceRepair?.percent || 0
             )}</td>
             <td>${getProjectedValue("Maintenance & Repair", "dollar")}</td>
             <td>${getProjectedValue("Maintenance & Repair", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.maintenanceRepair?.percent || 0,
                 parseFloat(
@@ -848,22 +979,30 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.maintenanceRepair?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Maintenance & Repair", "percent")).replace(
+            "%",
+            ""
+          )
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Small Equipment</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.smallEquipment.dollars,
-              getProjectedValueAsNumber("Small Equipment")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.smallEquipment.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.smallEquipment.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.smallEquipment?.percent || 0
             )}</td>
             <td>${getProjectedValue("Small Equipment", "dollar")}</td>
             <td>${getProjectedValue("Small Equipment", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.smallEquipment?.percent || 0,
                 parseFloat(
@@ -873,22 +1012,30 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.smallEquipment?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Small Equipment", "percent")).replace(
+            "%",
+            ""
+          )
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Utilities</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.utilities.dollars,
-              getProjectedValueAsNumber("Utilities")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.utilities.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.utilities.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.utilities?.percent || 0
             )}</td>
             <td>${getProjectedValue("Utilities", "dollar")}</td>
             <td>${getProjectedValue("Utilities", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.utilities?.percent || 0,
                 parseFloat(
@@ -899,22 +1046,27 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.utilities?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Utilities", "percent")).replace("%", "")
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Office</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.office.dollars,
-              getProjectedValueAsNumber("Office")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.office.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.office.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.office?.percent || 0
             )}</td>
             <td>${getProjectedValue("Office", "dollar")}</td>
             <td>${getProjectedValue("Office", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.office?.percent || 0,
                 parseFloat(
@@ -925,22 +1077,27 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.office?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Office", "percent")).replace("%", "")
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Cash +/-</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.cashPlusMinus.dollars,
-              getProjectedValueAsNumber("Cash +/-")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.cashPlusMinus.dollars
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.cashPlusMinus.dollars
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.cashPlusMinus?.percent || 0
             )}</td>
             <td>${getProjectedValue("Cash +/-", "dollar")}</td>
             <td>${getProjectedValue("Cash +/-", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.cashPlusMinus?.percent || 0,
                 parseFloat(
@@ -951,22 +1108,27 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.cashPlusMinus?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Cash +/-", "percent")).replace("%", "")
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Crew Relations</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.crewRelations?.dollars || 0,
-              getProjectedValueAsNumber("Crew Relations")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.crewRelations?.dollars || 0
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.crewRelations?.dollars || 0
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.crewRelations?.percent || 0
             )}</td>
             <td>${getProjectedValue("Crew Relations", "dollar")}</td>
             <td>${getProjectedValue("Crew Relations", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.crewRelations?.percent || 0,
                 parseFloat(
@@ -976,22 +1138,30 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.crewRelations?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Crew Relations", "percent")).replace(
+            "%",
+            ""
+          )
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Training</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.training?.dollars || 0,
-              getProjectedValueAsNumber("Training")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.training?.dollars || 0
-    )}</td>
+            <td>${formatCurrency(
+              actualData.controllableExpenses.training?.dollars || 0
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.training?.percent || 0
             )}</td>
             <td>${getProjectedValue("Training", "dollar")}</td>
             <td>${getProjectedValue("Training", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.controllableExpenses.training?.percent || 0,
                 parseFloat(
@@ -1002,13 +1172,21 @@ const PacTab = ({
                 )
               ),
               "default"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.controllableExpenses.training?.percent || 0,
+        parseFloat(
+          String(getProjectedValue("Training", "percent")).replace("%", "")
+        )
+      ),
+      "default"
+    )}</td>
           </tr>
           <tr>
             <td style="padding-left: 20px;">Dues and Subscriptions</td>
             <td>${formatCurrency(
-      actualData.controllableExpenses.duesAndSubscriptions?.dollars || 0
-    )}</td>
+              actualData.controllableExpenses.duesAndSubscriptions?.dollars || 0
+            )}</td>
             <td>${formatPercentage(
               actualData.controllableExpenses.duesAndSubscriptions?.percent || 0
             )}</td>
@@ -1023,22 +1201,21 @@ const PacTab = ({
             <td style="font-weight: bold; background-color: #fce4ec;">${formatCurrency(
               (actualData.controllableExpenses.travel?.dollars || 0) +
                 (actualData.controllableExpenses.advertising?.dollars || 0) +
-                (actualData.controllableExpenses.promo?.dollars || 0) +
+                (actualData.controllableExpenses.promotion?.dollars || 0) +
                 (actualData.controllableExpenses.outsideServices?.dollars ||
                   0) +
                 (actualData.controllableExpenses.linen?.dollars || 0) +
-                (actualData.controllableExpenses.operatingSupply?.dollars ||
-                  0) +
+                (actualData.controllableExpenses.opsSupplies?.dollars || 0) +
                 (actualData.controllableExpenses.maintenanceRepair?.dollars ||
                   0) +
                 (actualData.controllableExpenses.smallEquipment?.dollars || 0) +
                 (actualData.controllableExpenses.utilities?.dollars || 0) +
                 (actualData.controllableExpenses.office?.dollars || 0) +
-                (actualData.controllableExpenses.cashAdjustments?.dollars ||
-                  0) +
+                (actualData.controllableExpenses.cashPlusMinus?.dollars || 0) +
                 (actualData.controllableExpenses.crewRelations?.dollars || 0) +
                 (actualData.controllableExpenses.training?.dollars || 0) +
-                (actualData.controllableExpenses.duesAndSubscriptions?.dollars || 0)
+                (actualData.controllableExpenses.duesAndSubscriptions
+                  ?.dollars || 0)
             )}</td>
             <td style="font-weight: bold; background-color: #fce4ec;">${formatPercentage(
               (actualData.controllableExpenses.travel?.percent || 0) +
@@ -1057,132 +1234,108 @@ const PacTab = ({
                 (actualData.controllableExpenses.cashPlusMinus?.percent || 0) +
                 (actualData.controllableExpenses.crewRelations?.percent || 0) +
                 (actualData.controllableExpenses.training?.percent || 0) +
-                (actualData.controllableExpenses.duesAndSubscriptions?.percent || 0)
+                (actualData.controllableExpenses.duesAndSubscriptions
+                  ?.percent || 0)
             )}</td>
             <td style="font-weight: bold; background-color: #fce4ec;">${formatCurrency(
-              getProjectedValueAsNumber("Travel") +
-                getProjectedValueAsNumber("Advertising") +
-                getProjectedValueAsNumber("Promo") +
-                getProjectedValueAsNumber("Outside Services") +
-                getProjectedValueAsNumber("Linen") +
-                getProjectedValueAsNumber("Operating Supply") +
-                getProjectedValueAsNumber("Maintenance & Repair") +
-                getProjectedValueAsNumber("Small Equipment") +
-                getProjectedValueAsNumber("Utilities") +
-                getProjectedValueAsNumber("Office") +
-                getProjectedValueAsNumber("Cash +/-") +
-                getProjectedValueAsNumber("Crew Relations") +
-                getProjectedValueAsNumber("Training")
+              (getProjectedValueAsNumber("Travel") || 0) +
+                (getProjectedValueAsNumber("Advertising") || 0) +
+                (getProjectedValueAsNumber("Advertising Other") || 0) +
+                (getProjectedValueAsNumber("Promotion") || 0) +
+                (getProjectedValueAsNumber("Outside Services") || 0) +
+                (getProjectedValueAsNumber("Linen") || 0) +
+                (getProjectedValueAsNumber("Operating Supply") || 0) +
+                (getProjectedValueAsNumber("Maintenance & Repair") || 0) +
+                (getProjectedValueAsNumber("Small Equipment") || 0) +
+                (getProjectedValueAsNumber("Utilities") || 0) +
+                (getProjectedValueAsNumber("Office") || 0) +
+                (getProjectedValueAsNumber("Cash +/-") || 0) +
+                (getProjectedValueAsNumber("Crew Relations") || 0) +
+                (getProjectedValueAsNumber("Training") || 0)
             )}</td>
             <td style="font-weight: bold; background-color: #fce4ec;">${formatPercentage(
-              parseFloat(
-                String(getProjectedValue("Travel", "percent")).replace("%", "")
-              ) +
-                parseFloat(
-                  String(getProjectedValue("Advertising", "percent")).replace(
-                    "%",
-                    ""
-                  )
-                ) +
-                parseFloat(
-                  String(getProjectedValue("Promo", "percent")).replace("%", "")
-                ) +
-                parseFloat(
-                  String(
-                    getProjectedValue("Outside Services", "percent")
-                  ).replace("%", "")
-                ) +
-                parseFloat(
-                  String(getProjectedValue("Linen", "percent")).replace("%", "")
-                ) +
-                parseFloat(
-                  String(
-                    getProjectedValue("Operating Supply", "percent")
-                  ).replace("%", "")
-                ) +
-                parseFloat(
-                  String(
-                    getProjectedValue("Maintenance & Repair", "percent")
-                  ).replace("%", "")
-                ) +
-                parseFloat(
-                  String(
-                    getProjectedValue("Small Equipment", "percent")
-                  ).replace("%", "")
-                ) +
-                parseFloat(
-                  String(getProjectedValue("Utilities", "percent")).replace(
-                    "%",
-                    ""
-                  )
-                ) +
-                parseFloat(
-                  String(getProjectedValue("Office", "percent")).replace(
-                    "%",
-                    ""
-                  )
-                ) +
-                parseFloat(
-                  String(getProjectedValue("Cash +/-", "percent")).replace(
-                    "%",
-                    ""
-                  )
-                ) +
-                parseFloat(
-                  String(
-                    getProjectedValue("Crew Relations", "percent")
-                  ).replace("%", "")
-                ) +
-                parseFloat(
-                  String(getProjectedValue("Training", "percent")).replace(
-                    "%",
-                    ""
-                  )
-                )
+              (() => {
+                const val = getProjectedValue("Travel", "percent");
+                const num = parseFloat(String(val || "0").replace("%", ""));
+                return isNaN(num) ? 0 : num;
+              })() +
+                (() => {
+                  const val = getProjectedValue("Advertising", "percent");
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })() +
+                (() => {
+                  const val = getProjectedValue("Advertising Other", "percent");
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })() +
+                (() => {
+                  const val = getProjectedValue("Promotion", "percent");
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })() +
+                (() => {
+                  const val = getProjectedValue("Outside Services", "percent");
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })() +
+                (() => {
+                  const val = getProjectedValue("Linen", "percent");
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })() +
+                (() => {
+                  const val = getProjectedValue("Operating Supply", "percent");
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })() +
+                (() => {
+                  const val = getProjectedValue(
+                    "Maintenance & Repair",
+                    "percent"
+                  );
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })() +
+                (() => {
+                  const val = getProjectedValue("Small Equipment", "percent");
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })() +
+                (() => {
+                  const val = getProjectedValue("Utilities", "percent");
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })() +
+                (() => {
+                  const val = getProjectedValue("Office", "percent");
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })() +
+                (() => {
+                  const val = getProjectedValue("Cash +/-", "percent");
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })() +
+                (() => {
+                  const val = getProjectedValue("Crew Relations", "percent");
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })() +
+                (() => {
+                  const val = getProjectedValue("Training", "percent");
+                  const num = parseFloat(String(val || "0").replace("%", ""));
+                  return isNaN(num) ? 0 : num;
+                })()
             )}</td>
             <td style="font-weight: bold; background-color: #fce4ec;">-</td>
-          </tr>
-          
-          <!-- Add missing expense categories -->
-          <tr>
-            <td style="padding-left: 20px;">Adv Other</td>
-            <td class="${getColorClass(
-              actualData.controllableExpenses.advertisingOther?.dollars || 0,
-              getProjectedValueAsNumber("Adv Other")
-            )}">${formatCurrency(
-      actualData.controllableExpenses.advertisingOther?.dollars || 0
-    )}</td>
-            <td>${formatPercentage(
-              actualData.controllableExpenses.advOther?.percent || 0
-            )}</td>
-            <td>${getProjectedValue("Adv Other", "dollar")}</td>
-            <td>${getProjectedValue("Adv Other", "percent")}</td>
-            <td class="${getDiffColorClass(
-              actualData.controllableExpenses.advertisingOther?.dollars || 0,
-              getProjectedValueAsNumber("Adv Other")
-            )}">${formatDiffPercent(
-      calculateDiffPercent(
-        actualData.controllableExpenses.advOther?.percent || 0,
-        parseFloat(
-          String(getProjectedValue("Adv Other", "percent")).replace("%", "")
-        )
-      )
-    )}</td>
           </tr>
           
           <!-- Totals -->
           <tr class="print-section-header print-totals-header">
             <td>Total Controllable</td>
-            <td class="${getColorClass(
-              actualData.totalControllableDollars,
-              getProjectedValueAsNumber("Total Controllable")
-            )}">${formatCurrency(actualData.totalControllableDollars)}</td>
-            <td class="${getColorClass(
-              actualData.totalControllablePercent,
-              (getProjectedValueAsNumber("Total Controllable") /
-                (actualData.productNetSales || 1)) *
-                100
-            )}">${formatPercentage(actualData.totalControllablePercent)}</td>
+            <td>${formatCurrency(actualData.totalControllableDollars)}</td>
+            <td>${formatPercentage(actualData.totalControllablePercent)}</td>
             <td>${getProjectedValue("Total Controllable", "dollar")}</td>
             <td>${getProjectedValue("Total Controllable", "percent")}</td>
             <td>-</td>
@@ -1203,7 +1356,7 @@ const PacTab = ({
             )}">${formatPercentage(actualData.pacPercent)}</td>
             <td>${getProjectedValue("P.A.C.", "dollar")}</td>
             <td>${getProjectedValue("P.A.C.", "percent")}</td>
-            <td>${formatDiffPercentForPrint(
+            <td class="${getDiffPercentColorClass(
               calculateDiffPercent(
                 actualData.pacPercent,
                 parseFloat(
@@ -1214,7 +1367,15 @@ const PacTab = ({
                 )
               ),
               "pac"
-            )}</td>
+            )}">${formatDiffPercentForPrint(
+      calculateDiffPercent(
+        actualData.pacPercent,
+        parseFloat(
+          String(getProjectedValue("P.A.C.", "percent")).replace("%", "")
+        )
+      ),
+      "pac"
+    )}</td>
           </tr>
         </tbody>
       </table>
@@ -1293,18 +1454,10 @@ const PacTab = ({
 
   const fetchProjectionsData = async (formattedStoreId, yearMonth) => {
     try {
-      const response = await fetch(
-        apiUrl(`/api/pac/projections/${formattedStoreId}/${yearMonth}`)
+      const data = await apiCall(
+        `/api/pac/projections/${formattedStoreId}/${yearMonth}`
       );
-      if (response.ok) {
-        const data = await response.json();
-        return data;
-      } else {
-        console.warn(
-          `No projections data found for ${formattedStoreId} - ${yearMonth}`
-        );
-        return null;
-      }
+      return data;
     } catch (error) {
       console.warn(`Error fetching projections: ${error.message}`);
       return null;
@@ -1324,21 +1477,41 @@ const PacTab = ({
         : `store_${storeId.padStart(3, "0")}`;
 
       // Fetch actual, projections, and PAC actual data in parallel
-      const [actualResponse, projectionsData, pacActualData] =
-        await Promise.all([
-          fetch(
-            apiUrl(`/api/pac/calc/${formattedStoreId}/${yearMonth}`)
-          ),
-          fetchProjectionsData(formattedStoreId, yearMonth),
-          getPacActual(formattedStoreId, year, month),
-        ]);
+      const months = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+      ];
+      const monthIndex = months.indexOf(month);
+      const monthNumber = monthIndex >= 0 ? monthIndex + 1 : 1;
+      const pacActualYearMonth = `${year}${String(monthNumber).padStart(
+        2,
+        "0"
+      )}`;
 
-      if (!actualResponse.ok) {
-        throw new Error(
-          `Failed to fetch PAC data: ${actualResponse.statusText}`
-        );
+      const [actualData, projectionsData, pacActualData] = await Promise.all([
+        apiCall(`/api/pac/calc/${formattedStoreId}/${yearMonth}`).catch(
+          () => null
+        ),
+        fetchProjectionsData(formattedStoreId, yearMonth),
+        apiCall(
+          `/api/pac/actual/${formattedStoreId}/${pacActualYearMonth}`
+        ).catch(() => null),
+      ]);
+
+      if (!actualData) {
+        throw new Error("Failed to fetch PAC data");
       }
-      const data = await actualResponse.json();
+      const data = actualData;
 
       // Convert snake_case from backend to camelCase for frontend
       const convertedData = {
@@ -1393,8 +1566,12 @@ const PacTab = ({
             percent: parseFloat(data.controllable_expenses.payroll_tax.percent),
           },
           additionalLaborDollars: {
-            dollars: parseFloat(data.controllable_expenses.additional_labor_dollars?.dollars || 0),
-            percent: parseFloat(data.controllable_expenses.additional_labor_dollars?.percent || 0),
+            dollars: parseFloat(
+              data.controllable_expenses.additional_labor_dollars?.dollars || 0
+            ),
+            percent: parseFloat(
+              data.controllable_expenses.additional_labor_dollars?.percent || 0
+            ),
           },
           travel: {
             dollars: parseFloat(data.controllable_expenses.travel.dollars),
@@ -1477,8 +1654,12 @@ const PacTab = ({
             percent: parseFloat(data.controllable_expenses.training.percent),
           },
           duesAndSubscriptions: {
-            dollars: parseFloat(data.controllable_expenses.dues_and_subscriptions?.dollars || 0),
-            percent: parseFloat(data.controllable_expenses.dues_and_subscriptions?.percent || 0),
+            dollars: parseFloat(
+              data.controllable_expenses.dues_and_subscriptions?.dollars || 0
+            ),
+            percent: parseFloat(
+              data.controllable_expenses.dues_and_subscriptions?.percent || 0
+            ),
           },
         },
         totalControllableDollars: parseFloat(data.total_controllable_dollars),
@@ -1606,7 +1787,19 @@ const PacTab = ({
     }
     // Fallback: map backend shape into the same structure to avoid runtime errors
     if (pacData) {
-      const toObj = (val) => ({ dollars: Number(val || 0), percent: 0 });
+      // Helper to extract dollars and percent from data structure
+      const toObj = (val) => {
+        if (!val) return { dollars: 0, percent: 0 };
+        // If it's already an object with dollars and percent, use it
+        if (typeof val === "object" && ("dollars" in val || "percent" in val)) {
+          return {
+            dollars: Number(val.dollars || 0),
+            percent: Number(val.percent || 0),
+          };
+        }
+        // Otherwise, treat as a number (legacy format)
+        return { dollars: Number(val || 0), percent: 0 };
+      };
       const ce = pacData.controllableExpenses || {};
       return {
         productNetSales: Number(pacData.productNetSales || 0),
@@ -1622,16 +1815,16 @@ const PacTab = ({
           payrollTax: toObj(ce.payrollTax),
           additionalLaborDollars: toObj(ce.additionalLaborDollars),
           travel: toObj(ce.travel),
-          advOther: toObj(ce.advOther),
+          advOther: toObj(ce.advOther || ce.advertisingOther),
           promotion: toObj(ce.promotion),
           outsideServices: toObj(ce.outsideServices),
           linen: toObj(ce.linen),
-          opsSupplies: toObj(ce.opsSupplies),
+          opsSupplies: toObj(ce.opSupply || ce.opsSupplies),
           maintenanceRepair: toObj(ce.maintenanceRepair),
           smallEquipment: toObj(ce.smallEquipment),
           utilities: toObj(ce.utilities),
           office: toObj(ce.office),
-          cashPlusMinus: toObj(ce.cashPlusMinus),
+          cashPlusMinus: toObj(ce.cashAdjustments || ce.cashPlusMinus),
           crewRelations: toObj(ce.crewRelations),
           training: toObj(ce.training),
           duesAndSubscriptions: toObj(ce.duesAndSubscriptions),
@@ -1800,57 +1993,15 @@ const PacTab = ({
   };
 
   const getProjectedPercent = (accountName) => {
-    if (!projectionsData) return "-";
-
-    const expenseMap = {
-      "Base Food": projectionsData.controllable_expenses?.base_food?.percent,
-      "Employee Meal":
-        projectionsData.controllable_expenses?.employee_meal?.percent,
-      Condiment: projectionsData.controllable_expenses?.condiment?.percent,
-      "Total Waste":
-        projectionsData.controllable_expenses?.total_waste?.percent,
-      Paper: projectionsData.controllable_expenses?.paper?.percent,
-      "Crew Labor": projectionsData.controllable_expenses?.crew_labor?.percent,
-      "Management Labor":
-        projectionsData.controllable_expenses?.management_labor?.percent,
-      "Payroll Tax":
-        projectionsData.controllable_expenses?.payroll_tax?.percent,
-      Travel: projectionsData.controllable_expenses?.travel?.percent,
-      Advertising: projectionsData.controllable_expenses?.advertising?.percent,
-      "Advertising Other":
-        projectionsData.controllable_expenses?.advertising_other?.percent,
-      Promotion: projectionsData.controllable_expenses?.promotion?.percent,
-      "Outside Services":
-        projectionsData.controllable_expenses?.outside_services?.percent,
-      Linen: projectionsData.controllable_expenses?.linen?.percent,
-      "Operating Supply":
-        projectionsData.controllable_expenses?.operating_supply?.percent ??
-        projectionsData.controllable_expenses?.op_supply?.percent,
-      "Maintenance & Repair":
-        projectionsData.controllable_expenses?.maintenance_repair?.percent,
-      "Small Equipment":
-        projectionsData.controllable_expenses?.small_equipment?.percent,
-      Utilities: projectionsData.controllable_expenses?.utilities?.percent,
-      Office: projectionsData.controllable_expenses?.office?.percent,
-      "Cash +/-":
-        projectionsData.controllable_expenses?.cash_adjustments?.percent,
-      "Crew Relations":
-        projectionsData.controllable_expenses?.crew_relations?.percent,
-      Training: projectionsData.controllable_expenses?.training?.percent,
-      "Total Controllable": projectionsData.total_controllable_percent,
-      "P.A.C.": projectionsData.pac_percent,
-    };
-
-    const raw = expenseMap[accountName];
-    return raw !== undefined && raw !== null ? formatPercentage(raw) : "-";
+    // Use getProjectedValue to calculate percent from dollars
+    return getProjectedValue(accountName, "percent");
   };
 
   // Helper function to get projected values from projections data
   const getProjectedValue = (expenseName, type) => {
     if (!projectionsData) return "-";
 
-    // Map expense names to projections data fields
-    const fieldMap = {
+    const dollarFieldMap = {
       "Product Net Sales": "product_net_sales",
       "All Net Sales": "all_net_sales",
       "Base Food": "controllable_expenses.base_food.dollars",
@@ -1880,30 +2031,76 @@ const PacTab = ({
       "P.A.C.": "pac_dollars",
     };
 
-    const fieldPath = fieldMap[expenseName];
+    const percentFieldMap = {
+      "Base Food": "controllable_expenses.base_food.percent",
+      "Employee Meal": "controllable_expenses.employee_meal.percent",
+      Condiment: "controllable_expenses.condiment.percent",
+      "Total Waste": "controllable_expenses.total_waste.percent",
+      Paper: "controllable_expenses.paper.percent",
+      "Crew Labor": "controllable_expenses.crew_labor.percent",
+      "Management Labor": "controllable_expenses.management_labor.percent",
+      "Payroll Tax": "controllable_expenses.payroll_tax.percent",
+      Travel: "controllable_expenses.travel.percent",
+      Advertising: "controllable_expenses.advertising.percent",
+      "Advertising Other": "controllable_expenses.advertising_other.percent",
+      Promotion: "controllable_expenses.promotion.percent",
+      "Outside Services": "controllable_expenses.outside_services.percent",
+      Linen: "controllable_expenses.linen.percent",
+      "Operating Supply": [
+        "controllable_expenses.operating_supply.percent",
+        "controllable_expenses.op_supply.percent",
+      ],
+      "Maintenance & Repair":
+        "controllable_expenses.maintenance_repair.percent",
+      "Small Equipment": "controllable_expenses.small_equipment.percent",
+      Utilities: "controllable_expenses.utilities.percent",
+      Office: "controllable_expenses.office.percent",
+      "Cash +/-": "controllable_expenses.cash_adjustments.percent",
+      "Crew Relations": "controllable_expenses.crew_relations.percent",
+      Training: "controllable_expenses.training.percent",
+      "Total Controllable": "total_controllable_percent",
+      "P.A.C.": "pac_percent",
+    };
+
+    // Helper to resolve a value from a path or array of paths
+    const resolveValue = (pathOrPaths) => {
+      const paths = Array.isArray(pathOrPaths) ? pathOrPaths : [pathOrPaths];
+      for (const path of paths) {
+        const next = path
+          .split(".")
+          .reduce((obj, key) => obj?.[key], projectionsData);
+        if (next !== undefined && next !== null) {
+          return next;
+        }
+      }
+      return undefined;
+    };
+
+    // For percent type, calculate from dollars / product sales * 100
+    if (type === "percent") {
+      const dollarFieldPath = dollarFieldMap[expenseName];
+      if (!dollarFieldPath) return "-";
+
+      const projectedDollars = resolveValue(dollarFieldPath);
+      const productSales = projectionsData.product_net_sales || 0;
+
+      if (projectedDollars === undefined || projectedDollars === null)
+        return "-";
+      if (productSales === 0) return "0.00%";
+
+      const calculatedPercent =
+        (parseFloat(projectedDollars) / parseFloat(productSales)) * 100;
+      return formatPercentage(calculatedPercent);
+    }
+
+    // For dollar type, use the dollar field map
+    const fieldPath = dollarFieldMap[expenseName];
     if (!fieldPath) return "-";
 
-    // Navigate nested object path
-    const value = fieldPath
-      .split(".")
-      .reduce((obj, key) => obj?.[key], projectionsData);
+    const value = resolveValue(fieldPath);
+    if (value === undefined || value === null) return "-";
 
-    if (value === null || value === undefined) return "-";
-
-    if (type === "dollar") {
-      return formatCurrency(parseFloat(value));
-    } else if (type === "percent") {
-      // For percentages, we need to calculate them from the dollar amounts
-      // Get the projected net sales for percentage calculation
-      const projectedNetSales =
-        projectionsData.product_net_sales || projectionsData.all_net_sales;
-      if (!projectedNetSales || projectedNetSales === 0) return "-";
-
-      const percentage =
-        (parseFloat(value) / parseFloat(projectedNetSales)) * 100;
-      return formatPercentage(percentage);
-    }
-    return "-";
+    return formatCurrency(parseFloat(value));
   };
 
   if (!storeId) {
@@ -1998,402 +2195,590 @@ const PacTab = ({
       alert("No data available to export.");
       return;
     }
+
+    // Helper function to calculate difference % for sales
+    const calculateSalesDiffPercent = (actual, projected) => {
+      if (!projected || projected === 0) return null;
+      return ((actual - projected) / projected) * 100;
+    };
+
+    // Helper function to calculate difference % for other items
+    const calculateOtherDiffPercent = (actualPercent, projectedPercentStr) => {
+      if (!projectedPercentStr || projectedPercentStr === "-") return null;
+      const projectedNum = parseFloat(
+        String(projectedPercentStr).replace("%", "")
+      );
+      if (isNaN(projectedNum)) return null;
+      return actualPercent - projectedNum;
+    };
+
+    // Format difference % for display
+    const formatDiffPercent = (diff) => {
+      if (diff === null || diff === undefined || isNaN(diff)) return "-";
+      const sign = diff > 0 ? "+" : "";
+      return `${sign}${diff.toFixed(2)}%`;
+    };
+
+    // Format last updated timestamp
+    const formatLastUpdated = () => {
+      if (!lastUpdatedTimestamp) return "-";
+      const ts = new Date(lastUpdatedTimestamp);
+      return ts.toLocaleString("en-US", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+    };
+
     // Flatten into rows for Excel
     const rows = [
+      // Metadata rows
+      {
+        Account: "Store Number",
+        "Actual $": storeId,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Month",
+        "Actual $": month,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Year",
+        "Actual $": year,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Last Updated",
+        "Actual $": formatLastUpdated(),
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Month Locked By",
+        "Actual $": monthLockStatus?.locked_by || "-",
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "",
+        "Actual $": "",
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      }, // Empty row separator
+
       // --- Sales ---
       {
         Account: "Product Net Sales",
         "Actual $": actualData?.productNetSales ?? 0,
         "Actual %": "-",
-        "Projected $": getProjectedValueAsNumber("Product Net Sales"),
-        "Projected %": getProjectedPercent("Product Net Sales"),
-        "Difference $":
-          (actualData?.productNetSales ?? 0) -
-          getProjectedValueAsNumber("Product Net Sales"),
+        "Projected $": getProjectedValueAsNumber("Product Net Sales") || 0,
+        "Projected %": "-",
+        "Difference %": formatDiffPercent(
+          calculateSalesDiffPercent(
+            actualData?.productNetSales ?? 0,
+            getProjectedValueAsNumber("Product Net Sales")
+          )
+        ),
       },
       {
         Account: "All Net Sales",
         "Actual $": actualData?.allNetSales ?? 0,
         "Actual %": "-",
-        "Projected $": getProjectedValueAsNumber("All Net Sales"),
-        "Projected %": getProjectedPercent("All Net Sales"),
-        "Difference $":
-          (actualData?.allNetSales ?? 0) -
-          getProjectedValueAsNumber("All Net Sales"),
+        "Projected $": getProjectedValueAsNumber("All Net Sales") || 0,
+        "Projected %": "-",
+        "Difference %": formatDiffPercent(
+          calculateSalesDiffPercent(
+            actualData?.allNetSales ?? 0,
+            getProjectedValueAsNumber("All Net Sales")
+          )
+        ),
       },
 
       // --- Food & Paper ---
       {
         Account: "Base Food",
-        "Actual $": pacData?.controllableExpenses?.baseFood?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.baseFood?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.baseFood?.percent !== undefined
-            ? formatPercentage(
-                actualData.controllableExpenses.baseFood?.percent || 0
-              )
+          actualData.controllableExpenses.baseFood?.percent !== undefined
+            ? formatPercentage(actualData.controllableExpenses.baseFood.percent)
             : "-",
-        "Projected $": getProjectedValueAsNumber("Base Food"),
+        "Projected $": getProjectedValueAsNumber("Base Food") || 0,
         "Projected %": getProjectedPercent("Base Food"),
-        "Difference $":
-          (pacData?.controllableExpenses?.baseFood?.dollars ?? 0) -
-          getProjectedValueAsNumber("Base Food"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.baseFood?.percent || 0,
+            getProjectedPercent("Base Food")
+          )
+        ),
       },
       {
         Account: "Employee Meal",
-        "Actual $": pacData?.controllableExpenses?.employeeMeal?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.employeeMeal?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.employeeMeal?.percent !== undefined
+          actualData.controllableExpenses.employeeMeal?.percent !== undefined
             ? formatPercentage(
                 actualData.controllableExpenses.employeeMeal.percent
               )
             : "-",
-        "Projected $": getProjectedValueAsNumber("Employee Meal"),
+        "Projected $": getProjectedValueAsNumber("Employee Meal") || 0,
         "Projected %": getProjectedPercent("Employee Meal"),
-        "Difference $":
-          (pacData?.controllableExpenses?.employeeMeal?.dollars ?? 0) -
-          getProjectedValueAsNumber("Employee Meal"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.employeeMeal?.percent || 0,
+            getProjectedPercent("Employee Meal")
+          )
+        ),
       },
       {
         Account: "Condiment",
-        "Actual $": pacData?.controllableExpenses?.condiment?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.condiment?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.condiment?.percent !== undefined
+          actualData.controllableExpenses.condiment?.percent !== undefined
             ? formatPercentage(
-                actualData.controllableExpenses.condiment?.percent || 0
+                actualData.controllableExpenses.condiment.percent
               )
             : "-",
-        "Projected $": getProjectedValueAsNumber("Condiment"),
+        "Projected $": getProjectedValueAsNumber("Condiment") || 0,
         "Projected %": getProjectedPercent("Condiment"),
-        "Difference $":
-          (pacData?.controllableExpenses?.condiment?.dollars ?? 0) -
-          getProjectedValueAsNumber("Condiment"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.condiment?.percent || 0,
+            getProjectedPercent("Condiment")
+          )
+        ),
       },
       {
         Account: "Total Waste",
-        "Actual $": pacData?.controllableExpenses?.totalWaste?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.totalWaste?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.totalWaste?.percent !== undefined
+          actualData.controllableExpenses.totalWaste?.percent !== undefined
             ? formatPercentage(
-                actualData.controllableExpenses.totalWaste?.percent || 0
+                actualData.controllableExpenses.totalWaste.percent
               )
             : "-",
-        "Projected $": getProjectedValueAsNumber("Total Waste"),
+        "Projected $": getProjectedValueAsNumber("Total Waste") || 0,
         "Projected %": getProjectedPercent("Total Waste"),
-        "Difference $":
-          (pacData?.controllableExpenses?.totalWaste?.dollars ?? 0) -
-          getProjectedValueAsNumber("Total Waste"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.totalWaste?.percent || 0,
+            getProjectedPercent("Total Waste")
+          )
+        ),
       },
       {
         Account: "Paper",
-        "Actual $": pacData?.controllableExpenses?.paper?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.paper?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.paper?.percent !== undefined
-            ? formatPercentage(
-                actualData.controllableExpenses.paper?.percent || 0
-              )
+          actualData.controllableExpenses.paper?.percent !== undefined
+            ? formatPercentage(actualData.controllableExpenses.paper.percent)
             : "-",
-        "Projected $": getProjectedValueAsNumber("Paper"),
+        "Projected $": getProjectedValueAsNumber("Paper") || 0,
         "Projected %": getProjectedPercent("Paper"),
-        "Difference $":
-          (pacData?.controllableExpenses?.paper?.dollars ?? 0) -
-          getProjectedValueAsNumber("Paper"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.paper?.percent || 0,
+            getProjectedPercent("Paper")
+          )
+        ),
       },
 
       // --- Labor ---
       {
         Account: "Crew Labor",
-        "Actual $": pacData?.controllableExpenses?.crewLabor?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.crewLabor?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.crewLabor?.percent !== undefined
+          actualData.controllableExpenses.crewLabor?.percent !== undefined
             ? formatPercentage(
-                actualData.controllableExpenses.crewLabor?.percent || 0
+                actualData.controllableExpenses.crewLabor.percent
               )
             : "-",
-        "Projected $": getProjectedValueAsNumber("Crew Labor"),
+        "Projected $": getProjectedValueAsNumber("Crew Labor") || 0,
         "Projected %": getProjectedPercent("Crew Labor"),
-        "Difference $":
-          (pacData?.controllableExpenses?.crewLabor?.dollars ?? 0) -
-          getProjectedValueAsNumber("Crew Labor"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.crewLabor?.percent || 0,
+            getProjectedPercent("Crew Labor")
+          )
+        ),
       },
       {
         Account: "Management Labor",
         "Actual $":
-          pacData?.controllableExpenses?.managementLabor?.dollars ?? 0,
+          actualData.controllableExpenses.managementLabor?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.managementLabor?.percent !== undefined
+          actualData.controllableExpenses.managementLabor?.percent !== undefined
             ? formatPercentage(
                 actualData.controllableExpenses.managementLabor.percent
               )
             : "-",
-        "Projected $": getProjectedValueAsNumber("Management Labor"),
+        "Projected $": getProjectedValueAsNumber("Management Labor") || 0,
         "Projected %": getProjectedPercent("Management Labor"),
-        "Difference $":
-          (pacData?.controllableExpenses?.managementLabor?.dollars ?? 0) -
-          getProjectedValueAsNumber("Management Labor"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.managementLabor?.percent || 0,
+            getProjectedPercent("Management Labor")
+          )
+        ),
       },
       {
         Account: "Payroll Tax",
-        "Actual $": pacData?.controllableExpenses?.payrollTax?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.payrollTax?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.payrollTax?.percent !== undefined
+          actualData.controllableExpenses.payrollTax?.percent !== undefined
             ? formatPercentage(
-                actualData.controllableExpenses.payrollTax?.percent || 0
+                actualData.controllableExpenses.payrollTax.percent
               )
             : "-",
-        "Projected $": getProjectedValueAsNumber("Payroll Tax"),
+        "Projected $": getProjectedValueAsNumber("Payroll Tax") || 0,
         "Projected %": getProjectedPercent("Payroll Tax"),
-        "Difference $":
-          (pacData?.controllableExpenses?.payrollTax?.dollars ?? 0) -
-          getProjectedValueAsNumber("Payroll Tax"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.payrollTax?.percent || 0,
+            getProjectedPercent("Payroll Tax")
+          )
+        ),
       },
       {
         Account: "Additional Labor Dollars",
-        "Actual $": pacData?.controllableExpenses?.additionalLaborDollars?.dollars ?? 0,
+        "Actual $":
+          actualData.controllableExpenses.additionalLaborDollars?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.additionalLaborDollars?.percent !== undefined
+          actualData.controllableExpenses.additionalLaborDollars?.percent !==
+          undefined
             ? formatPercentage(
-                actualData.controllableExpenses.additionalLaborDollars?.percent || 0
+                actualData.controllableExpenses.additionalLaborDollars.percent
               )
             : "-",
         "Projected $": 0,
         "Projected %": "-",
-        "Difference $": pacData?.controllableExpenses?.additionalLaborDollars?.dollars ?? 0,
+        "Difference %": "-",
       },
 
       // --- Other Expenses ---
       {
         Account: "Travel",
-        "Actual $": pacData?.controllableExpenses?.travel?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.travel?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.travel?.percent !== undefined
-            ? formatPercentage(
-                actualData.controllableExpenses.travel?.percent || 0
-              )
+          actualData.controllableExpenses.travel?.percent !== undefined
+            ? formatPercentage(actualData.controllableExpenses.travel.percent)
             : "-",
-        "Projected $": getProjectedValueAsNumber("Travel"),
+        "Projected $": getProjectedValueAsNumber("Travel") || 0,
         "Projected %": getProjectedPercent("Travel"),
-        "Difference $":
-          (pacData?.controllableExpenses?.travel?.dollars ?? 0) -
-          getProjectedValueAsNumber("Travel"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.travel?.percent || 0,
+            getProjectedPercent("Travel")
+          )
+        ),
       },
       {
         Account: "Advertising",
-        "Actual $": pacData?.controllableExpenses?.advertising?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.advertising?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.advertising?.percent !== undefined
+          actualData.controllableExpenses.advertising?.percent !== undefined
             ? formatPercentage(
-                actualData.controllableExpenses.advertising?.percent || 0
+                actualData.controllableExpenses.advertising.percent
               )
             : "-",
-        "Projected $": getProjectedValueAsNumber("Advertising"),
+        "Projected $": getProjectedValueAsNumber("Advertising") || 0,
         "Projected %": getProjectedPercent("Advertising"),
-        "Difference $":
-          (pacData?.controllableExpenses?.advertising?.dollars ?? 0) -
-          getProjectedValueAsNumber("Advertising"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.advertising?.percent || 0,
+            getProjectedPercent("Advertising")
+          )
+        ),
       },
       {
         Account: "Advertising Other",
-        "Actual $": pacData?.controllableExpenses?.advOther?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.advOther?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.advertisingOther?.percent !== undefined
+          actualData.controllableExpenses.advOther?.percent !== undefined
             ? formatPercentage(actualData.controllableExpenses.advOther.percent)
             : "-",
-        "Projected $": getProjectedValueAsNumber("Advertising Other"),
+        "Projected $": getProjectedValueAsNumber("Advertising Other") || 0,
         "Projected %": getProjectedPercent("Advertising Other"),
-        "Difference $":
-          (pacData?.controllableExpenses?.advOther?.dollars ?? 0) -
-          getProjectedValueAsNumber("Advertising Other"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.advOther?.percent || 0,
+            getProjectedPercent("Advertising Other")
+          )
+        ),
       },
       {
         Account: "Promotion",
-        "Actual $": pacData?.controllableExpenses?.promotion?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.promotion?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.promotion?.percent !== undefined
+          actualData.controllableExpenses.promotion?.percent !== undefined
             ? formatPercentage(
-                actualData.controllableExpenses.promotion?.percent || 0
+                actualData.controllableExpenses.promotion.percent
               )
             : "-",
-        "Projected $": getProjectedValueAsNumber("Promotion"),
+        "Projected $": getProjectedValueAsNumber("Promotion") || 0,
         "Projected %": getProjectedPercent("Promotion"),
-        "Difference $":
-          (pacData?.controllableExpenses?.promotion?.dollars ?? 0) -
-          getProjectedValueAsNumber("Promotion"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.promotion?.percent || 0,
+            getProjectedPercent("Promotion")
+          )
+        ),
       },
       {
         Account: "Outside Services",
         "Actual $":
-          pacData?.controllableExpenses?.outsideServices?.dollars ?? 0,
+          actualData.controllableExpenses.outsideServices?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.outsideServices?.percent !== undefined
+          actualData.controllableExpenses.outsideServices?.percent !== undefined
             ? formatPercentage(
                 actualData.controllableExpenses.outsideServices.percent
               )
             : "-",
-        "Projected $": getProjectedValueAsNumber("Outside Services"),
+        "Projected $": getProjectedValueAsNumber("Outside Services") || 0,
         "Projected %": getProjectedPercent("Outside Services"),
-        "Difference $":
-          (pacData?.controllableExpenses?.outsideServices?.dollars ?? 0) -
-          getProjectedValueAsNumber("Outside Services"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.outsideServices?.percent || 0,
+            getProjectedPercent("Outside Services")
+          )
+        ),
       },
       {
         Account: "Linen",
-        "Actual $": pacData?.controllableExpenses?.linen?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.linen?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.linen?.percent !== undefined
-            ? formatPercentage(
-                actualData.controllableExpenses.linen?.percent || 0
-              )
+          actualData.controllableExpenses.linen?.percent !== undefined
+            ? formatPercentage(actualData.controllableExpenses.linen.percent)
             : "-",
-        "Projected $": getProjectedValueAsNumber("Linen"),
+        "Projected $": getProjectedValueAsNumber("Linen") || 0,
         "Projected %": getProjectedPercent("Linen"),
-        "Difference $":
-          (pacData?.controllableExpenses?.linen?.dollars ?? 0) -
-          getProjectedValueAsNumber("Linen"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.linen?.percent || 0,
+            getProjectedPercent("Linen")
+          )
+        ),
       },
       {
         Account: "Operating Supply",
-        "Actual $": pacData?.controllableExpenses?.opsSupplies?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.opsSupplies?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.opsSupplies?.percent !== undefined
+          actualData.controllableExpenses.opsSupplies?.percent !== undefined
             ? formatPercentage(
-                actualData.controllableExpenses.opsSupplies?.percent || 0
+                actualData.controllableExpenses.opsSupplies.percent
               )
             : "-",
-        "Projected $": getProjectedValueAsNumber("Operating Supply"),
+        "Projected $": getProjectedValueAsNumber("Operating Supply") || 0,
         "Projected %": getProjectedPercent("Operating Supply"),
-        "Difference $":
-          (pacData?.controllableExpenses?.opsSupplies?.dollars ?? 0) -
-          getProjectedValueAsNumber("Operating Supply"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.opsSupplies?.percent || 0,
+            getProjectedPercent("Operating Supply")
+          )
+        ),
       },
       {
         Account: "Maintenance & Repair",
         "Actual $":
-          pacData?.controllableExpenses?.maintenanceRepair?.dollars ?? 0,
+          actualData.controllableExpenses.maintenanceRepair?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.maintenanceRepair?.percent !==
+          actualData.controllableExpenses.maintenanceRepair?.percent !==
           undefined
             ? formatPercentage(
                 actualData.controllableExpenses.maintenanceRepair.percent
               )
             : "-",
-        "Projected $": getProjectedValueAsNumber("Maintenance & Repair"),
+        "Projected $": getProjectedValueAsNumber("Maintenance & Repair") || 0,
         "Projected %": getProjectedPercent("Maintenance & Repair"),
-        "Difference $":
-          (pacData?.controllableExpenses?.maintenanceRepair?.dollars ?? 0) -
-          getProjectedValueAsNumber("Maintenance & Repair"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.maintenanceRepair?.percent || 0,
+            getProjectedPercent("Maintenance & Repair")
+          )
+        ),
       },
       {
         Account: "Small Equipment",
-        "Actual $": pacData?.controllableExpenses?.smallEquipment?.dollars ?? 0,
+        "Actual $":
+          actualData.controllableExpenses.smallEquipment?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.smallEquipment?.percent !== undefined
+          actualData.controllableExpenses.smallEquipment?.percent !== undefined
             ? formatPercentage(
                 actualData.controllableExpenses.smallEquipment.percent
               )
             : "-",
-        "Projected $": getProjectedValueAsNumber("Small Equipment"),
+        "Projected $": getProjectedValueAsNumber("Small Equipment") || 0,
         "Projected %": getProjectedPercent("Small Equipment"),
-        "Difference $":
-          (pacData?.controllableExpenses?.smallEquipment?.dollars ?? 0) -
-          getProjectedValueAsNumber("Small Equipment"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.smallEquipment?.percent || 0,
+            getProjectedPercent("Small Equipment")
+          )
+        ),
       },
       {
         Account: "Utilities",
-        "Actual $": pacData?.controllableExpenses?.utilities?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.utilities?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.utilities?.percent !== undefined
+          actualData.controllableExpenses.utilities?.percent !== undefined
             ? formatPercentage(
-                actualData.controllableExpenses.utilities?.percent || 0
+                actualData.controllableExpenses.utilities.percent
               )
             : "-",
-        "Projected $": getProjectedValueAsNumber("Utilities"),
+        "Projected $": getProjectedValueAsNumber("Utilities") || 0,
         "Projected %": getProjectedPercent("Utilities"),
-        "Difference $":
-          (pacData?.controllableExpenses?.utilities?.dollars ?? 0) -
-          getProjectedValueAsNumber("Utilities"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.utilities?.percent || 0,
+            getProjectedPercent("Utilities")
+          )
+        ),
       },
       {
         Account: "Office",
-        "Actual $": pacData?.controllableExpenses?.office?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.office?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.office?.percent !== undefined
-            ? formatPercentage(
-                actualData.controllableExpenses.office?.percent || 0
-              )
+          actualData.controllableExpenses.office?.percent !== undefined
+            ? formatPercentage(actualData.controllableExpenses.office.percent)
             : "-",
-        "Projected $": getProjectedValueAsNumber("Office"),
+        "Projected $": getProjectedValueAsNumber("Office") || 0,
         "Projected %": getProjectedPercent("Office"),
-        "Difference $":
-          (pacData?.controllableExpenses?.office?.dollars ?? 0) -
-          getProjectedValueAsNumber("Office"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.office?.percent || 0,
+            getProjectedPercent("Office")
+          )
+        ),
       },
       {
         Account: "Cash +/-",
-        "Actual $": pacData?.controllableExpenses?.cashPlusMinus?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.cashPlusMinus?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.cashAdjustments?.percent !== undefined
+          actualData.controllableExpenses.cashPlusMinus?.percent !== undefined
             ? formatPercentage(
                 actualData.controllableExpenses.cashPlusMinus.percent
               )
             : "-",
-        "Projected $": getProjectedValueAsNumber("Cash +/-"),
+        "Projected $": getProjectedValueAsNumber("Cash +/-") || 0,
         "Projected %": getProjectedPercent("Cash +/-"),
-        "Difference $":
-          (pacData?.controllableExpenses?.cashPlusMinus?.dollars ?? 0) -
-          getProjectedValueAsNumber("Cash +/-"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.cashPlusMinus?.percent || 0,
+            getProjectedPercent("Cash +/-")
+          )
+        ),
       },
       {
         Account: "Crew Relations",
-        "Actual $": pacData?.controllableExpenses?.crewRelations?.dollars ?? 0,
+        "Actual $": actualData.controllableExpenses.crewRelations?.dollars ?? 0,
         "Actual %":
-          pacData?.controllableExpenses?.crewRelations?.percent !== undefined
+          actualData.controllableExpenses.crewRelations?.percent !== undefined
             ? formatPercentage(
-                actualData.controllableExpenses.crewRelations?.percent || 0
+                actualData.controllableExpenses.crewRelations.percent
               )
             : "-",
-        "Projected $": getProjectedValueAsNumber("Crew Relations"),
+        "Projected $": getProjectedValueAsNumber("Crew Relations") || 0,
         "Projected %": getProjectedPercent("Crew Relations"),
-        "Difference $":
-          (pacData?.controllableExpenses?.crewRelations?.dollars ?? 0) -
-          getProjectedValueAsNumber("Crew Relations"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.crewRelations?.percent || 0,
+            getProjectedPercent("Crew Relations")
+          )
+        ),
+      },
+      {
+        Account: "Training",
+        "Actual $": actualData.controllableExpenses.training?.dollars ?? 0,
+        "Actual %":
+          actualData.controllableExpenses.training?.percent !== undefined
+            ? formatPercentage(actualData.controllableExpenses.training.percent)
+            : "-",
+        "Projected $": getProjectedValueAsNumber("Training") || 0,
+        "Projected %": getProjectedPercent("Training"),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.controllableExpenses.training?.percent || 0,
+            getProjectedPercent("Training")
+          )
+        ),
+      },
+      {
+        Account: "Dues and Subscriptions",
+        "Actual $":
+          actualData.controllableExpenses.duesAndSubscriptions?.dollars ?? 0,
+        "Actual %":
+          actualData.controllableExpenses.duesAndSubscriptions?.percent !==
+          undefined
+            ? formatPercentage(
+                actualData.controllableExpenses.duesAndSubscriptions.percent
+              )
+            : "-",
+        "Projected $": 0,
+        "Projected %": "-",
+        "Difference %": "-",
       },
 
       // --- Totals ---
       {
         Account: "Total Controllable",
-        "Actual $": pacData?.totalControllableDollars ?? 0,
+        "Actual $": actualData.totalControllableDollars ?? 0,
         "Actual %":
-          pacData?.totalControllablePercent !== undefined
+          actualData.totalControllablePercent !== undefined
             ? formatPercentage(actualData.totalControllablePercent)
             : "-",
-        "Projected $": getProjectedValueAsNumber("Total Controllable"),
+        "Projected $": getProjectedValueAsNumber("Total Controllable") || 0,
         "Projected %": getProjectedPercent("Total Controllable"),
-        "Difference $":
-          (pacData?.totalControllableDollars ?? 0) -
-          getProjectedValueAsNumber("Total Controllable"),
+        "Difference %": "-",
       },
       {
         Account: "P.A.C.",
-        "Actual $": pacData?.pacDollars ?? 0,
+        "Actual $": actualData.pacDollars ?? 0,
         "Actual %":
-          pacData?.pacPercent !== undefined
+          actualData.pacPercent !== undefined
             ? formatPercentage(actualData.pacPercent)
             : "-",
-        "Projected $": getProjectedValueAsNumber("P.A.C."),
+        "Projected $": getProjectedValueAsNumber("P.A.C.") || 0,
         "Projected %": getProjectedPercent("P.A.C."),
-        "Difference $":
-          (pacData?.pacDollars ?? 0) - getProjectedValueAsNumber("P.A.C."),
+        "Difference %": formatDiffPercent(
+          calculateOtherDiffPercent(
+            actualData.pacPercent || 0,
+            getProjectedPercent("P.A.C.")
+          )
+        ),
       },
     ];
-    
+
     const worksheet = XLSX.utils.json_to_sheet(rows);
-    const currencyCols = ["B", "D", "F"]; // adjust column letters based on where these land
+    const currencyCols = ["B", "D"]; // Actual $ and Projected $ columns
+    const metadataRowCount = 6; // Store, Month, Year, Last Updated, Month Locked By, empty separator
     currencyCols.forEach((col) => {
-      for (let row = 2; row <= rows.length + 1; row++) {
-        // start at row 2 (skip headers)
+      // Start after headers (row 1) and metadata rows (rows 2-7), so data starts at row 8
+      for (let row = metadataRowCount + 2; row <= rows.length + 1; row++) {
         const cellRef = `${col}${row}`;
-        if (worksheet[cellRef]) {
-          worksheet[cellRef].z = "$#,##0.00"; // Excel currency format
+        if (
+          worksheet[cellRef] &&
+          worksheet[cellRef].v !== "" &&
+          worksheet[cellRef].v !== "-"
+        ) {
+          // Only format if it's a number
+          const value = worksheet[cellRef].v;
+          if (typeof value === "number") {
+            worksheet[cellRef].z = "$#,##0.00"; // Excel currency format
+          }
         }
       }
     });
@@ -2408,299 +2793,790 @@ const PacTab = ({
 
     // saveAs(data, `pac_report_${storeId}_${year}${getMonthNumber(month)}.xlsx`);
   };
-  
+
   const sectionColors = {
-    sales: isDark ? "#1a2b3d" : "#e3f2fd",         // navy blue
-    food: isDark ? "#1a2a1a" : "#e8f5e9",          // green tint
-    labor: isDark ? "#332a1c" : "#fff3e0",         // amber/brown
-    purchases: isDark ? "#2a1f2f" : "#f3e5f5",     // purple tint
-    total: isDark ? "#101010" : "#f0f0f0",         // neutral gray
+    sales: isDark ? "#1a2b3d" : "#e3f2fd", // navy blue
+    food: isDark ? "#1a2a1a" : "#e8f5e9", // green tint
+    labor: isDark ? "#332a1c" : "#fff3e0", // amber/brown
+    purchases: isDark ? "#2a1f2f" : "#f3e5f5", // purple tint
+    total: isDark ? "#101010" : "#f0f0f0", // neutral gray
   };
 
-return (
-  <Container sx={{ mt: 2, mb: 4 }}>
-    <Box
-      sx={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        mb: 3,
-      }}
-    >
-      <Typography
-        variant="h4"
-        component="h1"
-        sx={{ color: isDark ? "#e0e0e0" : "#000" }}
+  return (
+    <Container sx={{ mt: 2, mb: 4 }}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 3,
+        }}
       >
-        PAC Report - {storeId} - {month} {year}
-      </Typography>
-      <Box>
-        <Button
-          variant="contained"
-          onClick={handlePrint}
-          sx={{
-            backgroundColor: "#1976d2",
-            color: "white",
-            mr: 2,
-            "&:hover": { backgroundColor: "#1565c0" },
-          }}
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{ color: isDark ? "#e0e0e0" : "#000" }}
         >
-          Print Report
-        </Button>
-        <Button
-          variant="contained"
-          onClick={handleExportExcel}
-          sx={{
-            backgroundColor: "#2e7d32",
-            color: "white",
-            "&:hover": { backgroundColor: "#1b5e20" },
-          }}
-        >
-          Export to Excel
-        </Button>
-      </Box>
-    </Box>
-
-    <TableContainer
-      component={Paper}
-      sx={{
-        mb: 3,
-        backgroundColor: isDark ? "#121212" : "#fff",
-        color: isDark ? "#e0e0e0" : "#000",
-        boxShadow: isDark ? "0 0 10px rgba(255,255,255,0.1)" : "none",
-      }}
-    >
-      <Table size="small">
-        <TableHead>
-          <TableRow sx={{ backgroundColor: isDark ? "#1e1e1e" : "#f5f5f5" }}>
-            <TableCell sx={{ fontWeight: "bold", width: "30%" }}>Account</TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold", width: "12%" }}>Actual $</TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold", width: "12%" }}>Actual %</TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold", width: "12%" }}>Projected $</TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold", width: "12%" }}>Projected %</TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold", width: "12%" }}>Difference %</TableCell>
-          </TableRow>
-        </TableHead>
-
-        <TableBody>
-
-          {/* SALES */}
-          <TableRow sx={{ backgroundColor: sectionColors.sales }}>
-            <TableCell colSpan={6} sx={{ fontWeight: "bold", fontSize: "1.1em" }}>
-              Sales
-            </TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell sx={{ pl: 4 }}>Product Net Sales</TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold" }}>
-              {formatActualWithColor(actualData.productNetSales, getProjectedValueAsNumber("Product Net Sales"), "dollar")}
-            </TableCell>
-            <TableCell align="right">-</TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold" }}>
-              {getProjectedValue("Product Net Sales", "dollar")}
-            </TableCell>
-            <TableCell align="right">-</TableCell>
-            <TableCell align="right">
-              {formatDiffPercent(calculateDiffPercent(actualData.productNetSales, getProjectedValueAsNumber("Product Net Sales"), "sales"), "sales")}
-            </TableCell>
-          </TableRow>
-
-          <TableRow>
-            <TableCell sx={{ pl: 4 }}>All Net Sales</TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold" }}>
-              {formatActualWithColor(actualData.allNetSales, getProjectedValueAsNumber("All Net Sales"), "dollar")}
-            </TableCell>
-            <TableCell align="right">-</TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold" }}>
-              {getProjectedValue("All Net Sales", "dollar")}
-            </TableCell>
-            <TableCell align="right">-</TableCell>
-            <TableCell align="right">
-              {formatDiffPercent(calculateDiffPercent(actualData.allNetSales, getProjectedValueAsNumber("All Net Sales"), "sales"), "sales")}
-            </TableCell>
-          </TableRow>
-
-          {/* FOOD & PAPER */}
-          <TableRow sx={{ backgroundColor: sectionColors.food }}>
-            <TableCell colSpan={6} sx={{ fontWeight: "bold" }}>
-              Food & Paper
-            </TableCell>
-          </TableRow>
-
-          {[
-            "Base Food",
-            "Employee Meal",
-            "Condiment",
-            "Total Waste",
-            "Paper",
-          ].map((item) => (
-            <TableRow key={item}>
-              <TableCell sx={{ pl: 4 }}>{item}</TableCell>
-              <TableCell align="right">
-                {formatCurrency(actualData.controllableExpenses[item.replace(" ", "").toLowerCase()]?.dollars || 0)}
-              </TableCell>
-              <TableCell align="right">
-                {formatPercentage(actualData.controllableExpenses[item.replace(" ", "").toLowerCase()]?.percent || 0)}
-              </TableCell>
-              <TableCell align="right">{getProjectedValue(item, "dollar")}</TableCell>
-              <TableCell align="right">{getProjectedValue(item, "percent")}</TableCell>
-              <TableCell align="right">
-                {formatDiffPercent(
-                  calculateDiffPercent(
-                    actualData.controllableExpenses[item.replace(" ", "").toLowerCase()]?.percent || 0,
-                    parseFloat(String(getProjectedValue(item, "percent")).replace("%", ""))
-                  ),
-                  "default"
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-
-          {/* LABOR */}
-          <TableRow sx={{ backgroundColor: sectionColors.labor }}>
-            <TableCell colSpan={6} sx={{ fontWeight: "bold" }}>
-              Labor
-            </TableCell>
-          </TableRow>
-
-          {["Crew Labor", "Management Labor", "Payroll Tax"].map((item) => (
-            <TableRow key={item}>
-              <TableCell sx={{ pl: 4 }}>{item}</TableCell>
-              <TableCell align="right">
-                {formatCurrency(actualData.controllableExpenses[item.replace(" ", "").toLowerCase()]?.dollars || 0)}
-              </TableCell>
-              <TableCell align="right">
-                {formatPercentage(actualData.controllableExpenses[item.replace(" ", "").toLowerCase()]?.percent || 0)}
-              </TableCell>
-              <TableCell align="right">{getProjectedValue(item, "dollar")}</TableCell>
-              <TableCell align="right">{getProjectedValue(item, "percent")}</TableCell>
-              <TableCell align="right">
-                {formatDiffPercent(
-                  calculateDiffPercent(
-                    actualData.controllableExpenses[item.replace(" ", "").toLowerCase()]?.percent || 0,
-                    parseFloat(String(getProjectedValue(item, "percent")).replace("%", ""))
-                  ),
-                  "default"
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-
-          {/* PURCHASES */}
-          <TableRow sx={{ backgroundColor: sectionColors.purchases }}>
-            <TableCell colSpan={6} sx={{ fontWeight: "bold" }}>
-              Purchases
-            </TableCell>
-          </TableRow>
-
-          {[
-            "Travel",
-            "Advertising",
-            "Advertising Other",
-            "Promotion",
-            "Outside Services",
-            "Linen",
-            "Operating Supply",
-            "Maintenance & Repair",
-            "Small Equipment",
-            "Utilities",
-            "Office",
-            "Cash +/-",
-            "Crew Relations",
-            "Training",
-          ].map((item) => (
-            <TableRow key={item}>
-              <TableCell sx={{ pl: 4 }}>{item}</TableCell>
-              <TableCell align="right">
-                {formatCurrency(actualData.controllableExpenses[item.replace(/[\s&+\/]/g, "").toLowerCase()]?.dollars || 0)}
-              </TableCell>
-              <TableCell align="right">
-                {formatPercentage(actualData.controllableExpenses[item.replace(/[\s&+\/]/g, "").toLowerCase()]?.percent || 0)}
-              </TableCell>
-              <TableCell align="right">{getProjectedValue(item, "dollar")}</TableCell>
-              <TableCell align="right">{getProjectedValue(item, "percent")}</TableCell>
-              <TableCell align="right">
-                {formatDiffPercent(
-                  calculateDiffPercent(
-                    actualData.controllableExpenses[item.replace(/[\s&+\/]/g, "").toLowerCase()]?.percent || 0,
-                    parseFloat(String(getProjectedValue(item, "percent")).replace("%", ""))
-                  ),
-                  "default"
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-
-          {/* TOTAL CONTROLLABLE */}
-          <TableRow sx={{ backgroundColor: sectionColors.total, borderTop: `2px solid ${isDark ? "#333" : "#ccc"}` }}>
-            <TableCell sx={{ fontWeight: "bold", fontSize: "1.1em" }}>Total Controllable</TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold" }}>
-              {formatCurrency(actualData.totalControllableDollars)}
-            </TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold" }}>
-              {formatPercentage(actualData.totalControllablePercent)}
-            </TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold" }}>
-              {getProjectedValue("Total Controllable", "dollar")}
-            </TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold" }}>
-              {getProjectedValue("Total Controllable", "percent")}
-            </TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold" }}>
-              -
-            </TableCell>
-          </TableRow>
-
-          {/* P.A.C. */}
-          <TableRow
+          PAC Report - {storeId} - {month} {year}
+        </Typography>
+        <Box>
+          <Button
+            variant="contained"
+            onClick={handlePrint}
             sx={{
-              backgroundColor:
-                actualData.pacPercent >= 0
-                  ? isDark
-                    ? "rgba(0,255,0,0.15)"
-                    : "rgba(0,255,0,0.1)"
-                  : isDark
-                  ? "rgba(255,0,0,0.15)"
-                  : "rgba(255,0,0,0.1)",
-              borderTop: `2px solid ${isDark ? "#333" : "#ccc"}`,
+              backgroundColor: "#1976d2",
+              color: "white",
+              mr: 2,
+              "&:hover": { backgroundColor: "#1565c0" },
             }}
           >
-            <TableCell sx={{ fontWeight: "bold", fontSize: "1.2em" }}>P.A.C.</TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold" }}>
-              {formatActualWithColor(actualData.pacDollars, getProjectedValueAsNumber("P.A.C."), "dollar")}
-            </TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold" }}>
-              {formatActualWithColor(
-                actualData.pacPercent,
-                (getProjectedValueAsNumber("P.A.C.") / (actualData.productNetSales || 1)) * 100,
-                "percent"
-              )}
-            </TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold" }}>
-              {getProjectedValue("P.A.C.", "dollar")}
-            </TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold" }}>
-              {getProjectedValue("P.A.C.", "percent")}
-            </TableCell>
-            <TableCell align="right" sx={{ fontWeight: "bold" }}>
-              {formatDiffPercent(
-                calculateDiffPercent(
+            Print Report
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleExportExcel}
+            sx={{
+              backgroundColor: "#2e7d32",
+              color: "white",
+              "&:hover": { backgroundColor: "#1b5e20" },
+            }}
+          >
+            Export to Excel
+          </Button>
+        </Box>
+      </Box>
+
+      <TableContainer
+        component={Paper}
+        sx={{
+          mb: 3,
+          backgroundColor: isDark ? "#121212" : "#fff",
+          color: isDark ? "#e0e0e0" : "#000",
+          boxShadow: isDark ? "0 0 10px rgba(255,255,255,0.1)" : "none",
+        }}
+      >
+        <Table size="small">
+          <TableHead>
+            <TableRow sx={{ backgroundColor: isDark ? "#1e1e1e" : "#f5f5f5" }}>
+              <TableCell sx={{ fontWeight: "bold", width: "30%" }}>
+                Account
+              </TableCell>
+              <TableCell
+                align="right"
+                sx={{ fontWeight: "bold", width: "12%" }}
+              >
+                Actual $
+              </TableCell>
+              <TableCell
+                align="right"
+                sx={{ fontWeight: "bold", width: "12%" }}
+              >
+                Actual %
+              </TableCell>
+              <TableCell
+                align="right"
+                sx={{ fontWeight: "bold", width: "12%" }}
+              >
+                Projected $
+              </TableCell>
+              <TableCell
+                align="right"
+                sx={{ fontWeight: "bold", width: "12%" }}
+              >
+                Projected %
+              </TableCell>
+              <TableCell
+                align="right"
+                sx={{ fontWeight: "bold", width: "12%" }}
+              >
+                Difference %
+              </TableCell>
+            </TableRow>
+          </TableHead>
+
+          <TableBody>
+            {/* SALES */}
+            <TableRow sx={{ backgroundColor: sectionColors.sales }}>
+              <TableCell
+                colSpan={6}
+                sx={{ fontWeight: "bold", fontSize: "1.1em" }}
+              >
+                Sales
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell sx={{ pl: 4 }}>Product Net Sales</TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatActualWithColor(
+                  actualData.productNetSales,
+                  getProjectedValueAsNumber("Product Net Sales"),
+                  "dollar"
+                )}
+              </TableCell>
+              <TableCell align="right">-</TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {getProjectedValue("Product Net Sales", "dollar")}
+              </TableCell>
+              <TableCell align="right">-</TableCell>
+              <TableCell align="right">
+                {formatDiffPercent(
+                  calculateDiffPercent(
+                    actualData.productNetSales,
+                    getProjectedValueAsNumber("Product Net Sales"),
+                    "sales"
+                  ),
+                  "sales"
+                )}
+              </TableCell>
+            </TableRow>
+
+            <TableRow>
+              <TableCell sx={{ pl: 4 }}>All Net Sales</TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatActualWithColor(
+                  actualData.allNetSales,
+                  getProjectedValueAsNumber("All Net Sales"),
+                  "dollar"
+                )}
+              </TableCell>
+              <TableCell align="right">-</TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {getProjectedValue("All Net Sales", "dollar")}
+              </TableCell>
+              <TableCell align="right">-</TableCell>
+              <TableCell align="right">
+                {formatDiffPercent(
+                  calculateDiffPercent(
+                    actualData.allNetSales,
+                    getProjectedValueAsNumber("All Net Sales"),
+                    "sales"
+                  ),
+                  "sales"
+                )}
+              </TableCell>
+            </TableRow>
+
+            {/* FOOD & PAPER */}
+            <TableRow sx={{ backgroundColor: sectionColors.food }}>
+              <TableCell colSpan={6} sx={{ fontWeight: "bold" }}>
+                Food & Paper
+              </TableCell>
+            </TableRow>
+
+            {[
+              { name: "Base Food", field: "baseFood" },
+              { name: "Employee Meal", field: "employeeMeal" },
+              { name: "Condiment", field: "condiment" },
+              { name: "Total Waste", field: "totalWaste" },
+              { name: "Paper", field: "paper" },
+            ].map(({ name, field }) => (
+              <TableRow key={name}>
+                <TableCell sx={{ pl: 4 }}>{name}</TableCell>
+                <TableCell align="right">
+                  {formatCurrency(
+                    actualData.controllableExpenses[field]?.dollars || 0
+                  )}
+                </TableCell>
+                <TableCell align="right">
+                  {formatPercentage(
+                    actualData.controllableExpenses[field]?.percent || 0
+                  )}
+                </TableCell>
+                <TableCell align="right">
+                  {getProjectedValue(name, "dollar")}
+                </TableCell>
+                <TableCell align="right">
+                  {getProjectedValue(name, "percent")}
+                </TableCell>
+                <TableCell align="right">
+                  {formatDiffPercent(
+                    calculateDiffPercent(
+                      actualData.controllableExpenses[field]?.percent || 0,
+                      parseFloat(
+                        String(getProjectedValue(name, "percent")).replace(
+                          "%",
+                          ""
+                        )
+                      )
+                    ),
+                    "default"
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+
+            {/* Food & Paper Total */}
+            <TableRow
+              sx={{
+                backgroundColor: sectionColors.food,
+                borderTop: `2px solid ${isDark ? "#333" : "#ccc"}`,
+              }}
+            >
+              <TableCell sx={{ pl: 4, fontWeight: "bold" }}>
+                Food & Paper Total
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatCurrency(
+                  (actualData.controllableExpenses.baseFood?.dollars || 0) +
+                    (actualData.controllableExpenses.employeeMeal?.dollars ||
+                      0) +
+                    (actualData.controllableExpenses.condiment?.dollars || 0) +
+                    (actualData.controllableExpenses.totalWaste?.dollars || 0) +
+                    (actualData.controllableExpenses.paper?.dollars || 0)
+                )}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatPercentage(
+                  (actualData.controllableExpenses.baseFood?.percent || 0) +
+                    (actualData.controllableExpenses.employeeMeal?.percent ||
+                      0) +
+                    (actualData.controllableExpenses.condiment?.percent || 0) +
+                    (actualData.controllableExpenses.totalWaste?.percent || 0) +
+                    (actualData.controllableExpenses.paper?.percent || 0)
+                )}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatCurrency(
+                  (getProjectedValueAsNumber("Base Food") || 0) +
+                    (getProjectedValueAsNumber("Employee Meal") || 0) +
+                    (getProjectedValueAsNumber("Condiment") || 0) +
+                    (getProjectedValueAsNumber("Total Waste") || 0) +
+                    (getProjectedValueAsNumber("Paper") || 0)
+                )}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatPercentage(
+                  (() => {
+                    const val = getProjectedValue("Base Food", "percent");
+                    const num = parseFloat(String(val || "0").replace("%", ""));
+                    return isNaN(num) ? 0 : num;
+                  })() +
+                    (() => {
+                      const val = getProjectedValue("Employee Meal", "percent");
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })() +
+                    (() => {
+                      const val = getProjectedValue("Condiment", "percent");
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })() +
+                    (() => {
+                      const val = getProjectedValue("Total Waste", "percent");
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })() +
+                    (() => {
+                      const val = getProjectedValue("Paper", "percent");
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })()
+                )}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                -
+              </TableCell>
+            </TableRow>
+
+            {/* LABOR */}
+            <TableRow sx={{ backgroundColor: sectionColors.labor }}>
+              <TableCell colSpan={6} sx={{ fontWeight: "bold" }}>
+                Labor
+              </TableCell>
+            </TableRow>
+
+            {[
+              { name: "Crew Labor", field: "crewLabor" },
+              { name: "Management Labor", field: "managementLabor" },
+              { name: "Payroll Tax", field: "payrollTax" },
+              {
+                name: "Additional Labor Dollars",
+                field: "additionalLaborDollars",
+              },
+            ].map(({ name, field }) => {
+              const expenseData = actualData.controllableExpenses[field];
+              const dollars = expenseData?.dollars;
+              const percent = expenseData?.percent;
+              const isAdditionalLabor = field === "additionalLaborDollars";
+              const shouldShowDash =
+                isAdditionalLabor && (!dollars || dollars === 0);
+              const projectedPercentStr = getProjectedValue(name, "percent");
+              const projectedPercentNum = parseFloat(
+                String(projectedPercentStr || "").replace("%", "")
+              );
+              const hasProjectedData =
+                !isNaN(projectedPercentNum) &&
+                projectedPercentStr !== "" &&
+                projectedPercentStr !== "-";
+              const shouldShowDashForDiff =
+                isAdditionalLabor && (!hasProjectedData || shouldShowDash);
+              return (
+                <TableRow key={name}>
+                  <TableCell sx={{ pl: 4 }}>{name}</TableCell>
+                  <TableCell align="right">
+                    {shouldShowDash ? "-" : formatCurrency(dollars || 0)}
+                  </TableCell>
+                  <TableCell align="right">
+                    {shouldShowDash ? "-" : formatPercentage(percent || 0)}
+                  </TableCell>
+                  <TableCell align="right">
+                    {getProjectedValue(name, "dollar")}
+                  </TableCell>
+                  <TableCell align="right">
+                    {getProjectedValue(name, "percent")}
+                  </TableCell>
+                  <TableCell align="right">
+                    {shouldShowDashForDiff
+                      ? "-"
+                      : formatDiffPercent(
+                          calculateDiffPercent(
+                            percent || 0,
+                            projectedPercentNum
+                          ),
+                          "default"
+                        )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+
+            {/* Labor Total */}
+            <TableRow
+              sx={{
+                backgroundColor: sectionColors.labor,
+                borderTop: `2px solid ${isDark ? "#333" : "#ccc"}`,
+              }}
+            >
+              <TableCell sx={{ pl: 4, fontWeight: "bold" }}>
+                Labor Total
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatCurrency(
+                  (actualData.controllableExpenses.crewLabor?.dollars || 0) +
+                    (actualData.controllableExpenses.managementLabor?.dollars ||
+                      0) +
+                    (actualData.controllableExpenses.payrollTax?.dollars || 0) +
+                    (actualData.controllableExpenses.additionalLaborDollars
+                      ?.dollars || 0)
+                )}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatPercentage(
+                  (actualData.controllableExpenses.crewLabor?.percent || 0) +
+                    (actualData.controllableExpenses.managementLabor?.percent ||
+                      0) +
+                    (actualData.controllableExpenses.payrollTax?.percent || 0) +
+                    (actualData.controllableExpenses.additionalLaborDollars
+                      ?.percent || 0)
+                )}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatCurrency(
+                  (getProjectedValueAsNumber("Crew Labor") || 0) +
+                    (getProjectedValueAsNumber("Management Labor") || 0) +
+                    (getProjectedValueAsNumber("Payroll Tax") || 0)
+                )}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatPercentage(
+                  (() => {
+                    const val = getProjectedValue("Crew Labor", "percent");
+                    const num = parseFloat(String(val || "0").replace("%", ""));
+                    return isNaN(num) ? 0 : num;
+                  })() +
+                    (() => {
+                      const val = getProjectedValue(
+                        "Management Labor",
+                        "percent"
+                      );
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })() +
+                    (() => {
+                      const val = getProjectedValue("Payroll Tax", "percent");
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })()
+                )}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                -
+              </TableCell>
+            </TableRow>
+
+            {/* PURCHASES */}
+            <TableRow sx={{ backgroundColor: sectionColors.purchases }}>
+              <TableCell colSpan={6} sx={{ fontWeight: "bold" }}>
+                Purchases
+              </TableCell>
+            </TableRow>
+
+            {[
+              { name: "Travel", field: "travel" },
+              { name: "Advertising", field: "advertising" },
+              { name: "Advertising Other", field: "advOther" },
+              { name: "Promotion", field: "promotion" },
+              { name: "Outside Services", field: "outsideServices" },
+              { name: "Linen", field: "linen" },
+              { name: "Operating Supply", field: "opsSupplies" },
+              { name: "Maintenance & Repair", field: "maintenanceRepair" },
+              { name: "Small Equipment", field: "smallEquipment" },
+              { name: "Utilities", field: "utilities" },
+              { name: "Office", field: "office" },
+              { name: "Cash +/-", field: "cashPlusMinus" },
+              { name: "Crew Relations", field: "crewRelations" },
+              { name: "Training", field: "training" },
+              { name: "Dues and Subscriptions", field: "duesAndSubscriptions" },
+            ].map(({ name, field }) => {
+              const expenseData = actualData.controllableExpenses[field];
+              const dollars = expenseData?.dollars;
+              const percent = expenseData?.percent;
+              const isDuesAndSubs = field === "duesAndSubscriptions";
+              const shouldShowDash =
+                isDuesAndSubs && (!dollars || dollars === 0);
+              const projectedPercentStr = getProjectedValue(name, "percent");
+              const projectedPercentNum = parseFloat(
+                String(projectedPercentStr || "").replace("%", "")
+              );
+              const hasProjectedData =
+                !isNaN(projectedPercentNum) &&
+                projectedPercentStr !== "" &&
+                projectedPercentStr !== "-";
+              const shouldShowDashForDiff =
+                isDuesAndSubs && (!hasProjectedData || shouldShowDash);
+              return (
+                <TableRow key={name}>
+                  <TableCell sx={{ pl: 4 }}>{name}</TableCell>
+                  <TableCell align="right">
+                    {shouldShowDash ? "-" : formatCurrency(dollars || 0)}
+                  </TableCell>
+                  <TableCell align="right">
+                    {shouldShowDash ? "-" : formatPercentage(percent || 0)}
+                  </TableCell>
+                  <TableCell align="right">
+                    {getProjectedValue(name, "dollar")}
+                  </TableCell>
+                  <TableCell align="right">
+                    {getProjectedValue(name, "percent")}
+                  </TableCell>
+                  <TableCell align="right">
+                    {shouldShowDashForDiff
+                      ? "-"
+                      : formatDiffPercent(
+                          calculateDiffPercent(
+                            percent || 0,
+                            projectedPercentNum
+                          ),
+                          "default"
+                        )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+
+            {/* Purchases Total */}
+            <TableRow
+              sx={{
+                backgroundColor: sectionColors.purchases,
+                borderTop: `2px solid ${isDark ? "#333" : "#ccc"}`,
+              }}
+            >
+              <TableCell sx={{ pl: 4, fontWeight: "bold" }}>
+                Purchases Total
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatCurrency(
+                  (actualData.controllableExpenses.travel?.dollars || 0) +
+                    (actualData.controllableExpenses.advertising?.dollars ||
+                      0) +
+                    (actualData.controllableExpenses.advOther?.dollars || 0) +
+                    (actualData.controllableExpenses.promotion?.dollars || 0) +
+                    (actualData.controllableExpenses.outsideServices?.dollars ||
+                      0) +
+                    (actualData.controllableExpenses.linen?.dollars || 0) +
+                    (actualData.controllableExpenses.opsSupplies?.dollars ||
+                      0) +
+                    (actualData.controllableExpenses.maintenanceRepair
+                      ?.dollars || 0) +
+                    (actualData.controllableExpenses.smallEquipment?.dollars ||
+                      0) +
+                    (actualData.controllableExpenses.utilities?.dollars || 0) +
+                    (actualData.controllableExpenses.office?.dollars || 0) +
+                    (actualData.controllableExpenses.cashPlusMinus?.dollars ||
+                      0) +
+                    (actualData.controllableExpenses.crewRelations?.dollars ||
+                      0) +
+                    (actualData.controllableExpenses.training?.dollars || 0) +
+                    (actualData.controllableExpenses.duesAndSubscriptions
+                      ?.dollars || 0)
+                )}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatPercentage(
+                  (actualData.controllableExpenses.travel?.percent || 0) +
+                    (actualData.controllableExpenses.advertising?.percent ||
+                      0) +
+                    (actualData.controllableExpenses.advOther?.percent || 0) +
+                    (actualData.controllableExpenses.promotion?.percent || 0) +
+                    (actualData.controllableExpenses.outsideServices?.percent ||
+                      0) +
+                    (actualData.controllableExpenses.linen?.percent || 0) +
+                    (actualData.controllableExpenses.opsSupplies?.percent ||
+                      0) +
+                    (actualData.controllableExpenses.maintenanceRepair
+                      ?.percent || 0) +
+                    (actualData.controllableExpenses.smallEquipment?.percent ||
+                      0) +
+                    (actualData.controllableExpenses.utilities?.percent || 0) +
+                    (actualData.controllableExpenses.office?.percent || 0) +
+                    (actualData.controllableExpenses.cashPlusMinus?.percent ||
+                      0) +
+                    (actualData.controllableExpenses.crewRelations?.percent ||
+                      0) +
+                    (actualData.controllableExpenses.training?.percent || 0) +
+                    (actualData.controllableExpenses.duesAndSubscriptions
+                      ?.percent || 0)
+                )}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatCurrency(
+                  (getProjectedValueAsNumber("Travel") || 0) +
+                    (getProjectedValueAsNumber("Advertising") || 0) +
+                    (getProjectedValueAsNumber("Advertising Other") || 0) +
+                    (getProjectedValueAsNumber("Promotion") || 0) +
+                    (getProjectedValueAsNumber("Outside Services") || 0) +
+                    (getProjectedValueAsNumber("Linen") || 0) +
+                    (getProjectedValueAsNumber("Operating Supply") || 0) +
+                    (getProjectedValueAsNumber("Maintenance & Repair") || 0) +
+                    (getProjectedValueAsNumber("Small Equipment") || 0) +
+                    (getProjectedValueAsNumber("Utilities") || 0) +
+                    (getProjectedValueAsNumber("Office") || 0) +
+                    (getProjectedValueAsNumber("Cash +/-") || 0) +
+                    (getProjectedValueAsNumber("Crew Relations") || 0) +
+                    (getProjectedValueAsNumber("Training") || 0)
+                )}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatPercentage(
+                  (() => {
+                    const val = getProjectedValue("Travel", "percent");
+                    const num = parseFloat(String(val || "0").replace("%", ""));
+                    return isNaN(num) ? 0 : num;
+                  })() +
+                    (() => {
+                      const val = getProjectedValue("Advertising", "percent");
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })() +
+                    (() => {
+                      const val = getProjectedValue(
+                        "Advertising Other",
+                        "percent"
+                      );
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })() +
+                    (() => {
+                      const val = getProjectedValue("Promotion", "percent");
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })() +
+                    (() => {
+                      const val = getProjectedValue(
+                        "Outside Services",
+                        "percent"
+                      );
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })() +
+                    (() => {
+                      const val = getProjectedValue("Linen", "percent");
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })() +
+                    (() => {
+                      const val = getProjectedValue(
+                        "Operating Supply",
+                        "percent"
+                      );
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })() +
+                    (() => {
+                      const val = getProjectedValue(
+                        "Maintenance & Repair",
+                        "percent"
+                      );
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })() +
+                    (() => {
+                      const val = getProjectedValue(
+                        "Small Equipment",
+                        "percent"
+                      );
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })() +
+                    (() => {
+                      const val = getProjectedValue("Utilities", "percent");
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })() +
+                    (() => {
+                      const val = getProjectedValue("Office", "percent");
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })() +
+                    (() => {
+                      const val = getProjectedValue("Cash +/-", "percent");
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })() +
+                    (() => {
+                      const val = getProjectedValue(
+                        "Crew Relations",
+                        "percent"
+                      );
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })() +
+                    (() => {
+                      const val = getProjectedValue("Training", "percent");
+                      const num = parseFloat(
+                        String(val || "0").replace("%", "")
+                      );
+                      return isNaN(num) ? 0 : num;
+                    })()
+                )}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                -
+              </TableCell>
+            </TableRow>
+
+            {/* TOTAL CONTROLLABLE */}
+            <TableRow
+              sx={{
+                backgroundColor: sectionColors.total,
+                borderTop: `2px solid ${isDark ? "#333" : "#ccc"}`,
+              }}
+            >
+              <TableCell sx={{ fontWeight: "bold", fontSize: "1.1em" }}>
+                Total Controllable
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatCurrency(actualData.totalControllableDollars)}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatPercentage(actualData.totalControllablePercent)}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {getProjectedValue("Total Controllable", "dollar")}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {getProjectedValue("Total Controllable", "percent")}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                -
+              </TableCell>
+            </TableRow>
+
+            {/* P.A.C. */}
+            <TableRow
+              sx={{
+                backgroundColor:
+                  actualData.pacPercent >= 0
+                    ? isDark
+                      ? "rgba(0,255,0,0.15)"
+                      : "rgba(0,255,0,0.1)"
+                    : isDark
+                    ? "rgba(255,0,0,0.15)"
+                    : "rgba(255,0,0,0.1)",
+                borderTop: `2px solid ${isDark ? "#333" : "#ccc"}`,
+              }}
+            >
+              <TableCell sx={{ fontWeight: "bold", fontSize: "1.2em" }}>
+                P.A.C.
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatActualWithColor(
+                  actualData.pacDollars,
+                  getProjectedValueAsNumber("P.A.C."),
+                  "dollar"
+                )}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatActualWithColor(
                   actualData.pacPercent,
-                  parseFloat(String(getProjectedValue("P.A.C.", "percent")).replace("%", ""))
-                ),
-                "pac"
-              )}
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-    </TableContainer>
-  </Container>
-);
-
-
-
-
+                  (getProjectedValueAsNumber("P.A.C.") /
+                    (actualData.productNetSales || 1)) *
+                    100,
+                  "percent"
+                )}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {getProjectedValue("P.A.C.", "dollar")}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {getProjectedValue("P.A.C.", "percent")}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                {formatDiffPercent(
+                  calculateDiffPercent(
+                    actualData.pacPercent,
+                    parseFloat(
+                      String(getProjectedValue("P.A.C.", "percent")).replace(
+                        "%",
+                        ""
+                      )
+                    )
+                  ),
+                  "pac"
+                )}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Container>
+  );
 };
 
 export default PacTab;

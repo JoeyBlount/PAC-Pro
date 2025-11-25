@@ -1,0 +1,8 @@
+{
+  "suite": "tests\\setup\\save-auth-state.spec.ts",
+  "title": "manual Google login then save storage state",
+  "timestamp": "2025-11-20T01:23:28.169Z",
+  "status": "passed",
+  "duration": 4681,
+  "errors": ""
+}

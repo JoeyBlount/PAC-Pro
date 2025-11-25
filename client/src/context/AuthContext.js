@@ -9,9 +9,8 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [userRole, setUserRole] = useState(null);
+  const [authMethod, setAuthMethod] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [authMethod, setAuthMethod] = useState(null); // 'firebase' or 'microsoft'
-
 
   const fetchUserInfo = async () => {
     const u = auth.currentUser;
@@ -52,14 +51,15 @@ export const AuthProvider = ({ children }) => {
 
   const composeName = (info) => {
     if (info?.name) return info.name;
-    const first = (info?.firstName || '').trim();
-    const last = (info?.lastName || '').trim();
+    const first = info?.firstName?.trim() ?? '';
+    const last = info?.lastName?.trim() ?? '';
     return [first, last].filter(Boolean).join(' ') || null;
   };
 
   useEffect(() => {
     let isMounted = true;
     let unsub = null;
+    let unsubscribe = () => { };
 
     (async () => {
       setLoading(true);
@@ -75,48 +75,74 @@ export const AuthProvider = ({ children }) => {
         setCurrentUser(microsoftUser);
         setUserRole(microsoftSession.user.role || null);
         setAuthMethod("microsoft");
-        setLoading(false); // ✅ done; no Firebase listener needed
+        setLoading(false);
         return;
       }
 
-      // 2) Fall back to Firebase client auth
-      unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-        if (!isMounted) return;
+      // If no Microsoft session, check Firebase
+      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         try {
-          if (firebaseUser?.email) {
-            // set provisional user so UI can render immediately
-            setCurrentUser({ ...firebaseUser, authMethod: "firebase" });
-            setAuthMethod("firebase");
+          if (firebaseUser && firebaseUser.email) {
+            setCurrentUser({ ...firebaseUser, authMethod: 'firebase' });
 
-            // fetch role/profile with Bearer token
-            const info = await fetchUserInfo().catch((e) => {
-              console.warn("fetchUserInfo failed:", e);
-              return null;
-            });
+            const info = await fetchUserInfo(firebaseUser.email);
             setUserRole(info?.role ?? null);
+            setAuthMethod('firebase');
 
-            // fill displayName if missing
             const fullName = composeName(info);
-            if ((!firebaseUser.displayName || firebaseUser.displayName.trim() === "") && fullName) {
-              setCurrentUser({ ...firebaseUser, displayName: fullName, authMethod: "firebase" });
+            if ((!firebaseUser.displayName || firebaseUser.displayName.trim() === '') && fullName) {
+              setCurrentUser({ ...firebaseUser, displayName: fullName, authMethod: 'firebase' });
             }
           } else {
+            // No authenticated user
             setCurrentUser(null);
             setUserRole(null);
             setAuthMethod(null);
           }
+        } catch {
+          setCurrentUser(null);
+          setUserRole(null);
+          setAuthMethod(null);
         } finally {
           setLoading(false);
         }
       });
     })();
 
-    return () => {
-      isMounted = false;
-      if (typeof unsub === "function") unsub();
-    };
+
+initializeAuth();
+init();
+return () => {
+  isMounted = false;
+  if (typeof unsub === "function") unsub();
+};
+
+return () => unsubscribe();
   }, []);
 
-  const value = { currentUser, userRole, loading, authMethod };
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+
+// -----------------------------
+// getToken: works for both Firebase and Microsoft
+// -----------------------------
+const getToken = async () => {
+  if (authMethod === 'firebase' && currentUser?.getIdToken) {
+    return currentUser.getIdToken();
+  }
+  // Microsoft token logic can be added here if needed
+  return null;
+};
+
+const value = {
+  currentUser,
+  userRole,
+  authMethod,
+  loading,
+  getToken, // <--- safe token getter
+};
+
+return (
+  <AuthContext.Provider value={{ currentUser, userRole, loading, authMethod, getToken }}>
+    {children}
+  </AuthContext.Provider>
+);
 };

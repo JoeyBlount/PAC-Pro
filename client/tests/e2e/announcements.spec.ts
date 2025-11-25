@@ -4,7 +4,7 @@ test.use({ storageState: './auth.json' });
 test.use({ headless: true, channel: 'chrome' });
 
 test.describe('Announcement Management',  () => {
-  test('Should be able to add and remove announcements', async ({ page }, testInfo) => {
+  test('Manage announcements by adding and removing', async ({ page }, testInfo) => {
     test.setTimeout(60000);
 
     await page.goto('http://localhost:3000');

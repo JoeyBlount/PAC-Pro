@@ -1,0 +1,8 @@
+{
+  "suite": "User Management",
+  "title": "Creates Test Testingson, promotes to Admin, then deletes",
+  "timestamp": "2025-11-20T01:10:49.227Z",
+  "status": "passed",
+  "duration": 11215,
+  "errors": ""
+}
