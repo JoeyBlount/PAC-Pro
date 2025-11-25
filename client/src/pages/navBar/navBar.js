@@ -363,17 +363,23 @@ export function NavBar() {
 
           <div className="storeSelectorWrapper">
             <FormControl variant="outlined" size="small">
-              <InputLabel id="store-select-label">
-                <Storefront />
-              </InputLabel>
+              {/* Plain text label so it doesn't overlap the value */}
+              <InputLabel id="store-select-label">Store</InputLabel>
+
               <Select
                 labelId="store-select-label"
                 id="store-select"
-                value={selectedStore}
+                value={selectedStore || ""}
                 onChange={handleStoreChange}
                 label="Store"
-                style={{ minWidth: 180 }}
-                renderValue={() => getSelectedStoreText()}
+                style={{ minWidth: 220 }}
+                displayEmpty
+                renderValue={() => (
+                  <span style={{ display: "flex", alignItems: "center" }}>
+                    <Storefront style={{ marginRight: 8, fontSize: 20 }} />
+                    {getSelectedStoreText()}
+                  </span>
+                )}
               >
                 {stores.map((store) => (
                   <MenuItem key={store.id} value={store.id}>
