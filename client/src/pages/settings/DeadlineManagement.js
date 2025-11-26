@@ -33,7 +33,7 @@ import { ROLES } from '../../constants/roles';
 import { apiUrl } from '../../utils/api';
 
 const DeadlineManagement = () => {
-  const { userRole, currentUser } = useAuth();
+  const { userRole, currentUser, getToken } = useAuth();
   const [deadlines, setDeadlines] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingDeadline, setEditingDeadline] = useState(null);
@@ -57,31 +57,33 @@ const DeadlineManagement = () => {
     fetchDeadlines();
   }, [currentUser]);
 
-  const fetchDeadlines = async () => {
-    try {
-      const token = currentUser ? await currentUser.getIdToken() : null;
-      const response = await fetch(apiUrl('/api/pac/deadlines'), {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-Role': userRole || '',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        }
-      });
-      
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errText}`);
-      }
-      
-      const data = await response.json();
-      setDeadlines(data);
-    } catch (error) {
-      console.error('Error fetching deadlines:', error);
-      showAlert('Error loading deadlines', 'error');
-    } finally {
-      setLoading(false);
+ const fetchDeadlines = async () => {
+  try {
+    const token = await getToken();
+
+    const response = await fetch(apiUrl('/api/pac/deadlines'), {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Role': userRole || '',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errText}`);
     }
-  };
+
+    const data = await response.json();
+    setDeadlines(data);
+  } catch (error) {
+    console.error('Error fetching deadlines:', error);
+    showAlert('Error loading deadlines', 'error');
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const showAlert = (message, severity = 'success') => {
     setAlert({ show: true, message, severity });
@@ -144,7 +146,8 @@ const DeadlineManagement = () => {
         dayOfMonth: (formData.recurring === true || formData.recurring === 'true') ? parseInt(formData.dayOfMonth) : null,
       };
 
-      const token = currentUser ? await currentUser.getIdToken() : null;
+      const token = await getToken();
+
       const url = editingDeadline 
         ? apiUrl(`/api/pac/deadlines/${editingDeadline.id}`)
         : apiUrl('/api/pac/deadlines');
@@ -180,7 +183,7 @@ const DeadlineManagement = () => {
     }
 
     try {
-      const token = currentUser ? await currentUser.getIdToken() : null;
+      const token = await getToken();
       const response = await fetch(apiUrl(`/api/pac/deadlines/${deadlineId}`), {
         method: 'DELETE',
         headers: {

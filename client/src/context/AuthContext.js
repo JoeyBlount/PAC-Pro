@@ -126,16 +126,17 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
 
-  // -----------------------------
-  // getToken: works for both Firebase and Microsoft
-  // -----------------------------
-  const getToken = async () => {
-    if (authMethod === 'firebase' && currentUser?.getIdToken) {
-      return currentUser.getIdToken();
-    }
-    // Microsoft token logic can be added here if needed
-    return null;
-  };
+ // -----------------------------
+// getToken: works for both Firebase and Microsoft
+// -----------------------------
+const getToken = async () => {
+  if (authMethod === 'firebase' && auth.currentUser) {
+    return auth.currentUser.getIdToken();
+  }
+
+  return null;
+};
+
 
   const value = {
     currentUser,
