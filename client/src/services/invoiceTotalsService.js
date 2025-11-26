@@ -162,15 +162,22 @@ export const recomputeMonthlyTotals = async (
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Failed to compute PAC actual: ${errorText || response.statusText}`
+        // 404 is expected for future months that don't have generate_input data yet
+        if (response.status === 404) {
+          console.log(
+            `[Invoice Totals] No generate_input data for ${storeID} - ${monthName} ${targetYear} (expected for future months)`
+          );
+        } else {
+          const errorText = await response.text();
+          throw new Error(
+            `Failed to compute PAC actual: ${errorText || response.statusText}`
+          );
+        }
+      } else {
+        console.log(
+          `[Invoice Totals] PAC actual recalculation completed for ${storeID} - ${monthName} ${targetYear}`
         );
       }
-
-      console.log(
-        `[Invoice Totals] PAC actual recalculation completed for ${storeID} - ${monthName} ${targetYear}`
-      );
     } catch (pacError) {
       console.error(
         `[Invoice Totals] Failed to recalculate PAC actual for ${storeID}:`,

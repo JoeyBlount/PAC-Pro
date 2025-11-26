@@ -3,11 +3,12 @@ import { auth } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext";
 import { useAuth } from "../../context/AuthContext";
 import MonthLockService from "../../services/monthLockService";
+import { recomputeMonthlyTotals } from "../../services/invoiceTotalsService";
 import styles from "./submitInvoice.module.css";
 import { invoiceCatList } from "../settings/InvoiceSettings";
 // Frontend no longer uploads to Storage or writes to Firestore; backend handles it
-import { useTheme } from '@mui/material/styles';
-import { apiUrl } from '../../utils/api';
+import { useTheme } from "@mui/material/styles";
+import { apiUrl } from "../../utils/api";
 import {
   Alert,
   TextField,
@@ -16,8 +17,14 @@ import {
   Box,
   InputLabel,
   FormControl,
+  Checkbox,
+  FormControlLabel,
+  Radio,
+  RadioGroup,
+  FormLabel,
 } from "@mui/material";
 import LockIcon from "@mui/icons-material/Lock";
+import RepeatIcon from "@mui/icons-material/Repeat";
 
 const generateUUID = () => {
   return Math.random().toString(36).slice(2);
@@ -32,7 +39,6 @@ const SubmitInvoice = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [loadingUpload, setLoadingUpload] = useState(false);
   const theme = useTheme();
-  
 
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -53,6 +59,15 @@ const SubmitInvoice = () => {
   // Month locking state
   const [monthLockStatus, setMonthLockStatus] = useState(null);
   const [lockedMonths, setLockedMonths] = useState([]);
+
+  // Recurring invoice state
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringInterval, setRecurringInterval] = useState(1);
+  const [recurringEndType, setRecurringEndType] = useState("forever"); // "forever" or "specific"
+  const [recurringEndMonth, setRecurringEndMonth] = useState(1);
+  const [recurringEndYear, setRecurringEndYear] = useState(
+    new Date().getFullYear() + 1
+  );
 
   // Separate month/year selectors for controlling which month the invoice gets added to
   const currentDate = new Date();
@@ -211,7 +226,7 @@ const SubmitInvoice = () => {
     setLoadingUpload(true);
 
     try {
-      const res = await fetch(apiUrl('/api/invoiceread/read'), {
+      const res = await fetch(apiUrl("/api/invoiceread/read"), {
         method: "POST",
         body: formData,
       });
@@ -340,7 +355,8 @@ const SubmitInvoice = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!imageUpload) {
+    // For non-recurring invoices, image is required
+    if (!isRecurring && !imageUpload) {
       alert("Please upload an image first.");
       return;
     }
@@ -369,8 +385,16 @@ const SubmitInvoice = () => {
 
       // Create FormData for backend request
       const formData = new FormData();
-      formData.append("image", imageUpload);
-      formData.append("invoice_number", invoiceNumber);
+
+      // Image is optional for recurring invoices
+      if (imageUpload) {
+        formData.append("image", imageUpload);
+      }
+
+      formData.append(
+        "invoice_number",
+        isRecurring ? "Re-Occurring" : invoiceNumber
+      );
       formData.append("company_name", companyName);
       formData.append("invoice_day", invoiceDay.toString());
       formData.append("invoice_month", invoiceMonth.toString());
@@ -381,26 +405,106 @@ const SubmitInvoice = () => {
       formData.append("user_email", user.email);
       formData.append("categories", JSON.stringify(categories));
 
-      // Submit to backend service (no auth token required)
-      const response = await fetch(
-        apiUrl('/api/pac/invoices/submit'),
-        {
-          method: "POST",
-          body: formData,
+      // Add recurring invoice parameters
+      formData.append("is_recurring", isRecurring.toString());
+      if (isRecurring) {
+        formData.append("recurring_interval", recurringInterval.toString());
+        if (recurringEndType === "forever") {
+          formData.append("recurring_end_date", "forever");
+        } else {
+          formData.append(
+            "recurring_end_date",
+            `${recurringEndYear}-${String(recurringEndMonth).padStart(2, "0")}`
+          );
         }
-      );
+      }
+
+      // Submit to backend service (no auth token required)
+      const response = await fetch(apiUrl("/api/pac/invoices/submit"), {
+        method: "POST",
+        body: formData,
+      });
 
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result.detail || "Failed to submit invoice");
       }
 
-      alert("Invoice submitted successfully!");
+      // Update invoice totals and PAC actual for affected months
+      try {
+        if (isRecurring && result.invoice_ids?.length > 0) {
+          // For recurring invoices, we need to update totals for each month
+          // The backend creates invoices for multiple months based on the interval
+          // We'll update the current target month - the backend should handle the rest
+          // But to be safe, let's calculate all affected months
+          const startMonth = targetMonth;
+          const startYear = targetYear;
+          let endMonth, endYear;
+
+          if (recurringEndType === "forever") {
+            // Default to 1 year ahead
+            endMonth = startMonth;
+            endYear = startYear + 1;
+          } else {
+            endMonth = recurringEndMonth;
+            endYear = recurringEndYear;
+          }
+
+          // Calculate all months that need totals updated
+          let currentMonth = startMonth;
+          let currentYear = startYear;
+          const monthsToUpdate = [];
+
+          while (
+            currentYear < endYear ||
+            (currentYear === endYear && currentMonth <= endMonth)
+          ) {
+            monthsToUpdate.push({ month: currentMonth, year: currentYear });
+            currentMonth += recurringInterval;
+            while (currentMonth > 12) {
+              currentMonth -= 12;
+              currentYear++;
+            }
+          }
+
+          // Update totals for each affected month
+          for (const { month, year } of monthsToUpdate) {
+            await recomputeMonthlyTotals(selectedStore, month, year);
+            console.log(
+              `Invoice totals updated for ${selectedStore} - ${month}/${year}`
+            );
+          }
+        } else {
+          // Single invoice - just update the target month
+          await recomputeMonthlyTotals(selectedStore, targetMonth, targetYear);
+          console.log(
+            `Invoice totals updated for ${selectedStore} - ${targetMonth}/${targetYear}`
+          );
+        }
+      } catch (totalsError) {
+        console.error("Error updating invoice totals:", totalsError);
+        // Don't fail the submission if totals update fails
+      }
+
+      if (isRecurring) {
+        alert(
+          `Recurring invoice created successfully! ${
+            result.invoice_ids?.length || 1
+          } invoice entries generated.`
+        );
+      } else {
+        alert("Invoice submitted successfully!");
+      }
+
+      // Reset form
       setInvoiceNumber("");
       setCompanyName("");
       setExtras([]);
       setConfirmedItems([]);
       setImageUpload(null);
+      setIsRecurring(false);
+      setRecurringInterval(1);
+      setRecurringEndType("forever");
     } catch (err) {
       console.error(err);
       alert("Error submitting invoice: " + err.message);
@@ -457,13 +561,181 @@ const SubmitInvoice = () => {
               placeholder={
                 isMonthLocked()
                   ? "Please select valid month"
+                  : isRecurring
+                  ? "Re-Occurring"
                   : "Enter Invoice Number"
               }
-              value={invoiceNumber}
+              value={isRecurring ? "Re-Occurring" : invoiceNumber}
               onChange={(e) => setInvoiceNumber(e.target.value)}
-              disabled={isMonthLocked()}
+              disabled={isMonthLocked() || isRecurring}
+              style={
+                isRecurring
+                  ? { backgroundColor: "#e8e0f0", color: "#6b4c9a" }
+                  : {}
+              }
             />
           </div>
+
+          {/* Recurring Invoice Option - Admin Only */}
+          {userRole === "Admin" && (
+            <div className={styles.formGroup}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={isRecurring}
+                    onChange={(e) => setIsRecurring(e.target.checked)}
+                    disabled={isMonthLocked()}
+                    sx={{
+                      color: "#9c27b0",
+                      "&.Mui-checked": {
+                        color: "#7b1fa2",
+                      },
+                    }}
+                  />
+                }
+                label={
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <RepeatIcon
+                      sx={{ color: isRecurring ? "#7b1fa2" : "inherit" }}
+                    />
+                    <span>Recurring Invoice</span>
+                  </Box>
+                }
+              />
+
+              {isRecurring && (
+                <Box
+                  sx={{
+                    mt: 2,
+                    p: 2,
+                    border: "1px solid #9c27b0",
+                    borderRadius: "8px",
+                    backgroundColor:
+                      theme.palette.mode === "dark" ? "#2d1f3d" : "#f3e5f5",
+                  }}
+                >
+                  {/* Recurring Interval */}
+                  <FormControl fullWidth sx={{ mb: 2 }}>
+                    <InputLabel>Repeat Every</InputLabel>
+                    <Select
+                      value={recurringInterval}
+                      onChange={(e) => setRecurringInterval(e.target.value)}
+                      label="Repeat Every"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(
+                        (months) => (
+                          <MenuItem key={months} value={months}>
+                            {months} {months === 1 ? "Month" : "Months"}
+                          </MenuItem>
+                        )
+                      )}
+                    </Select>
+                  </FormControl>
+
+                  {/* End Date Options */}
+                  <FormControl component="fieldset" sx={{ width: "100%" }}>
+                    <FormLabel
+                      component="legend"
+                      sx={{
+                        color:
+                          theme.palette.mode === "dark" ? "#ce93d8" : "#7b1fa2",
+                      }}
+                    >
+                      End Date
+                    </FormLabel>
+                    <RadioGroup
+                      value={recurringEndType}
+                      onChange={(e) => setRecurringEndType(e.target.value)}
+                    >
+                      <FormControlLabel
+                        value="forever"
+                        control={
+                          <Radio
+                            sx={{
+                              color: "#9c27b0",
+                              "&.Mui-checked": { color: "#7b1fa2" },
+                            }}
+                          />
+                        }
+                        label="Forever (auto-extends 1 year ahead)"
+                      />
+                      <FormControlLabel
+                        value="specific"
+                        control={
+                          <Radio
+                            sx={{
+                              color: "#9c27b0",
+                              "&.Mui-checked": { color: "#7b1fa2" },
+                            }}
+                          />
+                        }
+                        label="End on specific month"
+                      />
+                    </RadioGroup>
+
+                    {recurringEndType === "specific" && (
+                      <Box display="flex" gap={2} mt={1}>
+                        <FormControl sx={{ minWidth: 120 }}>
+                          <InputLabel>End Month</InputLabel>
+                          <Select
+                            value={recurringEndMonth}
+                            onChange={(e) =>
+                              setRecurringEndMonth(e.target.value)
+                            }
+                            label="End Month"
+                          >
+                            {[
+                              "January",
+                              "February",
+                              "March",
+                              "April",
+                              "May",
+                              "June",
+                              "July",
+                              "August",
+                              "September",
+                              "October",
+                              "November",
+                              "December",
+                            ].map((month, index) => (
+                              <MenuItem key={month} value={index + 1}>
+                                {month}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <FormControl sx={{ minWidth: 100 }}>
+                          <InputLabel>End Year</InputLabel>
+                          <Select
+                            value={recurringEndYear}
+                            onChange={(e) =>
+                              setRecurringEndYear(e.target.value)
+                            }
+                            label="End Year"
+                          >
+                            {Array.from(
+                              { length: 6 },
+                              (_, i) => currentYear + i
+                            ).map((year) => (
+                              <MenuItem key={year} value={year}>
+                                {year}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Box>
+                    )}
+                  </FormControl>
+
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    Recurring invoices will be automatically created for each
+                    interval. The invoice number will be set to "Re-Occurring"
+                    and photo upload is optional.
+                  </Alert>
+                </Box>
+              )}
+            </div>
+          )}
 
           <div className={styles.formGroup}>
             <label>Company Name</label>
@@ -784,19 +1056,37 @@ const SubmitInvoice = () => {
           </div>
 
           <div className={styles.buttonRow}>
-            <input
-              type="file"
-              onChange={(e) => setImageUpload(e.target.files[0])}
-              disabled={isMonthLocked()}
-            />
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+            >
+              <input
+                type="file"
+                onChange={(e) => setImageUpload(e.target.files[0])}
+                disabled={isMonthLocked()}
+              />
+              {isRecurring && (
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "#9c27b0",
+                    fontStyle: "italic",
+                  }}
+                >
+                  (Optional for recurring invoices)
+                </span>
+              )}
+            </div>
             <button
               type="submit"
               data-testid="submit-invoice-btn"
               className={styles.submitBtn}
               disabled={isMonthLocked()}
+              style={isRecurring ? { backgroundColor: "#7b1fa2" } : {}}
             >
               {isMonthLocked()
                 ? "Month Locked - Cannot Submit"
+                : isRecurring
+                ? "Create Recurring Invoice"
                 : "Submit Invoice"}
             </button>
             <button

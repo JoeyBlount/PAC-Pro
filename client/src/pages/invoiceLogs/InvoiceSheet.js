@@ -12,6 +12,13 @@ import {
   Select,
   MenuItem,
   Box,
+  TextField,
+  FormControl,
+  InputLabel,
+  InputAdornment,
+  Typography,
+  Divider,
+  Stack,
 } from "@mui/material";
 import {
   GetApp,
@@ -19,7 +26,10 @@ import {
   AccessibilityNewSharp,
   Lock,
   Lock as LockIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon,
 } from "@mui/icons-material";
+import { invoiceCatList } from "../settings/InvoiceSettings";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import "./invoiceLogs.css";
@@ -138,6 +148,12 @@ const InvoiceLogs = () => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   //useState(null);
   const [editInvoiceData, setEditInvoiceData] = useState(null);
+  const [editCategories, setEditCategories] = useState([]);
+
+  // Recurring invoice delete dialog state
+  const [recurringDeleteDialogOpen, setRecurringDeleteDialogOpen] =
+    useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] = useState(null);
 
   // Helper function to get a category amount from an invoice.
   // It now reads from the top-level of the invoice document using field.
@@ -162,7 +178,11 @@ const InvoiceLogs = () => {
     return 0;
   };
 
-  const API_URL = ((process.env.REACT_APP_BACKEND_URL || "http://localhost:5140").replace(/\/+$/, "")) + "/api/pac"; // or your deployed backend URL
+  const API_URL =
+    (process.env.REACT_APP_BACKEND_URL || "http://localhost:5140").replace(
+      /\/+$/,
+      ""
+    ) + "/api/pac"; // or your deployed backend URL
 
   async function sendNotification(event, context) {
     try {
@@ -274,10 +294,21 @@ const InvoiceLogs = () => {
   };
   const handleDelete = async (invoice) => {
     // Check if the invoice's month is locked
-    if (isInvoiceMonthLocked(invoice.invoiceMonth, invoice.invoiceYear)) {
+    if (isInvoiceMonthLocked(invoice.targetMonth, invoice.targetYear)) {
       alert(
         "Cannot delete invoice: The month for this invoice is locked and cannot be modified."
       );
+      return;
+    }
+
+    // For recurring invoices, only Admin users can delete
+    if (invoice.isRecurring && invoice.recurringGroupId) {
+      if (userRole !== "Admin") {
+        alert("Only Admin users can delete recurring invoices.");
+        return;
+      }
+      setInvoiceToDelete(invoice);
+      setRecurringDeleteDialogOpen(true);
       return;
     }
 
@@ -286,6 +317,11 @@ const InvoiceLogs = () => {
     );
     if (!confirm) return;
 
+    await deleteSingleInvoice(invoice);
+  };
+
+  // Delete a single invoice (used for non-recurring and "this month only" option)
+  const deleteSingleInvoice = async (invoice) => {
     try {
       // 1. Move the invoice to 'recentlyDeleted' collection
       const deletedRef = doc(db, "recentlyDeleted", invoice.id);
@@ -333,6 +369,83 @@ const InvoiceLogs = () => {
     }
   };
 
+  // Delete recurring invoice - this month only
+  const handleDeleteRecurringThisMonthOnly = async () => {
+    if (!invoiceToDelete) return;
+    setRecurringDeleteDialogOpen(false);
+    await deleteSingleInvoice(invoiceToDelete);
+    setInvoiceToDelete(null);
+  };
+
+  // Delete recurring invoice - all future months (including current)
+  const handleDeleteRecurringAllFuture = async () => {
+    if (!invoiceToDelete) return;
+
+    try {
+      // First, query to get all invoices that will be deleted (to know which months to update)
+      const recurringQuery = query(
+        collection(db, "invoices"),
+        where("recurringGroupId", "==", invoiceToDelete.recurringGroupId)
+      );
+      const recurringSnapshot = await getDocs(recurringQuery);
+      
+      // Collect months that will be affected
+      const monthsToUpdate = new Set();
+      const currentDate = new Date(invoiceToDelete.targetYear, invoiceToDelete.targetMonth - 1, 1);
+      
+      recurringSnapshot.docs.forEach((docSnap) => {
+        const invData = docSnap.data();
+        const invDate = new Date(invData.targetYear, invData.targetMonth - 1, 1);
+        if (invDate >= currentDate) {
+          monthsToUpdate.add(`${invData.storeID}|${invData.targetMonth}|${invData.targetYear}`);
+        }
+      });
+
+      // Get auth token for the request
+      const auth = getAuth();
+      const token = await auth.currentUser?.getIdToken();
+
+      const response = await fetch(
+        apiUrl(
+          `/api/pac/invoices/recurring/${invoiceToDelete.recurringGroupId}?delete_from_month=${invoiceToDelete.targetMonth}&delete_from_year=${invoiceToDelete.targetYear}`
+        ),
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.detail || "Failed to delete recurring invoices");
+      }
+
+      // Update totals for all affected months
+      for (const monthKey of monthsToUpdate) {
+        const [storeID, targetMonth, targetYear] = monthKey.split("|");
+        try {
+          await recomputeMonthlyTotals(storeID, Number(targetMonth), Number(targetYear));
+          console.log(`Invoice totals updated for ${storeID} - ${targetMonth}/${targetYear}`);
+        } catch (totalsError) {
+          console.error("Error updating invoice totals:", totalsError);
+        }
+      }
+
+      alert(`Deleted ${result.deleted_count} recurring invoice(s).`);
+
+      // Refresh invoices on the page
+      fetchInvoices();
+
+      setRecurringDeleteDialogOpen(false);
+      setInvoiceToDelete(null);
+    } catch (err) {
+      console.error("Failed to delete recurring invoices:", err);
+      alert("Error deleting recurring invoices: " + err.message);
+    }
+  };
+
   const handleRestore = async (invoice) => {
     const confirm = window.confirm(
       "Are you sure you want to restore this invoice?"
@@ -345,6 +458,18 @@ const InvoiceLogs = () => {
 
       // 2. Then delete from "recentlyDeleted"
       await deleteDoc(doc(db, "recentlyDeleted", invoice.id));
+
+      // 3. Update invoice totals for this store/month/year
+      try {
+        await recomputeMonthlyTotals(
+          invoice.storeID,
+          invoice.targetMonth,
+          invoice.targetYear
+        );
+        console.log("Invoice totals updated after restore");
+      } catch (totalsError) {
+        console.error("Error updating invoice totals after restore:", totalsError);
+      }
 
       alert("Invoice restored successfully!");
 
@@ -375,14 +500,29 @@ const InvoiceLogs = () => {
 
   const handleEdit = (invoice) => {
     // Check if the invoice's month is locked
-    if (isInvoiceMonthLocked(invoice.invoiceMonth, invoice.invoiceYear)) {
+    if (isInvoiceMonthLocked(invoice.targetMonth, invoice.targetYear)) {
       alert(
         "Cannot edit invoice: The month for this invoice is locked and cannot be modified."
       );
       return;
     }
 
+    // Only Admin users can edit recurring invoices
+    if (invoice.isRecurring && userRole !== "Admin") {
+      alert("Only Admin users can edit recurring invoices.");
+      return;
+    }
+
     setEditInvoiceData({ ...invoice }); // clone it so we can modify safely
+    // Initialize categories state for editing
+    const categoriesArray = Object.entries(invoice.categories || {}).map(
+      ([name, value]) => ({
+        id: Math.random().toString(36).substr(2, 9),
+        name,
+        amount: Array.isArray(value) ? value[0] : value,
+      })
+    );
+    setEditCategories(categoriesArray);
     setEditDialogOpen(true);
   };
 
@@ -419,7 +559,68 @@ const InvoiceLogs = () => {
     try {
       const invoiceRef = doc(db, "invoices", updatedInvoice.id);
       const { id, ...invoiceDataToUpdate } = updatedInvoice;
-      await updateDoc(invoiceRef, invoiceDataToUpdate);
+
+      // Track which months need totals updated
+      const monthsToUpdate = new Set();
+
+      // For recurring invoices, update all future months as well
+      if (updatedInvoice.isRecurring && updatedInvoice.recurringGroupId) {
+        // Query all invoices in this recurring group
+        const recurringQuery = query(
+          collection(db, "invoices"),
+          where("recurringGroupId", "==", updatedInvoice.recurringGroupId)
+        );
+        const recurringSnapshot = await getDocs(recurringQuery);
+
+        let updatedCount = 0;
+        const currentDate = new Date(
+          updatedInvoice.targetYear,
+          updatedInvoice.targetMonth - 1,
+          1
+        );
+
+        for (const docSnap of recurringSnapshot.docs) {
+          const invData = docSnap.data();
+          const invDate = new Date(
+            invData.targetYear,
+            invData.targetMonth - 1,
+            1
+          );
+
+          // Update current month and all future months
+          if (invDate >= currentDate) {
+            const updateData = {
+              companyName: updatedInvoice.companyName,
+              categories: updatedInvoice.categories,
+              // Don't update targetMonth/targetYear for other invoices
+            };
+            await updateDoc(doc(db, "invoices", docSnap.id), updateData);
+            updatedCount++;
+            // Track this month for totals update
+            monthsToUpdate.add(`${invData.storeID}|${invData.targetMonth}|${invData.targetYear}`);
+          }
+        }
+
+        alert(
+          `Recurring invoice updated! ${updatedCount} invoice(s) affected (current and future months).`
+        );
+      } else {
+        // Regular invoice - just update this one
+        await updateDoc(invoiceRef, invoiceDataToUpdate);
+        monthsToUpdate.add(`${updatedInvoice.storeID}|${updatedInvoice.targetMonth}|${updatedInvoice.targetYear}`);
+        alert("Invoice updated successfully!");
+      }
+
+      // Update totals for all affected months
+      for (const monthKey of monthsToUpdate) {
+        const [storeID, targetMonth, targetYear] = monthKey.split("|");
+        try {
+          await recomputeMonthlyTotals(storeID, Number(targetMonth), Number(targetYear));
+          console.log(`Invoice totals updated for ${storeID} - ${targetMonth}/${targetYear}`);
+        } catch (totalsError) {
+          console.error("Error updating invoice totals:", totalsError);
+        }
+      }
 
       const auth = getAuth();
       const editorUser = auth.currentUser || { firstName: "User" };
@@ -440,7 +641,6 @@ const InvoiceLogs = () => {
         }),
       });
 
-      alert("Invoice updated successfully!");
       setEditDialogOpen(false);
       fetchInvoices(); // refresh from Firestore
     } catch (error) {
@@ -1049,13 +1249,20 @@ const InvoiceLogs = () => {
     return sorted.map((inv, i) => {
       const canEdit = isCurrentMonth(inv.invoiceDate) && !inv.locked;
       const isLocked = inv.locked === true; // Explicitly check for true
+      const isRecurring = inv.isRecurring === true; // Check if recurring invoice
+
+      // Determine row class - recurring takes precedence
+      let rowClass = "invoice-row";
+      if (isRecurring) {
+        rowClass += " recurring-row";
+      } else if (isLocked) {
+        rowClass += " locked-row";
+      } else {
+        rowClass += " unlocked-row";
+      }
 
       return (
-        <tr
-          key={i}
-          className={`invoice-row ${isLocked ? "locked-row" : "unlocked-row"}`}
-          onClick={() => handleRowClick(inv)}
-        >
+        <tr key={i} className={rowClass} onClick={() => handleRowClick(inv)}>
           <td className="tableCell">
             {inv.targetMonth && inv.targetYear
               ? `${inv.targetMonth}/${inv.targetYear}`
@@ -1071,7 +1278,15 @@ const InvoiceLogs = () => {
             {new Date(inv.invoiceDate).toLocaleDateString("en-US")}
           </td>
           <td className="tableCell">{inv.companyName}</td>
-          <td className="tableCell invoiceNumberCell">{inv.invoiceNumber}</td>
+          <td className="tableCell invoiceNumberCell">
+            {isRecurring ? (
+              <span style={{ color: "#7b1fa2", fontWeight: "bold" }}>
+                🔄 Re-Occurring
+              </span>
+            ) : (
+              inv.invoiceNumber
+            )}
+          </td>
 
           {monetaryColumns.map((col, j) => {
             const categoryName = col.id; // Use col.id instead of col.name
@@ -1116,29 +1331,32 @@ const InvoiceLogs = () => {
                   >
                     🗑️ Delete
                   </button>
-                  <button
-                    className={`lock-toggle-button ${
-                      isLocked ? "locked" : "unlocked"
-                    }`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      console.log(
-                        "Invoice lock status:",
-                        inv.locked,
-                        "isLocked:",
-                        isLocked
-                      );
-                      if (isLocked) {
-                        console.log("Unlocking invoice:", inv.id);
-                        unlockInvoice(inv.id);
-                      } else {
-                        console.log("Locking invoice:", inv.id);
-                        lockInvoice(inv.id);
-                      }
-                    }}
-                  >
-                    {isLocked ? "🔓 Unlock" : "🔒 Lock"}
-                  </button>
+                  {/* Hide lock button for recurring invoices */}
+                  {!isRecurring && (
+                    <button
+                      className={`lock-toggle-button ${
+                        isLocked ? "locked" : "unlocked"
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        console.log(
+                          "Invoice lock status:",
+                          inv.locked,
+                          "isLocked:",
+                          isLocked
+                        );
+                        if (isLocked) {
+                          console.log("Unlocking invoice:", inv.id);
+                          unlockInvoice(inv.id);
+                        } else {
+                          console.log("Locking invoice:", inv.id);
+                          lockInvoice(inv.id);
+                        }
+                      }}
+                    >
+                      {isLocked ? "🔓 Unlock" : "🔒 Lock"}
+                    </button>
+                  )}
                 </>
               )}
           </td>
@@ -1270,110 +1488,433 @@ const InvoiceLogs = () => {
   );
   const formRef = useRef(null); // place this at the top of your component
 
-  const EditDialog = React.memo(() => (
-    <Dialog
-      open={editDialogOpen}
-      onClose={() => setEditDialogOpen(false)}
-      maxWidth="sm"
-      fullWidth
-    >
-      <DialogTitle>Edit Invoice</DialogTitle>
-      <DialogContent dividers>
-        {editInvoiceData && (
-          <form
-            ref={formRef}
-            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-          >
-            <input
-              name="companyName"
-              type="text"
-              placeholder="Company Name"
-              defaultValue={editInvoiceData.companyName}
-            />
-            <input
-              name="invoiceNumber"
-              type="text"
-              placeholder="Invoice Number"
-              defaultValue={editInvoiceData.invoiceNumber}
-            />
-            <div>
-              <label>Target Month/Year (for grouping):</label>
-              <div style={{ display: "flex", gap: "10px", marginTop: "5px" }}>
-                <select
-                  name="targetMonth"
-                  defaultValue={
-                    editInvoiceData.targetMonth ||
-                    new Date(editInvoiceData.dateSubmitted).getMonth() + 1
-                  }
-                >
-                  <option value="1">January</option>
-                  <option value="2">February</option>
-                  <option value="3">March</option>
-                  <option value="4">April</option>
-                  <option value="5">May</option>
-                  <option value="6">June</option>
-                  <option value="7">July</option>
-                  <option value="8">August</option>
-                  <option value="9">September</option>
-                  <option value="10">October</option>
-                  <option value="11">November</option>
-                  <option value="12">December</option>
-                </select>
-                <select
-                  name="targetYear"
-                  defaultValue={
-                    editInvoiceData.targetYear ||
-                    new Date(editInvoiceData.dateSubmitted).getFullYear()
-                  }
-                >
-                  <option value="2023">2023</option>
-                  <option value="2024">2024</option>
-                  <option value="2025">2025</option>
-                  <option value="2026">2026</option>
-                </select>
-              </div>
-            </div>
-            {Object.entries(editInvoiceData.categories).map(([key, value]) => (
-              <div key={key}>
-                <label>{key}</label>
-                <input name={key} type="number" defaultValue={value[0]} />
-              </div>
-            ))}
-          </form>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setEditDialogOpen(false)} color="secondary">
-          Cancel
-        </Button>
-        <Button
-          onClick={() => {
-            if (formRef.current) {
-              const formData = new FormData(formRef.current);
-              const updated = {
-                ...editInvoiceData,
-                companyName: formData.get("companyName"),
-                invoiceNumber: formData.get("invoiceNumber"),
-                targetMonth: Number(formData.get("targetMonth")),
-                targetYear: Number(formData.get("targetYear")),
-                categories: Object.fromEntries(
-                  Object.entries(editInvoiceData.categories).map(([key]) => [
-                    key,
-                    [Number(formData.get(key)) || 0],
-                  ])
-                ),
-              };
-              setEditInvoiceData(updated);
-              submitEdit(updated);
-            }
+  // Helper functions for category management
+  const handleAddCategory = () => {
+    // Find a category that's not already added
+    const usedCategories = editCategories.map((c) => c.name);
+    const availableCategory = invoiceCatList.find(
+      (cat) => !usedCategories.includes(cat)
+    );
+    if (availableCategory) {
+      setEditCategories([
+        ...editCategories,
+        {
+          id: Math.random().toString(36).substr(2, 9),
+          name: availableCategory,
+          amount: 0,
+        },
+      ]);
+    }
+  };
+
+  const handleRemoveCategory = (id) => {
+    setEditCategories(editCategories.filter((cat) => cat.id !== id));
+  };
+
+  const handleCategoryChange = (id, field, value) => {
+    setEditCategories(
+      editCategories.map((cat) =>
+        cat.id === id ? { ...cat, [field]: value } : cat
+      )
+    );
+  };
+
+  const EditDialog = () => {
+    const isRecurringInvoice = editInvoiceData?.isRecurring;
+    const usedCategories = editCategories.map((c) => c.name);
+    const availableCategories = invoiceCatList.filter(
+      (cat) => !usedCategories.includes(cat)
+    );
+
+    return (
+      <Dialog
+        open={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            boxShadow: "0 24px 48px rgba(0,0,0,0.2)",
+            overflow: "hidden",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            background: isRecurringInvoice
+              ? "linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%)"
+              : "linear-gradient(135deg, #1565c0 0%, #1976d2 100%)",
+            color: "white",
+            fontWeight: 700,
+            py: 2.5,
+            px: 3,
+            fontSize: "1.25rem",
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
           }}
-          color="primary"
         >
-          Save Changes
-        </Button>
-      </DialogActions>
-    </Dialog>
-  ));
+          {isRecurringInvoice && "🔄 "}Edit Invoice
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3, pb: 2, px: 3 }}>
+          {editInvoiceData && (
+            <form ref={formRef}>
+              <Stack spacing={3}>
+                {/* Invoice Details Section */}
+                <Box
+                  sx={{
+                    p: 2.5,
+                    borderRadius: 2,
+                    bgcolor: "grey.50",
+                    border: "1px solid",
+                    borderColor: "grey.200",
+                  }}
+                >
+                  <Typography
+                    variant="subtitle2"
+                    gutterBottom
+                    sx={{
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      fontSize: "0.7rem",
+                      letterSpacing: 1,
+                      color: "primary.main",
+                      mb: 2,
+                    }}
+                  >
+                    Invoice Details
+                  </Typography>
+                  <Stack spacing={2.5}>
+                    <TextField
+                      name="companyName"
+                      label="Company Name"
+                      defaultValue={editInvoiceData.companyName}
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      sx={{
+                        "& .MuiOutlinedInput-root": {
+                          bgcolor: "white",
+                          borderRadius: 1.5,
+                        },
+                      }}
+                    />
+                    <TextField
+                      name="invoiceNumber"
+                      label="Invoice Number"
+                      defaultValue={editInvoiceData.invoiceNumber}
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      disabled={isRecurringInvoice}
+                      sx={{
+                        "& .MuiOutlinedInput-root": {
+                          bgcolor: isRecurringInvoice
+                            ? "action.disabledBackground"
+                            : "white",
+                          borderRadius: 1.5,
+                        },
+                      }}
+                      helperText={
+                        isRecurringInvoice
+                          ? "Cannot modify recurring invoice number"
+                          : "Edit the invoice number"
+                      }
+                    />
+                  </Stack>
+                </Box>
+
+                {/* Target Period Section */}
+                <Box
+                  sx={{
+                    p: 2.5,
+                    borderRadius: 2,
+                    bgcolor: "grey.50",
+                    border: "1px solid",
+                    borderColor: "grey.200",
+                  }}
+                >
+                  <Typography
+                    variant="subtitle2"
+                    gutterBottom
+                    sx={{
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      fontSize: "0.7rem",
+                      letterSpacing: 1,
+                      color: "primary.main",
+                      mb: 2,
+                    }}
+                  >
+                    Target Period
+                  </Typography>
+                  <Stack direction="row" spacing={2}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Month</InputLabel>
+                      <Select
+                        name="targetMonth"
+                        label="Month"
+                        defaultValue={
+                          editInvoiceData.targetMonth ||
+                          new Date(editInvoiceData.dateSubmitted).getMonth() + 1
+                        }
+                        sx={{ bgcolor: "white", borderRadius: 1.5 }}
+                      >
+                        {[
+                          "January",
+                          "February",
+                          "March",
+                          "April",
+                          "May",
+                          "June",
+                          "July",
+                          "August",
+                          "September",
+                          "October",
+                          "November",
+                          "December",
+                        ].map((month, index) => (
+                          <MenuItem key={month} value={index + 1}>
+                            {month}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Year</InputLabel>
+                      <Select
+                        name="targetYear"
+                        label="Year"
+                        defaultValue={
+                          editInvoiceData.targetYear ||
+                          new Date(editInvoiceData.dateSubmitted).getFullYear()
+                        }
+                        sx={{ bgcolor: "white", borderRadius: 1.5 }}
+                      >
+                        {[2023, 2024, 2025, 2026, 2027].map((year) => (
+                          <MenuItem key={year} value={year}>
+                            {year}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Stack>
+                </Box>
+
+                {/* Categories Section */}
+                <Box
+                  sx={{
+                    p: 2.5,
+                    borderRadius: 2,
+                    bgcolor: "grey.50",
+                    border: "1px solid",
+                    borderColor: "grey.200",
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      mb: 2,
+                    }}
+                  >
+                    <Typography
+                      variant="subtitle2"
+                      sx={{
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        fontSize: "0.7rem",
+                        letterSpacing: 1,
+                        color: "primary.main",
+                      }}
+                    >
+                      Category Amounts
+                    </Typography>
+                    <Button
+                      size="small"
+                      startIcon={<AddIcon />}
+                      onClick={handleAddCategory}
+                      disabled={availableCategories.length === 0}
+                      sx={{
+                        textTransform: "none",
+                        fontWeight: 600,
+                        borderRadius: 2,
+                      }}
+                    >
+                      Add Category
+                    </Button>
+                  </Box>
+                  <Stack spacing={1.5}>
+                    {editCategories.map((category) => (
+                      <Box
+                        key={category.id}
+                        sx={{
+                          display: "flex",
+                          gap: 1.5,
+                          alignItems: "center",
+                          p: 1.5,
+                          bgcolor: "white",
+                          borderRadius: 2,
+                          border: "1px solid",
+                          borderColor: "grey.300",
+                          transition: "all 0.2s ease",
+                          "&:hover": {
+                            borderColor: "primary.main",
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                          },
+                        }}
+                      >
+                        <FormControl
+                          size="small"
+                          sx={{ minWidth: 160, flex: 1 }}
+                        >
+                          <InputLabel>Category</InputLabel>
+                          <Select
+                            value={category.name}
+                            label="Category"
+                            onChange={(e) =>
+                              handleCategoryChange(
+                                category.id,
+                                "name",
+                                e.target.value
+                              )
+                            }
+                            sx={{ borderRadius: 1.5 }}
+                          >
+                            <MenuItem value={category.name}>
+                              {category.name}
+                            </MenuItem>
+                            {availableCategories.map((cat) => (
+                              <MenuItem key={cat} value={cat}>
+                                {cat}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <TextField
+                          type="number"
+                          value={category.amount}
+                          onChange={(e) =>
+                            handleCategoryChange(
+                              category.id,
+                              "amount",
+                              parseFloat(e.target.value) || 0
+                            )
+                          }
+                          size="small"
+                          sx={{
+                            width: 130,
+                            "& .MuiOutlinedInput-root": { borderRadius: 1.5 },
+                          }}
+                          InputProps={{
+                            startAdornment: (
+                              <InputAdornment position="start">
+                                $
+                              </InputAdornment>
+                            ),
+                          }}
+                        />
+                        <IconButton
+                          size="small"
+                          onClick={() => handleRemoveCategory(category.id)}
+                          sx={{
+                            color: "error.main",
+                            "&:hover": {
+                              bgcolor: "error.light",
+                              color: "white",
+                            },
+                          }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
+                    {editCategories.length === 0 && (
+                      <Box
+                        sx={{
+                          p: 3,
+                          textAlign: "center",
+                          color: "text.secondary",
+                          bgcolor: "white",
+                          borderRadius: 2,
+                          border: "1px dashed",
+                          borderColor: "grey.300",
+                        }}
+                      >
+                        <Typography variant="body2">
+                          No categories added. Click "Add Category" to add one.
+                        </Typography>
+                      </Box>
+                    )}
+                  </Stack>
+                </Box>
+              </Stack>
+            </form>
+          )}
+        </DialogContent>
+        <DialogActions
+          sx={{
+            px: 3,
+            py: 2,
+            bgcolor: "grey.100",
+            borderTop: "1px solid",
+            borderColor: "grey.200",
+          }}
+        >
+          <Button
+            onClick={() => setEditDialogOpen(false)}
+            variant="outlined"
+            color="inherit"
+            sx={{
+              borderRadius: 2,
+              px: 3,
+              textTransform: "none",
+              fontWeight: 600,
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => {
+              if (formRef.current) {
+                const formData = new FormData(formRef.current);
+                // Build categories from state
+                const categoriesObj = {};
+                editCategories.forEach((cat) => {
+                  categoriesObj[cat.name] = [cat.amount];
+                });
+                const updated = {
+                  ...editInvoiceData,
+                  companyName: formData.get("companyName"),
+                  invoiceNumber: isRecurringInvoice
+                    ? editInvoiceData.invoiceNumber
+                    : formData.get("invoiceNumber"),
+                  targetMonth: Number(formData.get("targetMonth")),
+                  targetYear: Number(formData.get("targetYear")),
+                  categories: categoriesObj,
+                };
+                setEditInvoiceData(updated);
+                submitEdit(updated);
+              }
+            }}
+            variant="contained"
+            color="primary"
+            sx={{
+              borderRadius: 2,
+              px: 4,
+              textTransform: "none",
+              fontWeight: 600,
+              boxShadow: "0 4px 12px rgba(25, 118, 210, 0.3)",
+            }}
+          >
+            Save Changes
+          </Button>
+        </DialogActions>
+      </Dialog>
+    );
+  };
 
   // Export choice dialog
   const ExportDialog = () => (
@@ -1385,6 +1926,84 @@ const InvoiceLogs = () => {
         </Button>
         <Button onClick={handleExportPDF} color="primary">
           Export as PDF
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
+  // Recurring invoice delete dialog
+  const RecurringDeleteDialog = () => (
+    <Dialog
+      open={recurringDeleteDialogOpen}
+      onClose={() => {
+        setRecurringDeleteDialogOpen(false);
+        setInvoiceToDelete(null);
+      }}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitle sx={{ backgroundColor: "#7b1fa2", color: "white" }}>
+        🔄 Delete Recurring Invoice
+      </DialogTitle>
+      <DialogContent sx={{ mt: 2 }}>
+        {invoiceToDelete && (
+          <Box>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              This is a recurring invoice for{" "}
+              <strong>{invoiceToDelete.companyName}</strong>.
+              <br />
+              How would you like to delete it?
+            </Alert>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={handleDeleteRecurringThisMonthOnly}
+                sx={{ justifyContent: "flex-start", textAlign: "left", py: 2 }}
+              >
+                <Box>
+                  <strong>Delete this month only</strong>
+                  <br />
+                  <span style={{ fontSize: "0.85rem", color: "#666" }}>
+                    Only removes the invoice for {invoiceToDelete.targetMonth}/
+                    {invoiceToDelete.targetYear}
+                  </span>
+                </Box>
+              </Button>
+              <Button
+                variant="contained"
+                color="error"
+                onClick={handleDeleteRecurringAllFuture}
+                sx={{ justifyContent: "flex-start", textAlign: "left", py: 2 }}
+              >
+                <Box>
+                  <strong>Delete this and all future months</strong>
+                  <br />
+                  <span
+                    style={{
+                      fontSize: "0.85rem",
+                      color: "rgba(255,255,255,0.8)",
+                    }}
+                  >
+                    Removes all recurring invoices from{" "}
+                    {invoiceToDelete.targetMonth}/{invoiceToDelete.targetYear}{" "}
+                    onwards
+                  </span>
+                </Box>
+              </Button>
+            </Box>
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button
+          onClick={() => {
+            setRecurringDeleteDialogOpen(false);
+            setInvoiceToDelete(null);
+          }}
+          color="secondary"
+        >
+          Cancel
         </Button>
       </DialogActions>
     </Dialog>
@@ -1414,18 +2033,18 @@ const InvoiceLogs = () => {
   ];
 
   return (
-     <Container
-    maxWidth={false}
-    disableGutters
-    sx={{
-      mt: 2,
-      px: 2,
-      bgcolor: theme.palette.background.default, // 🌙 adapts to dark/light mode
-      color: theme.palette.text.primary,
-      transition: "background-color 0.3s ease, color 0.3s ease",
-      minHeight: "100vh",
-    }}
-  >
+    <Container
+      maxWidth={false}
+      disableGutters
+      sx={{
+        mt: 2,
+        px: 2,
+        bgcolor: theme.palette.background.default, // 🌙 adapts to dark/light mode
+        color: theme.palette.text.primary,
+        transition: "background-color 0.3s ease, color 0.3s ease",
+        minHeight: "100vh",
+      }}
+    >
       <div className="topBar">
         <h1 className="Header">Invoice Log</h1>
         <div className="topBarControls">
@@ -1573,6 +2192,7 @@ const InvoiceLogs = () => {
       <ExportDialog />
       <InvoiceDialog />
       <EditDialog />
+      <RecurringDeleteDialog />
       {showRecentlyDeleted && (
         <div
           style={{
@@ -1583,7 +2203,9 @@ const InvoiceLogs = () => {
             minWidth: "300px",
             textAlign: "center",
             position: "relative",
-            boxShadow: `0px 4px 10px ${theme.palette.mode === "dark" ? "#00000080" : "#00000020"}`,
+            boxShadow: `0px 4px 10px ${
+              theme.palette.mode === "dark" ? "#00000080" : "#00000020"
+            }`,
             border: `1px solid ${theme.palette.divider}`,
           }}
         >

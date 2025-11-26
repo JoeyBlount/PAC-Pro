@@ -6,7 +6,8 @@ from decimal import Decimal
 from typing import Dict, Any, Optional
 from models import (
     PacInputData, PacCalculationResult, AmountUsedData, 
-    ControllableExpenses, ExpenseLine, InventoryData, PurchaseData
+    ControllableExpenses, ExpenseLine, InventoryData, PurchaseData,
+    NonProductAndSuppliesData, SalesComparisonData, BreakdownData
 )
 from .data_ingestion_service import DataIngestionService
 from .account_mapping_service import AccountMappingService
@@ -112,6 +113,30 @@ class PacCalculationService:
         result.pac_percent = 100 - result.total_controllable_percent
         result.pac_dollars = (result.pac_percent / 100) * S
         
+        # 5) Non-Product & Operating Supplies Usage (Detailed)
+        result.non_product_and_supplies = NonProductAndSuppliesData(
+            operatingSupplies=BreakdownData(
+                starting=input_data.beginning_inventory.op_supplies,
+                purchases=input_data.purchases.operating_supply,
+                ending=input_data.ending_inventory.op_supplies,
+                usage=result.amount_used.op_supplies
+            ),
+            nonProduct=BreakdownData(
+                starting=input_data.beginning_inventory.non_product,
+                purchases=input_data.purchases.non_product,
+                ending=input_data.ending_inventory.non_product,
+                usage=result.amount_used.non_product
+            )
+        )
+
+        # 6) Sales Comparison
+        result.sales_comparison = SalesComparisonData(
+            lastYearProductSales=input_data.last_year_product_sales or Decimal('0'),
+            lastMonthProductSales=input_data.last_month_product_sales or Decimal('0'),
+            lastMonthLastYearProductSales=input_data.last_month_last_year_product_sales or Decimal('0'),
+            lastYearLastYearProductSales=input_data.last_year_last_year_product_sales or Decimal('0')
+        )
+        
         return result
     
     def calculate_amount_used(self, input_data: PacInputData) -> AmountUsedData:
@@ -159,7 +184,11 @@ class PacCalculationService:
             input_data.ending_inventory.non_product
         )
         
-        op_supplies_amount = input_data.beginning_inventory.op_supplies
+        op_supplies_amount = (
+            input_data.beginning_inventory.op_supplies + 
+            input_data.purchases.operating_supply - 
+            input_data.ending_inventory.op_supplies
+        )
         
         # Create result with all fields
         result = AmountUsedData(
