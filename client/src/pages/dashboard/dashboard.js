@@ -740,9 +740,9 @@ const Dashboard = () => {
   const user = auth.currentUser;
 
   if (user) {
-    console.log("User is logged in: ", user.displayName);
+    // console.log("User is logged in: ", user.displayName);
   } else {
-    console.log("Error no user logged in")
+    // console.log("Error no user logged in")
   }
 
   // Future note to devs: Don't put anything that needs to fetch from the database via fastAPI in here.

@@ -622,13 +622,13 @@ const PAC = () => {
 
         // Log for debugging
         const productSales = loadedRows.find((r) => r.name === "Product Sales");
-        console.log("Loaded projections:", {
+        /*console.log("Loaded projections:", {
           source: data.source,
           productSales: productSales?.projectedDollar,
           allNetSales: loadedRows.find((r) => r.name === "All Net Sales")
             ?.projectedDollar,
           rowCount: loadedRows.length,
-        });
+        });*/
 
         setProjections(loadedRows);
       } catch (e) {
@@ -733,10 +733,10 @@ const PAC = () => {
         );
 
         if (existingData) {
-          console.log(
+          /*console.log(
             "Month is locked - loading previously submitted data:",
             existingData
-          );
+          );*/
 
           // Sales section
           setProductNetSales(existingData.sales?.productNetSales || 0);
@@ -785,21 +785,21 @@ const PAC = () => {
           setEndingNonProduct(existingData.inventoryEnding?.nonProduct || 0);
           setEndingOpsSupplies(existingData.inventoryEnding?.opsSupplies || 0);
 
-          console.log("Generate tab autofilled with locked month data");
+          //console.log("Generate tab autofilled with locked month data");
         } else {
           // Locked but no data - set to 0
-          console.log(
+          /*console.log(
             "Month is locked but no existing data found - setting to 0"
-          );
+          );*/
           resetGenerateFields();
         }
       } else {
         // Month is unlocked - set all fields to 0
-        console.log("Month is unlocked - resetting all fields to 0");
+        //console.log("Month is unlocked - resetting all fields to 0");
         resetGenerateFields();
       }
     } catch (error) {
-      console.error("Error loading existing generate data:", error);
+      //console.error("Error loading existing generate data:", error);
       // On error, reset to 0 if unlocked
       if (!isMonthLocked()) {
         resetGenerateFields();
@@ -929,10 +929,10 @@ const PAC = () => {
             lastYear,
             currentHistMonth
           );
-          console.log("Last year PAC actual data loaded:", lastYearData);
+          //console.log("Last year PAC actual data loaded:", lastYearData);
         } catch (e) {
           // Last year's data might not exist, that's okay
-          console.log("Last year's PAC actual data not found", e);
+          //console.log("Last year's PAC actual data not found", e);
         }
 
         // Check again if cancelled
@@ -1330,19 +1330,19 @@ const PAC = () => {
 
       // Compute and save PAC actuals
       try {
-        console.log("Starting PAC actual computation...", {
+        /*console.log("Starting PAC actual computation...", {
           selectedStore,
           year,
           month,
           submittedBy,
-        });
+        });*/
         const result = await computeAndSavePacActual(
           selectedStore,
           year,
           month,
           submittedBy
         );
-        console.log("PAC Actual computation successful:", result);
+        //console.log("PAC Actual computation successful:", result);
       } catch (e) {
         console.error("PAC Actual compute failed:", e);
         alert(`PAC Actual computation failed: ${e.message}`);
@@ -1423,12 +1423,12 @@ const PAC = () => {
           current.dollars || 0,
           lastYearDollars
         );
-        console.log("Product Sales YOY:", {
+        /*console.log("Product Sales YOY:", {
           currentDollars: current.dollars,
           lastYearDollars: lastYearDollars,
           lastYearData: lastYearData,
           yoyChange,
-        });
+        });*/
         return {
           dollars: current.dollars,
           percent: yoyChange,
@@ -1446,12 +1446,12 @@ const PAC = () => {
           current.dollars || 0,
           lastYearDollars
         );
-        console.log("All Net Sales YOY:", {
+        /*console.log("All Net Sales YOY:", {
           currentDollars: current.dollars,
           lastYearDollars: lastYearDollars,
           lastYearData: lastYearData,
           yoyChange,
-        });
+        });*/
         return {
           dollars: current.dollars,
           percent: yoyChange,

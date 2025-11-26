@@ -182,13 +182,13 @@ export const saveGenerateInput = async (
     // Save to Firestore
     await setDoc(docRef, generateData, { merge: true });
 
-    console.log(`Saved generate input data for ${storeID} - ${month} ${year}`);
+    //console.log(`Saved generate input data for ${storeID} - ${month} ${year}`);
 
     // Trigger PAC actual recalculation after generate input is saved
     try {
-      console.log(
+      /*console.log(
         `[Generate Input] Triggering PAC actual recalculation for ${storeID} - ${month} ${year}`
-      );
+      );*/
       const months = [
         "January",
         "February",
@@ -239,9 +239,9 @@ export const saveGenerateInput = async (
         );
       }
 
-      console.log(
+      /*console.log(
         `[Generate Input] PAC actual recalculation completed for ${storeID} - ${month} ${year}`
-      );
+      );*/
     } catch (pacError) {
       console.error(
         `[Generate Input] Failed to recalculate PAC actual for ${storeID}:`,

@@ -6,7 +6,7 @@ import { ROLES } from '../../constants/roles';
 const NotAllowed = () => {
   const navigate = useNavigate();
   const { userRole } = useAuth();
-  console.log("User Role:", userRole);
+  //console.log("User Role:", userRole);
 
   const getMessage = () => {
     switch (userRole) {

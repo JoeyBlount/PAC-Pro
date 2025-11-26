@@ -13,7 +13,7 @@ const invoiceCategories = [
 ];
 
 const setupInvoiceCategories = async () => {
-  console.log("Setting up invoice categories...");
+  //console.log("Setting up invoice categories...");
   
   try {
     const invoiceCatRef = collection(db, "invoiceCategories");
@@ -29,11 +29,11 @@ const setupInvoiceCategories = async () => {
         description: `Account settings for ${categoryId} category`
       });
       
-      console.log(`✅ Created category: ${categoryId}`);
+      //console.log(`✅ Created category: ${categoryId}`);
     }
     
-    console.log("🎉 All invoice categories have been created successfully!");
-    console.log("You can now use the Invoice Settings page to edit account numbers.");
+    //console.log("🎉 All invoice categories have been created successfully!");
+    //console.log("You can now use the Invoice Settings page to edit account numbers.");
     
   } catch (error) {
     console.error("❌ Error setting up categories:", error);
