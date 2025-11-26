@@ -596,6 +596,65 @@ async def compute_and_save_pac_actual(
         invoice_log_totals = invoice_log_totals_doc.to_dict() if invoice_log_totals_doc.exists else {"totals": {}}
         pac_projections = pac_projections_doc.to_dict() if pac_projections_doc.exists else {}
         
+        # Fetch Last Year Same Month Data
+        last_year = year - 1
+        last_year_doc_id = f"{store_id}_{last_year}{month_num:02d}"
+        
+        last_year_generate_input_doc = db.collection("generate_input").document(last_year_doc_id).get()
+        last_year_sales = 0.0
+        if last_year_generate_input_doc.exists:
+            data = last_year_generate_input_doc.to_dict() or {}
+            # Handle potential string/float values safely
+            try:
+                last_year_sales = float(data.get("sales", {}).get("productNetSales") or 0)
+            except (ValueError, TypeError):
+                last_year_sales = 0.0
+
+        # Fetch Last Year Same Month Last Year Data (2 years ago)
+        last_year_last_year = last_year - 1
+        last_year_last_year_doc_id = f"{store_id}_{last_year_last_year}{month_num:02d}"
+        
+        last_year_last_year_generate_input_doc = db.collection("generate_input").document(last_year_last_year_doc_id).get()
+        last_year_last_year_sales = 0.0
+        if last_year_last_year_generate_input_doc.exists:
+            data = last_year_last_year_generate_input_doc.to_dict() or {}
+            try:
+                last_year_last_year_sales = float(data.get("sales", {}).get("productNetSales") or 0)
+            except (ValueError, TypeError):
+                last_year_last_year_sales = 0.0
+
+        # Fetch Last Month Data
+        # Calculate previous month
+        if month_num == 1:
+            last_month_year = year - 1
+            last_month_num = 12
+        else:
+            last_month_year = year
+            last_month_num = month_num - 1
+            
+        last_month_doc_id = f"{store_id}_{last_month_year}{last_month_num:02d}"
+        last_month_generate_input_doc = db.collection("generate_input").document(last_month_doc_id).get()
+        last_month_sales = 0.0
+        if last_month_generate_input_doc.exists:
+            data = last_month_generate_input_doc.to_dict() or {}
+            try:
+                last_month_sales = float(data.get("sales", {}).get("productNetSales") or 0)
+            except (ValueError, TypeError):
+                last_month_sales = 0.0
+
+        # Fetch Last Month Last Year Data (for YoY calc on Last Month)
+        last_month_last_year_year = last_month_year - 1
+        last_month_last_year_doc_id = f"{store_id}_{last_month_last_year_year}{last_month_num:02d}"
+        
+        last_month_last_year_generate_input_doc = db.collection("generate_input").document(last_month_last_year_doc_id).get()
+        last_month_last_year_sales = 0.0
+        if last_month_last_year_generate_input_doc.exists:
+            data = last_month_last_year_generate_input_doc.to_dict() or {}
+            try:
+                last_month_last_year_sales = float(data.get("sales", {}).get("productNetSales") or 0)
+            except (ValueError, TypeError):
+                last_month_last_year_sales = 0.0
+
         # Use the PAC actual calculation function
         from services.pac_calculation_service import calculate_pac_actual
         
@@ -605,6 +664,15 @@ async def compute_and_save_pac_actual(
             invoice_log_totals,
             pac_projections
         )
+        
+        # Add comparison data to pac_actual_data
+        # This will be saved into the document
+        pac_actual_data["salesComparison"] = {
+            "lastYearProductSales": last_year_sales,
+            "lastMonthProductSales": last_month_sales,
+            "lastMonthLastYearProductSales": last_month_last_year_sales,
+            "lastYearLastYearProductSales": last_year_last_year_sales
+        }
         
         # Determine last updated timestamp and user
         timestamps = []
@@ -654,7 +722,149 @@ async def compute_and_save_pac_actual(
         # Save to Firestore
         db.collection("pac_actual").document(doc_id).set(pac_actual_doc, merge=True)
         
-        return {"success": True, "doc_id": doc_id, "data": pac_actual_doc}
+        # Trigger cascading recomputes for months that depend on this month's data
+        # Only trigger if not already a cascade (to prevent infinite loops)
+        cascade_triggered = getattr(payload, 'is_cascade', False) if hasattr(payload, 'is_cascade') else False
+        cascaded_months = []
+        
+        if not cascade_triggered:
+            # Calculate dependent months
+            dependent_months = []
+            
+            # Next year same month (uses this month as "Last Year Same Month")
+            next_year_same_month = f"{year + 1}{month_num:02d}"
+            dependent_months.append(next_year_same_month)
+            
+            # Next month (uses this month as "Last Month")
+            if month_num == 12:
+                next_month = f"{year + 1}01"
+            else:
+                next_month = f"{year}{month_num + 1:02d}"
+            dependent_months.append(next_month)
+            
+            # Next year next month (uses this month as "Last Month Last Year")
+            if month_num == 12:
+                next_year_next_month = f"{year + 2}01"
+            else:
+                next_year_next_month = f"{year + 1}{month_num + 1:02d}"
+            dependent_months.append(next_year_next_month)
+            
+            # Trigger recomputes for dependent months that have existing pac_actual data
+            for dep_month in dependent_months:
+                dep_doc_id = f"{store_id}_{dep_month}"
+                dep_pac_actual = db.collection("pac_actual").document(dep_doc_id).get()
+                
+                if dep_pac_actual.exists:
+                    # This month has PAC actual data, recompute it
+                    try:
+                        # Check if generate_input exists for this month
+                        dep_generate_input = db.collection("generate_input").document(dep_doc_id).get()
+                        if dep_generate_input.exists:
+                            # Recursively call compute for this month (but mark as cascade to prevent loops)
+                            logger.info(f"Cascading recompute triggered for {dep_doc_id}")
+                            cascaded_months.append(dep_month)
+                            
+                            # Perform inline recompute for the dependent month
+                            dep_year = int(dep_month[:4])
+                            dep_month_num = int(dep_month[4:])
+                            dep_month_name = month_names[dep_month_num - 1]
+                            
+                            dep_generate_input_data = dep_generate_input.to_dict() or {}
+                            dep_invoice_log_totals_doc = db.collection("invoice_log_totals").document(dep_doc_id).get()
+                            dep_pac_projections_doc = db.collection("pac-projections").document(dep_doc_id).get()
+                            
+                            dep_invoice_log_totals = dep_invoice_log_totals_doc.to_dict() if dep_invoice_log_totals_doc.exists else {"totals": {}}
+                            dep_pac_projections = dep_pac_projections_doc.to_dict() if dep_pac_projections_doc.exists else {}
+                            
+                            # Fetch historical data for the dependent month
+                            dep_last_year = dep_year - 1
+                            dep_last_year_doc_id = f"{store_id}_{dep_last_year}{dep_month_num:02d}"
+                            dep_last_year_doc = db.collection("generate_input").document(dep_last_year_doc_id).get()
+                            dep_last_year_sales = 0.0
+                            if dep_last_year_doc.exists:
+                                try:
+                                    dep_last_year_sales = float(dep_last_year_doc.to_dict().get("sales", {}).get("productNetSales") or 0)
+                                except (ValueError, TypeError):
+                                    pass
+                            
+                            # 2 years ago for YoY on Last Year Same Month
+                            dep_last_year_last_year = dep_last_year - 1
+                            dep_last_year_last_year_doc_id = f"{store_id}_{dep_last_year_last_year}{dep_month_num:02d}"
+                            dep_last_year_last_year_doc = db.collection("generate_input").document(dep_last_year_last_year_doc_id).get()
+                            dep_last_year_last_year_sales = 0.0
+                            if dep_last_year_last_year_doc.exists:
+                                try:
+                                    dep_last_year_last_year_sales = float(dep_last_year_last_year_doc.to_dict().get("sales", {}).get("productNetSales") or 0)
+                                except (ValueError, TypeError):
+                                    pass
+                            
+                            # Last month
+                            if dep_month_num == 1:
+                                dep_last_month_year = dep_year - 1
+                                dep_last_month_num = 12
+                            else:
+                                dep_last_month_year = dep_year
+                                dep_last_month_num = dep_month_num - 1
+                            dep_last_month_doc_id = f"{store_id}_{dep_last_month_year}{dep_last_month_num:02d}"
+                            dep_last_month_doc = db.collection("generate_input").document(dep_last_month_doc_id).get()
+                            dep_last_month_sales = 0.0
+                            if dep_last_month_doc.exists:
+                                try:
+                                    dep_last_month_sales = float(dep_last_month_doc.to_dict().get("sales", {}).get("productNetSales") or 0)
+                                except (ValueError, TypeError):
+                                    pass
+                            
+                            # Last month last year
+                            dep_last_month_last_year_year = dep_last_month_year - 1
+                            dep_last_month_last_year_doc_id = f"{store_id}_{dep_last_month_last_year_year}{dep_last_month_num:02d}"
+                            dep_last_month_last_year_doc = db.collection("generate_input").document(dep_last_month_last_year_doc_id).get()
+                            dep_last_month_last_year_sales = 0.0
+                            if dep_last_month_last_year_doc.exists:
+                                try:
+                                    dep_last_month_last_year_sales = float(dep_last_month_last_year_doc.to_dict().get("sales", {}).get("productNetSales") or 0)
+                                except (ValueError, TypeError):
+                                    pass
+                            
+                            # Calculate PAC actual for dependent month
+                            dep_pac_actual_data = calculate_pac_actual(
+                                dep_generate_input_data,
+                                dep_invoice_log_totals,
+                                dep_pac_projections
+                            )
+                            
+                            dep_pac_actual_data["salesComparison"] = {
+                                "lastYearProductSales": dep_last_year_sales,
+                                "lastMonthProductSales": dep_last_month_sales,
+                                "lastMonthLastYearProductSales": dep_last_month_last_year_sales,
+                                "lastYearLastYearProductSales": dep_last_year_last_year_sales
+                            }
+                            
+                            # Update the dependent month's pac_actual
+                            dep_pac_actual_doc = {
+                                "storeID": store_id,
+                                "store": f"Store {store_id.split('_')[1] if '_' in store_id else store_id}",
+                                "year": dep_year,
+                                "month": dep_month_name,
+                                "monthNumber": dep_month_num,
+                                "lastUpdatedAt": firestore.SERVER_TIMESTAMP,
+                                "lastUpdatedBy": "System (Cascade)",
+                                **dep_pac_actual_data,
+                            }
+                            
+                            db.collection("pac_actual").document(dep_doc_id).set(dep_pac_actual_doc, merge=True)
+                            logger.info(f"Cascade recompute completed for {dep_doc_id}")
+                    except Exception as cascade_err:
+                        logger.warning(f"Failed to cascade recompute for {dep_doc_id}: {cascade_err}")
+        
+        # Replace SERVER_TIMESTAMP with current time for response serialization
+        response_doc = pac_actual_doc.copy()
+        response_doc["lastUpdatedAt"] = datetime.now().isoformat()
+        
+        result = {"success": True, "doc_id": doc_id, "data": response_doc}
+        if cascaded_months:
+            result["cascaded_months"] = cascaded_months
+        
+        return result
         
     except HTTPException:
         raise
@@ -748,8 +958,8 @@ async def read_invoice(
 
 @router.post("/invoices/submit")
 async def submit_invoice(
-    image: UploadFile = File(...),
-    invoice_number: str = Form(...),
+    image: UploadFile = File(None),  # Optional for recurring invoices
+    invoice_number: str = Form(""),  # Optional for recurring invoices
     company_name: str = Form(...),
     invoice_day: int = Form(...),
     invoice_month: int = Form(...),
@@ -759,15 +969,16 @@ async def submit_invoice(
     store_id: str = Form(...),
     user_email: str = Form(...),
     categories: str = Form(...),  # JSON string of categories
+    is_recurring: bool = Form(False),  # Recurring invoice flag
+    recurring_interval: int = Form(1),  # Months between recurrences
+    recurring_end_date: str = Form("forever"),  # "forever" or "YYYY-MM" format
     submit_service: InvoiceSubmitService = Depends(get_invoice_submit_service),
 ) -> Dict[str, Any]:
     """
     Submit invoice data and image to Firebase.
+    For recurring invoices, image is optional and invoice_number is auto-set to "Re-Occurring".
     """
     logger.info("Received invoice submission request")
-    
-    if not image:
-        raise HTTPException(status_code=400, detail="No image uploaded.")
     
     if not submit_service.is_available():
         raise HTTPException(
@@ -775,17 +986,24 @@ async def submit_invoice(
             detail="Invoice submission service not available - Firebase not initialized"
         )
     
-    # Read image data
-    contents = await image.read()
-    await image.close()
-    if not contents or len(contents) == 0:
-        raise HTTPException(status_code=400, detail="Empty image upload.")
+    # Read image data if provided
+    contents = None
+    image_filename = None
+    if image:
+        contents = await image.read()
+        await image.close()
+        image_filename = image.filename or "invoice.jpg"
+    
+    # For non-recurring invoices, image is required
+    if not is_recurring and (not contents or len(contents) == 0):
+        raise HTTPException(status_code=400, detail="Image is required for non-recurring invoices.")
     
     try:
         # Validate required fields
         validation_errors = []
         
-        if not invoice_number:
+        # Invoice number is required only for non-recurring invoices
+        if not is_recurring and not invoice_number:
             validation_errors.append("Invoice number is required")
         if not company_name:
             validation_errors.append("Company name is required")
@@ -799,6 +1017,22 @@ async def submit_invoice(
             validation_errors.append("User email is required")
         if not categories:
             validation_errors.append("Categories are required")
+        
+        # Validate recurring invoice parameters
+        if is_recurring:
+            if recurring_interval < 1 or recurring_interval > 12:
+                validation_errors.append("Recurring interval must be between 1 and 12 months")
+            if recurring_end_date != "forever":
+                try:
+                    # Validate end date format (YYYY-MM)
+                    parts = recurring_end_date.split("-")
+                    if len(parts) != 2:
+                        raise ValueError("Invalid format")
+                    year, month = int(parts[0]), int(parts[1])
+                    if month < 1 or month > 12:
+                        raise ValueError("Invalid month")
+                except (ValueError, IndexError):
+                    validation_errors.append("Recurring end date must be 'forever' or in 'YYYY-MM' format")
         
         if validation_errors:
             raise HTTPException(
@@ -822,7 +1056,7 @@ async def submit_invoice(
         
         # Prepare invoice data
         invoice_data = {
-            'invoiceNumber': invoice_number,
+            'invoiceNumber': 'Re-Occurring' if is_recurring else invoice_number,
             'companyName': company_name,
             'invoiceDate': invoice_date,
             'targetMonth': target_month,
@@ -830,14 +1064,17 @@ async def submit_invoice(
             'storeID': store_id,
             'user_email': user_email,
             'categories': categories_dict,
-            'dateSubmitted': datetime.now().strftime("%m/%d/%Y")
+            'dateSubmitted': datetime.now().strftime("%m/%d/%Y"),
+            'isRecurring': is_recurring,
+            'recurringInterval': recurring_interval if is_recurring else None,
+            'recurringEndDate': recurring_end_date if is_recurring else None,
         }
         
         # Submit invoice
         result = await submit_service.submit_invoice(
             invoice_data=invoice_data,
             image_file=contents,
-            image_filename=image.filename or "invoice.jpg"
+            image_filename=image_filename
         )
             
         
@@ -850,6 +1087,51 @@ async def submit_invoice(
         logger.error(f"Error submitting invoice: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error submitting invoice: {str(e)}"
+        )
+
+
+# ---- Recurring Invoice Delete Endpoint ----
+class RecurringDeleteRequest(BaseModel):
+    recurring_group_id: str
+    delete_from_month: Optional[int] = None
+    delete_from_year: Optional[int] = None
+
+
+@router.delete("/invoices/recurring/{recurring_group_id}")
+async def delete_recurring_invoice_group(
+    recurring_group_id: str,
+    delete_from_month: Optional[int] = Query(None, description="Delete from this month onwards"),
+    delete_from_year: Optional[int] = Query(None, description="Delete from this year onwards"),
+    submit_service: InvoiceSubmitService = Depends(get_invoice_submit_service),
+    _auth: Dict[str, Any] = Depends(require_roles(["Admin"])),
+) -> Dict[str, Any]:
+    """
+    Delete all invoices in a recurring group.
+    If delete_from_month and delete_from_year are provided, only delete invoices from that month onwards.
+    Admin only.
+    """
+    logger.info(f"Received request to delete recurring invoice group: {recurring_group_id}")
+    
+    if not submit_service.is_available():
+        raise HTTPException(
+            status_code=503, 
+            detail="Invoice submission service not available - Firebase not initialized"
+        )
+    
+    try:
+        result = await submit_service.delete_recurring_group(
+            recurring_group_id=recurring_group_id,
+            delete_from_month=delete_from_month,
+            delete_from_year=delete_from_year
+        )
+        
+        logger.info(f"Recurring invoice group deleted: {result}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error deleting recurring invoice group: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error deleting recurring invoices: {str(e)}"
         )
     
 @router.post("/projections/seed")

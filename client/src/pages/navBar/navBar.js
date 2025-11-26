@@ -17,7 +17,7 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
-  useTheme
+  useTheme,
 } from "@mui/material";
 import {
   ReceiptLong,
@@ -31,15 +31,12 @@ import {
   Menu as MenuIcon,
   Close as CloseIcon,
   Dashboard,
-
   Print,
   Notifications,
   Delete,
   PersonAdd,
   DoneAll,
-
   Campaign,
-
 } from "@mui/icons-material";
 import { StoreContext } from "../../context/storeContext";
 import AnnoucementDialog from "./annoucement";
@@ -48,8 +45,7 @@ import { apiUrl } from "../../utils/api";
 // Helper to format timestamps into "x minutes ago"
 function formatRelativeTime(timestamp) {
   if (!timestamp) return "";
-  const date =
-    timestamp.toDate ? timestamp.toDate() : new Date(timestamp); // Firestore Timestamp -> Date
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp); // Firestore Timestamp -> Date
   const diffMs = Date.now() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   if (diffMins < 1) return "Just now";
@@ -70,7 +66,7 @@ export function NavBar() {
   const sideNavRef = React.useRef(null);
   const reportsRef = React.useRef(null);
   const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
+  const isDark = theme.palette.mode === "dark";
 
   const [userData, setUserData] = useState(null);
   const [stores, setStores] = useState([]);
@@ -79,19 +75,19 @@ export function NavBar() {
   // reports config for dropdown - PAC Actual report and Invoice Log
   const reportsList = [
     {
-      id: 'pac-actual-report',
-      name: 'PAC Actual Report',
+      id: "pac-actual-report",
+      name: "PAC Actual Report",
       icon: <Analytics />,
-      path: '/navi/pac',
-      description: 'View and print PAC Actual report'
+      path: "/navi/pac",
+      description: "View and print PAC Actual report",
     },
     {
-      id: 'invoice-log-report',
-      name: 'Invoice Log',
+      id: "invoice-log-report",
+      name: "Invoice Log",
       icon: <ReceiptLong />,
-      path: '/navi/invoiceLogs',
-      description: 'View and print invoice log report'
-    }
+      path: "/navi/invoiceLogs",
+      description: "View and print invoice log report",
+    },
   ];
 
   const { selectedStore, setSelectedStore } = useContext(StoreContext);
@@ -106,27 +102,27 @@ export function NavBar() {
       setLoading(true);
       try {
         let headers = {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         };
 
         // Handle authentication for both Firebase and Microsoft users
-        if (currentUser.authMethod === 'microsoft') {
+        if (currentUser.authMethod === "microsoft") {
           // For Microsoft users, use credentials with session cookies
-          headers['X-Auth-Method'] = 'microsoft';
+          headers["X-Auth-Method"] = "microsoft";
         } else if (auth.currentUser) {
           // For Firebase users, use ID token
           const token = await auth.currentUser.getIdToken();
-          headers['Authorization'] = `Bearer ${token}`;
+          headers["Authorization"] = `Bearer ${token}`;
         } else {
           // Fallback for dev mode
-          headers['X-Dev-Email'] = 'dev@example.com';
+          headers["X-Dev-Email"] = "dev@example.com";
         }
 
         // Load allowed stores from backend
-        const res = await fetch(apiUrl('/api/pac/nav/allowed-stores'), {
-          method: 'GET',
+        const res = await fetch(apiUrl("/api/pac/nav/allowed-stores"), {
+          method: "GET",
           headers: headers,
-          credentials: 'include',
+          credentials: "include",
         });
 
         if (!res.ok) {
@@ -144,11 +140,11 @@ export function NavBar() {
 
         // Set user data for display - use currentUser from AuthContext
         setUserData({
-          firstName: currentUser.displayName?.split(' ')[0] || 'User',
-          email: currentUser.email
+          firstName: currentUser.displayName?.split(" ")[0] || "User",
+          email: currentUser.email,
         });
       } catch (error) {
-        console.error('Error loading allowed stores:', error);
+        console.error("Error loading allowed stores:", error);
         setStores([]);
       } finally {
         setLoading(false);
@@ -166,9 +162,10 @@ export function NavBar() {
   const getSelectedStoreText = () => {
     if (!selectedStore || stores.length === 0) return "Select Store";
     const selected = stores.find((s) => s.id === selectedStore);
-    return selected ? `${selected.storeID} - ${selected.subName}` : "Select Store";
+    return selected
+      ? `${selected.storeID} - ${selected.subName}`
+      : "Select Store";
   };
-
 
   // Add click outside handler
   useEffect(() => {
@@ -180,7 +177,7 @@ export function NavBar() {
       ) {
         setSideNavOpen(false);
       }
-      
+
       // Handle reports dropdown click outside
       if (
         reportsRef.current &&
@@ -204,13 +201,12 @@ export function NavBar() {
     navigate("/navi/" + path);
   }
 
-
   // Handle report navigation with auto-print
   function handleReportNavigation(report) {
     //console.log('Navigating to report:', report.name, 'at path:', report.path);
     navigate(report.path);
     setReportsDropdownOpen(false);
-    
+
     // Auto-trigger print/export after a delay to allow page load
     setTimeout(() => {
       //console.log('Attempting to auto-trigger print/export for:', report.name);
@@ -224,13 +220,13 @@ export function NavBar() {
           //console.log('Switching to Actual tab...');
           actualTab.click();
         }
-        
-        
+
         setTimeout(() => {
-          const buttons = document.querySelectorAll('button');
-          const printBtn = Array.from(buttons).find(btn => 
-            btn.textContent.toLowerCase().includes('print report') ||
-            btn.textContent.toLowerCase().includes('print')
+          const buttons = document.querySelectorAll("button");
+          const printBtn = Array.from(buttons).find(
+            (btn) =>
+              btn.textContent.toLowerCase().includes("print report") ||
+              btn.textContent.toLowerCase().includes("print")
           );
           if (printBtn) {
             //console.log('Found print button, clicking...');
@@ -239,11 +235,11 @@ export function NavBar() {
             //console.log('No print button found');
           }
         }, 1000); // Wait 1 second for tab to load
-      } else if (report.id === 'invoice-log-report') {
+      } else if (report.id === "invoice-log-report") {
         // For Invoice Log, just open the export dialog
-        const buttons = document.querySelectorAll('button');
-        const exportBtn = Array.from(buttons).find(btn => 
-          btn.textContent.toLowerCase().includes('export')
+        const buttons = document.querySelectorAll("button");
+        const exportBtn = Array.from(buttons).find((btn) =>
+          btn.textContent.toLowerCase().includes("export")
         );
         if (exportBtn) {
           //console.log('Found export button, opening dialog...');
@@ -252,20 +248,24 @@ export function NavBar() {
           //console.log('No export button found');
         }
       }
-    }, 1500); 
+    }, 1500);
   }
 
   // Sign out logic
   async function handleSignOut() {
     try {
       // Sign out of Firebase if logged in
-      try { await signOut(auth); } catch {}
+      try {
+        await signOut(auth);
+      } catch {}
 
       // Clear backend Microsoft session cookie
-      const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "http://localhost:5140").replace(/\/+$/, "");
+      const BASE_URL = (
+        process.env.REACT_APP_BACKEND_URL || "http://localhost:5140"
+      ).replace(/\/+$/, "");
       await fetch(`${BASE_URL}/api/auth/logout`, {
-        method: 'POST',
-        credentials: 'include'
+        method: "POST",
+        credentials: "include",
       });
 
       // Clear local storage and redirect
@@ -284,7 +284,6 @@ export function NavBar() {
   const [anchorEl, setAnchorEl] = useState(null);
   const [loadingNotifications, setLoadingNotificaitons] = useState([]);
 
-
   // Notifications listener
   useEffect(() => {
     if (!auth.currentUser) return;
@@ -293,24 +292,34 @@ export function NavBar() {
 
     const fetchNotifications = async () => {
       try {
-        const res = await fetch(apiUrl(`/api/pac/notifications?toEmail=${encodeURIComponent(auth.currentUser.email)}`));
+        const res = await fetch(
+          apiUrl(
+            `/api/pac/notifications?toEmail=${encodeURIComponent(
+              auth.currentUser.email
+            )}`
+          )
+        );
         const data = await res.json();
-        setNotifications(data);
+        // Ensure data is an array before setting
+        setNotifications(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Error loading notification settings:", err);
+        setNotifications([]);
       } finally {
         setLoadingNotificaitons(false);
       }
-    }
+    };
 
     fetchNotifications();
   }, []);
 
   // Mark single notification as read
-  const markAsRead = async(notifId) => {
+  const markAsRead = async (notifId) => {
     try {
-      const res = await fetch(apiUrl(`/api/pac/notifications/${notifId}/read`), 
-        { method: "POST" });
+      const res = await fetch(
+        apiUrl(`/api/pac/notifications/${notifId}/read`),
+        { method: "POST" }
+      );
       if (res.ok) {
         setNotifications((prev) =>
           prev.map((n) => (n.id === notifId ? { ...n, read: true } : n))
@@ -325,8 +334,13 @@ export function NavBar() {
   const markAllAsRead = async () => {
     try {
       const res = await fetch(
-        apiUrl(`/api/pac/notifications/mark_all_read?toEmail=${encodeURIComponent(auth.currentUser.email)}`),
-        { method: "POST" });
+        apiUrl(
+          `/api/pac/notifications/mark_all_read?toEmail=${encodeURIComponent(
+            auth.currentUser.email
+          )}`
+        ),
+        { method: "POST" }
+      );
       if (res.ok) {
         setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       }
@@ -340,7 +354,9 @@ export function NavBar() {
   const handleNotifClick = (event) => setAnchorEl(event.currentTarget);
   const handleNotifClose = () => setAnchorEl(null);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = Array.isArray(notifications)
+    ? notifications.filter((n) => !n.read).length
+    : 0;
 
   const typeToIcon = {
     invoice_submitted: <ReceiptLong fontSize="small" color="primary" />,
@@ -351,19 +367,19 @@ export function NavBar() {
 
   // Annoucement things
   const [openAnn, setOpenAnn] = useState(false);
-  
+
   return (
     <>
       {/* TOP NAV BAR */}
-     <div
+      <div
         className="topNavBar"
         style={{
           background: isDark
-            ? theme.palette.background.paper                // dark mode color
-            : 'linear-gradient(to right, #2196f3, #0d47a1)', // light mode gradient
+            ? theme.palette.background.paper // dark mode color
+            : "linear-gradient(to right, #2196f3, #0d47a1)", // light mode gradient
           color: theme.palette.text.primary,
           borderBottom: `1px solid ${theme.palette.divider}`,
-          transition: 'background-color 0.3s ease, color 0.3s ease',
+          transition: "background-color 0.3s ease, color 0.3s ease",
         }}
       >
         <div className="topNavLeft">
@@ -409,16 +425,16 @@ export function NavBar() {
           style={{ display: "flex", alignItems: "center", gap: "8px" }}
         >
           {/* Annoucements */}
-          <IconButton className="announcementBtn" onClick={() => setOpenAnn(true)}>
+          <IconButton
+            className="announcementBtn"
+            onClick={() => setOpenAnn(true)}
+          >
             <Campaign />
           </IconButton>
           <AnnoucementDialog open={openAnn} onClose={() => setOpenAnn(false)} />
 
           {/* Notifications Bell */}
-          <IconButton
-            className="notificationBtn"
-            onClick={handleNotifClick}
-          >
+          <IconButton className="notificationBtn" onClick={handleNotifClick}>
             <Badge badgeContent={unreadCount} color="error">
               <Notifications sx={{ fontSize: 24 }} />
             </Badge>
@@ -431,7 +447,7 @@ export function NavBar() {
               style: { maxHeight: 400, width: "340px" },
             }}
           >
-            { loadingNotifications && (
+            {loadingNotifications && (
               <MenuItem disabled>Loading Notifications</MenuItem>
             )}
 
@@ -474,7 +490,9 @@ export function NavBar() {
                   }}
                 >
                   <ListItemIcon>
-                    {typeToIcon[notif.type] || <Notifications fontSize="small" />}
+                    {typeToIcon[notif.type] || (
+                      <Notifications fontSize="small" />
+                    )}
                   </ListItemIcon>
                   <ListItemText
                     primaryTypographyProps={{
@@ -522,7 +540,7 @@ export function NavBar() {
           backgroundColor: theme.palette.background.paper,
           color: theme.palette.text.primary,
           borderRight: `1px solid ${theme.palette.divider}`,
-          transition: 'background-color 0.3s ease, color 0.3s ease',
+          transition: "background-color 0.3s ease, color 0.3s ease",
         }}
       >
         <div className="sideNavContent">
@@ -554,8 +572,8 @@ export function NavBar() {
                 {sideNavOpen && "Submit Invoice"}
               </Button>
             </Tooltip>
-            <div 
-              className="reports-container" 
+            <div
+              className="reports-container"
               ref={reportsRef}
               onMouseEnter={() => {
                 if (reportsHoverTimeout) {
@@ -580,10 +598,10 @@ export function NavBar() {
                   {sideNavOpen && "Reports"}
                 </Button>
               </Tooltip>
-              
+
               {/* Reports Dropdown */}
               {reportsDropdownOpen && (
-                <div 
+                <div
                   className="reports-dropdown"
                   onMouseEnter={() => {
                     if (reportsHoverTimeout) {
@@ -604,12 +622,12 @@ export function NavBar() {
                       className="report-item"
                       onClick={() => handleReportNavigation(report)}
                     >
-                      <div className="report-icon">
-                        {report.icon}
-                      </div>
+                      <div className="report-icon">{report.icon}</div>
                       <div className="report-content">
                         <div className="report-name">{report.name}</div>
-                        <div className="report-description">{report.description}</div>
+                        <div className="report-description">
+                          {report.description}
+                        </div>
                       </div>
                       <div className="report-print-icon">
                         <Print />

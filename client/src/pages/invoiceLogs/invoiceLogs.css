@@ -164,6 +164,16 @@ html {
   border-left: 4px solid #4caf50;
 }
 
+/* Recurring invoice rows - purple theme */
+.recurring-row {
+  background-color: #f3e5f5 !important;
+  border-left: 4px solid #9c27b0;
+}
+
+.recurring-row:hover {
+  background-color: #e1bee7 !important;
+}
+
 /* Buttons */
 .edit-button {
   background: linear-gradient(135deg, #2196f3, #1976d2);
@@ -312,6 +322,16 @@ body[data-theme='dark'] .locked-row {
 body[data-theme='dark'] .unlocked-row {
   background-color: #1f3b1f !important;
   border-left: 4px solid #81c784 !important;
+}
+
+/* Recurring invoice rows - purple theme */
+body[data-theme='dark'] .recurring-row {
+  background-color: #2d1f3d !important;
+  border-left: 4px solid #ce93d8 !important;
+}
+
+body[data-theme='dark'] .recurring-row:hover {
+  background-color: #3d2952 !important;
 }
 
 /* Summary rows */

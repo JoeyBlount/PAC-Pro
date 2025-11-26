@@ -6,7 +6,8 @@ from decimal import Decimal
 from typing import Dict, Any, Optional
 from models import (
     PacInputData, PacCalculationResult, AmountUsedData, 
-    ControllableExpenses, ExpenseLine, InventoryData, PurchaseData
+    ControllableExpenses, ExpenseLine, InventoryData, PurchaseData,
+    NonProductAndSuppliesData, SalesComparisonData, BreakdownData
 )
 from .data_ingestion_service import DataIngestionService
 from .account_mapping_service import AccountMappingService
@@ -112,6 +113,30 @@ class PacCalculationService:
         result.pac_percent = 100 - result.total_controllable_percent
         result.pac_dollars = (result.pac_percent / 100) * S
         
+        # 5) Non-Product & Operating Supplies Usage (Detailed)
+        result.non_product_and_supplies = NonProductAndSuppliesData(
+            operatingSupplies=BreakdownData(
+                starting=input_data.beginning_inventory.op_supplies,
+                purchases=input_data.purchases.operating_supply,
+                ending=input_data.ending_inventory.op_supplies,
+                usage=result.amount_used.op_supplies
+            ),
+            nonProduct=BreakdownData(
+                starting=input_data.beginning_inventory.non_product,
+                purchases=input_data.purchases.non_product,
+                ending=input_data.ending_inventory.non_product,
+                usage=result.amount_used.non_product
+            )
+        )
+
+        # 6) Sales Comparison
+        result.sales_comparison = SalesComparisonData(
+            lastYearProductSales=input_data.last_year_product_sales or Decimal('0'),
+            lastMonthProductSales=input_data.last_month_product_sales or Decimal('0'),
+            lastMonthLastYearProductSales=input_data.last_month_last_year_product_sales or Decimal('0'),
+            lastYearLastYearProductSales=input_data.last_year_last_year_product_sales or Decimal('0')
+        )
+        
         return result
     
     def calculate_amount_used(self, input_data: PacInputData) -> AmountUsedData:
@@ -159,7 +184,11 @@ class PacCalculationService:
             input_data.ending_inventory.non_product
         )
         
-        op_supplies_amount = input_data.beginning_inventory.op_supplies
+        op_supplies_amount = (
+            input_data.beginning_inventory.op_supplies + 
+            input_data.purchases.operating_supply - 
+            input_data.ending_inventory.op_supplies
+        )
         
         # Create result with all fields
         result = AmountUsedData(
@@ -571,6 +600,48 @@ def calculate_pac_actual(
     def calculate_percentage(dollars):
         return (dollars / product_sales * 100) if product_sales > 0 else 0
     
+    # New Modules Calculations
+    
+    # Gross Profit
+    # Formula: 100 - FoodandPaper Total %
+    food_and_paper_percent = calculate_percentage(food_and_paper_total)
+    gross_profit_percent = 100 - food_and_paper_percent
+    
+    # Food Cost Module
+    # Inputs from Generate page (Food section)
+    # Assumes these are stored as percentages in the input
+    base_food_input = to_num(food.get("baseFood"))
+    discounts_input = to_num(food.get("discounts"))
+    raw_waste_input = to_num(food.get("rawWaste"))
+    complete_waste_input = to_num(food.get("completeWaste"))
+    stat_variance_input = to_num(food.get("variance"))
+    unexplained_input = to_num(food.get("unexplained"))
+    condiment_input = to_num(food.get("condiment"))
+    emp_mgr_meals_percent = to_num(food.get("empMgrMealsPercent"))
+    
+    # Food Over Base = Raw Waste + Complete Waste + Condiment + Stat Variance + Unexplained
+    # (Unexplained subtracts if negative, handled by addition)
+    food_over_base = (
+        raw_waste_input + 
+        complete_waste_input + 
+        condiment_input + 
+        stat_variance_input + 
+        unexplained_input
+    )
+    
+    # Non-Product & Operating Supplies Usage
+    # Operating Supplies
+    ops_supplies_start = to_num(inventory_starting.get("opsSupplies"))
+    ops_supplies_purchases = to_num(invoice_totals.get("OP. SUPPLY"))
+    ops_supplies_end = to_num(inventory_ending.get("opsSupplies"))
+    ops_supplies_usage = ops_supplies_start + ops_supplies_purchases - ops_supplies_end
+
+    # Non-Product
+    non_product_start = to_num(inventory_starting.get("nonProduct"))
+    non_product_purchases = to_num(invoice_totals.get("NONPRODUCT"))
+    non_product_end = to_num(inventory_ending.get("nonProduct"))
+    non_product_usage = non_product_start + non_product_purchases - non_product_end
+
     return {
         "sales": {
             "productSales": {
@@ -707,5 +778,32 @@ def calculate_pac_actual(
                 "dollars": pac_total,
                 "percent": 100 - calculate_percentage(total_controllable),
             },
+            "grossProfit": {
+                "title": "Gross Profit",
+                "percent": gross_profit_percent
+            },
         },
+        "foodCost": {
+            "baseFood": base_food_input,
+            "discount": discounts_input,
+            "rawWaste": raw_waste_input,
+            "completeWaste": complete_waste_input,
+            "statVariance": stat_variance_input,
+            "foodOverBase": food_over_base,
+            "empMgrMealsPercent": emp_mgr_meals_percent
+        },
+        "nonProductAndSupplies": {
+            "operatingSupplies": {
+                "starting": ops_supplies_start,
+                "purchases": ops_supplies_purchases,
+                "ending": ops_supplies_end,
+                "usage": ops_supplies_usage
+            },
+            "nonProduct": {
+                "starting": non_product_start,
+                "purchases": non_product_purchases,
+                "ending": non_product_end,
+                "usage": non_product_usage
+            }
+        }
     }

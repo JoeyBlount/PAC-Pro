@@ -44,6 +44,12 @@ class PacInputData(BaseModel):
     promotions: Decimal = Field(default=Decimal('0'), description="Promotions amount")
     manager_meals: Decimal = Field(default=Decimal('0'), description="Manager meals amount")
 
+    # Historical Sales Data (Optional, for comparisons)
+    last_year_product_sales: Optional[Decimal] = Field(default=Decimal('0'))
+    last_month_product_sales: Optional[Decimal] = Field(default=Decimal('0'))
+    last_month_last_year_product_sales: Optional[Decimal] = Field(default=Decimal('0'))
+    last_year_last_year_product_sales: Optional[Decimal] = Field(default=Decimal('0'))
+
     # Labor / Payroll Data
     crew_labor_percent: Decimal = Field(description="Crew labor percentage")
     total_labor_percent: Decimal = Field(description="Total labor percentage")
@@ -80,6 +86,28 @@ class AmountUsedData(BaseModel):
     condiment: Decimal = Field(default=Decimal('0'), description="Condiment amount used")
     non_product: Decimal = Field(default=Decimal('0'), description="Non-product amount used")
     op_supplies: Decimal = Field(default=Decimal('0'), description="Operating supplies amount used")
+
+
+class BreakdownData(BaseModel):
+    """Detailed breakdown for inventory/usage categories"""
+    starting: Decimal = Field(default=Decimal('0'))
+    purchases: Decimal = Field(default=Decimal('0'))
+    ending: Decimal = Field(default=Decimal('0'))
+    usage: Decimal = Field(default=Decimal('0'))
+
+
+class NonProductAndSuppliesData(BaseModel):
+    """Detailed data for Non-Product and Operating Supplies modules"""
+    operatingSupplies: BreakdownData = Field(default_factory=BreakdownData)
+    nonProduct: BreakdownData = Field(default_factory=BreakdownData)
+
+
+class SalesComparisonData(BaseModel):
+    """Historical sales comparison data"""
+    lastYearProductSales: Decimal = Field(default=Decimal('0'))
+    lastMonthProductSales: Decimal = Field(default=Decimal('0'))
+    lastMonthLastYearProductSales: Decimal = Field(default=Decimal('0'))
+    lastYearLastYearProductSales: Decimal = Field(default=Decimal('0'))
 
 
 class ControllableExpenses(BaseModel):
@@ -129,3 +157,7 @@ class PacCalculationResult(BaseModel):
     total_controllable_percent: Decimal = Field(default=Decimal('0'), description="Total controllable expenses percentage")
     pac_percent: Decimal = Field(default=Decimal('0'), description="PAC percentage")
     pac_dollars: Decimal = Field(default=Decimal('0'), description="PAC dollars")
+    
+    # New fields for UI revamp
+    non_product_and_supplies: Optional[NonProductAndSuppliesData] = Field(default=None)
+    sales_comparison: Optional[SalesComparisonData] = Field(default=None)
