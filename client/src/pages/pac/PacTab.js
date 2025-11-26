@@ -16,6 +16,10 @@ import {
   CircularProgress,
   Alert,
   Button,
+  Grid,
+  Card,
+  CardContent,
+  Divider,
 } from "@mui/material";
 import "./pac.css";
 import { useTheme } from "@mui/material/styles";
@@ -1381,59 +1385,107 @@ const PacTab = ({
       </table>
       
       <br/>
-      <div style="page-break-inside: avoid;">
-        <h3 class="print-header" style="text-align: left; margin-bottom: 5px;">Gross Profit</h3>
-        <table class="print-table" style="width: 50%;">
-            <tr>
-                <td style="width: 60%; font-weight: bold;">Gross Profit %</td>
-                <td style="text-align: right; font-weight: bold;">${formatPercentage(
-                  actualData.grossProfit?.percent || 0
-                )}</td>
-            </tr>
-        </table>
-      </div>
-      
-      <br/>
-      <div style="page-break-inside: avoid;">
-        <h3 class="print-header" style="text-align: left; margin-bottom: 5px;">Food Cost</h3>
-        <table class="print-table" style="width: 50%;">
-            <tr>
-                <td style="width: 60%;">Base Food</td>
-                <td style="text-align: right;">${formatPercentage(
-                  actualData.foodCost?.baseFood || 0
-                )}</td>
-            </tr>
-            <tr>
-                <td>Discount</td>
-                <td style="text-align: right;">${formatPercentage(
-                  actualData.foodCost?.discount || 0
-                )}</td>
-            </tr>
-            <tr>
-                <td>Raw Waste</td>
-                <td style="text-align: right;">${formatPercentage(
-                  actualData.foodCost?.rawWaste || 0
-                )}</td>
-            </tr>
-            <tr>
-                <td>Complete Waste</td>
-                <td style="text-align: right;">${formatPercentage(
-                  actualData.foodCost?.completeWaste || 0
-                )}</td>
-            </tr>
-            <tr>
-                <td>Stat Variance</td>
-                <td style="text-align: right;">${formatPercentage(
-                  actualData.foodCost?.statVariance || 0
-                )}</td>
-            </tr>
-            <tr>
-                <td style="font-weight: bold; border-top: 1px solid #ccc;">Food Over Base</td>
-                <td style="text-align: right; font-weight: bold; border-top: 1px solid #ccc;">${formatPercentage(
-                  actualData.foodCost?.foodOverBase || 0
-                )}</td>
-            </tr>
-        </table>
+      <div style="page-break-inside: avoid; display: flex; gap: 20px;">
+        <!-- Gross Profit -->
+        <div style="flex: 1; border: 1px solid #ccc; padding: 10px; border-radius: 4px;">
+            <h3 class="print-header" style="text-align: left; margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Gross Profit</h3>
+            <table class="print-table" style="width: 100%;">
+                <tr>
+                    <td style="width: 60%; font-weight: bold;">Gross Profit %</td>
+                    <td style="text-align: right; font-weight: bold;">${formatPercentage(
+                      actualData.grossProfit?.percent || 0
+                    )}</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Food Cost -->
+        <div style="flex: 1; border: 1px solid #ccc; padding: 10px; border-radius: 4px;">
+            <h3 class="print-header" style="text-align: left; margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Food Cost</h3>
+            <table class="print-table" style="width: 100%;">
+                <tr>
+                    <td style="width: 60%;">Base Food</td>
+                    <td style="text-align: right;">${formatPercentage(
+                      actualData.foodCost?.baseFood || 0
+                    )}</td>
+                </tr>
+                <tr>
+                    <td>Discount</td>
+                    <td style="text-align: right;">${formatPercentage(
+                      actualData.foodCost?.discount || 0
+                    )}</td>
+                </tr>
+                <tr>
+                    <td>Raw Waste</td>
+                    <td style="text-align: right;">${formatPercentage(
+                      actualData.foodCost?.rawWaste || 0
+                    )}</td>
+                </tr>
+                <tr>
+                    <td>Complete Waste</td>
+                    <td style="text-align: right;">${formatPercentage(
+                      actualData.foodCost?.completeWaste || 0
+                    )}</td>
+                </tr>
+                <tr>
+                    <td>Stat Variance</td>
+                    <td style="text-align: right;">${formatPercentage(
+                      actualData.foodCost?.statVariance || 0
+                    )}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold; border-top: 1px solid #ccc;">Food Over Base</td>
+                    <td style="text-align: right; font-weight: bold; border-top: 1px solid #ccc;">${formatPercentage(
+                      actualData.foodCost?.foodOverBase || 0
+                    )}</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Non-Product & Supplies -->
+        <div style="flex: 1; border: 1px solid #ccc; padding: 10px; border-radius: 4px;">
+            <h3 class="print-header" style="text-align: left; margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Non-Product & Supplies</h3>
+            
+            <div style="font-weight: bold; margin-bottom: 5px; font-size: 0.9em;">Operating Supplies</div>
+            <table class="print-table" style="width: 100%; margin-bottom: 10px;">
+                <tr>
+                    <td style="width: 60%;">Starting</td>
+                    <td style="text-align: right;">${formatCurrency(actualData.nonProductAndSupplies?.operatingSupplies?.starting || 0)}</td>
+                </tr>
+                <tr>
+                    <td>Purchases</td>
+                    <td style="text-align: right;">${formatCurrency(actualData.nonProductAndSupplies?.operatingSupplies?.purchases || 0)}</td>
+                </tr>
+                <tr>
+                    <td>Ending</td>
+                    <td style="text-align: right;">${formatCurrency(actualData.nonProductAndSupplies?.operatingSupplies?.ending || 0)}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold; border-top: 1px dashed #ccc;">Usage</td>
+                    <td style="text-align: right; font-weight: bold; border-top: 1px dashed #ccc;">${formatCurrency(actualData.nonProductAndSupplies?.operatingSupplies?.usage || 0)}</td>
+                </tr>
+            </table>
+
+            <div style="font-weight: bold; margin-bottom: 5px; font-size: 0.9em;">Non-Product</div>
+            <table class="print-table" style="width: 100%;">
+                <tr>
+                    <td style="width: 60%;">Starting</td>
+                    <td style="text-align: right;">${formatCurrency(actualData.nonProductAndSupplies?.nonProduct?.starting || 0)}</td>
+                </tr>
+                <tr>
+                    <td>Purchases</td>
+                    <td style="text-align: right;">${formatCurrency(actualData.nonProductAndSupplies?.nonProduct?.purchases || 0)}</td>
+                </tr>
+                <tr>
+                    <td>Ending</td>
+                    <td style="text-align: right;">${formatCurrency(actualData.nonProductAndSupplies?.nonProduct?.ending || 0)}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold; border-top: 1px dashed #ccc;">Usage</td>
+                    <td style="text-align: right; font-weight: bold; border-top: 1px dashed #ccc;">${formatCurrency(actualData.nonProductAndSupplies?.nonProduct?.usage || 0)}</td>
+                </tr>
+            </table>
+        </div>
       </div>
     `;
   };
@@ -2900,6 +2952,97 @@ const PacTab = ({
         "Projected %": "",
         "Difference %": "",
       },
+      {
+        Account: "",
+        "Actual $": "",
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      // Non-Product & Supplies
+      {
+        Account: "Non-Product & Supplies",
+        "Actual $": "",
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      // Operating Supplies
+      {
+        Account: "Operating Supplies - Starting",
+        "Actual $": actualData.nonProductAndSupplies?.operatingSupplies?.starting || 0,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Operating Supplies - Purchases",
+        "Actual $": actualData.nonProductAndSupplies?.operatingSupplies?.purchases || 0,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Operating Supplies - Ending",
+        "Actual $": actualData.nonProductAndSupplies?.operatingSupplies?.ending || 0,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Operating Supplies - Usage",
+        "Actual $": actualData.nonProductAndSupplies?.operatingSupplies?.usage || 0,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "",
+        "Actual $": "",
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      // Non-Product
+      {
+        Account: "Non-Product - Starting",
+        "Actual $": actualData.nonProductAndSupplies?.nonProduct?.starting || 0,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Non-Product - Purchases",
+        "Actual $": actualData.nonProductAndSupplies?.nonProduct?.purchases || 0,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Non-Product - Ending",
+        "Actual $": actualData.nonProductAndSupplies?.nonProduct?.ending || 0,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Non-Product - Usage",
+        "Actual $": actualData.nonProductAndSupplies?.nonProduct?.usage || 0,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
     ];
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -3713,93 +3856,183 @@ const PacTab = ({
               </TableCell>
             </TableRow>
 
-            {/* GROSS PROFIT */}
-            <TableRow>
-              <TableCell
-                colSpan={6}
-                sx={{
-                  fontWeight: "bold",
-                  fontSize: "1.1rem",
-                  pt: 4,
-                  pb: 1,
-                  borderBottom: "2px solid #e0e0e0",
-                }}
-              >
-                Gross Profit
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ pl: 4, fontWeight: "bold" }}>
-                Gross Profit %
-              </TableCell>
-              <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                {formatPercentage(actualData.grossProfit?.percent || 0)}
-              </TableCell>
-              <TableCell colSpan={4}></TableCell>
-            </TableRow>
-
-            {/* FOOD COST */}
-            <TableRow>
-              <TableCell
-                colSpan={6}
-                sx={{
-                  fontWeight: "bold",
-                  fontSize: "1.1rem",
-                  pt: 4,
-                  pb: 1,
-                  borderBottom: "2px solid #e0e0e0",
-                }}
-              >
-                Food Cost
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ pl: 4 }}>Base Food</TableCell>
-              <TableCell align="right">
-                {formatPercentage(actualData.foodCost?.baseFood || 0)}
-              </TableCell>
-              <TableCell colSpan={4}></TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ pl: 4 }}>Discount</TableCell>
-              <TableCell align="right">
-                {formatPercentage(actualData.foodCost?.discount || 0)}
-              </TableCell>
-              <TableCell colSpan={4}></TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ pl: 4 }}>Raw Waste</TableCell>
-              <TableCell align="right">
-                {formatPercentage(actualData.foodCost?.rawWaste || 0)}
-              </TableCell>
-              <TableCell colSpan={4}></TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ pl: 4 }}>Complete Waste</TableCell>
-              <TableCell align="right">
-                {formatPercentage(actualData.foodCost?.completeWaste || 0)}
-              </TableCell>
-              <TableCell colSpan={4}></TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ pl: 4 }}>Stat Variance</TableCell>
-              <TableCell align="right">
-                {formatPercentage(actualData.foodCost?.statVariance || 0)}
-              </TableCell>
-              <TableCell colSpan={4}></TableCell>
-            </TableRow>
-            <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-              <TableCell sx={{ pl: 4, fontWeight: "bold" }}>
-                Food Over Base
-              </TableCell>
-              <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                {formatPercentage(actualData.foodCost?.foodOverBase || 0)}
-              </TableCell>
-              <TableCell colSpan={4}></TableCell>
-            </TableRow>
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Modern Modules Section */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {/* Gross Profit Module */}
+        <Grid item xs={12} md={4}>
+          <Card
+            elevation={3}
+            sx={{
+              height: "100%",
+              backgroundColor: isDark ? "#1e1e1e" : "#fff",
+              borderRadius: 2,
+            }}
+          >
+            <CardContent
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                height: "100%",
+                p: 3,
+              }}
+            >
+              <Typography
+                variant="h6"
+                align="center"
+                color="textSecondary"
+                gutterBottom
+                sx={{ fontWeight: "medium", textTransform: "uppercase", letterSpacing: 1, fontSize: "0.85rem" }}
+              >
+                Gross Profit
+              </Typography>
+              <Typography
+                variant="h3"
+                align="center"
+                color="primary"
+                sx={{ fontWeight: "bold", my: 2 }}
+              >
+                {formatPercentage(actualData.grossProfit?.percent || 0)}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Food Cost Module */}
+        <Grid item xs={12} md={4}>
+          <Card
+            elevation={3}
+            sx={{
+              height: "100%",
+              backgroundColor: isDark ? "#1e1e1e" : "#fff",
+              borderRadius: 2,
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{
+                  fontWeight: "bold",
+                  borderBottom: "1px solid",
+                  borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)",
+                  pb: 1.5,
+                  mb: 2,
+                  fontSize: "1.1rem",
+                }}
+              >
+                Food Cost Breakdown
+              </Typography>
+              {[
+                { label: "Base Food", value: actualData.foodCost?.baseFood },
+                { label: "Discount", value: actualData.foodCost?.discount },
+                { label: "Raw Waste", value: actualData.foodCost?.rawWaste },
+                { label: "Complete Waste", value: actualData.foodCost?.completeWaste },
+                { label: "Stat Variance", value: actualData.foodCost?.statVariance },
+              ].map((item) => (
+                <Box
+                  key={item.label}
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  mb={1.5}
+                >
+                  <Typography variant="body2" color="textSecondary">
+                    {item.label}
+                  </Typography>
+                  <Typography variant="body2" fontWeight="600">
+                    {formatPercentage(item.value || 0)}
+                  </Typography>
+                </Box>
+              ))}
+              <Divider sx={{ my: 2, opacity: 0.6 }} />
+              <Box display="flex" justifyContent="space-between" alignItems="center">
+                <Typography variant="subtitle1" fontWeight="bold">
+                  Food Over Base
+                </Typography>
+                <Typography variant="subtitle1" fontWeight="bold" color="primary">
+                  {formatPercentage(actualData.foodCost?.foodOverBase || 0)}
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Non-Product & Operating Supplies Usage Module */}
+        <Grid item xs={12} md={4}>
+          <Card
+            elevation={3}
+            sx={{
+              height: "100%",
+              backgroundColor: isDark ? "#1e1e1e" : "#fff",
+              borderRadius: 2,
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{
+                  fontWeight: "bold",
+                  borderBottom: "1px solid",
+                  borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)",
+                  pb: 1.5,
+                  mb: 2,
+                  fontSize: "1.1rem",
+                }}
+              >
+                Usage Summary
+              </Typography>
+
+              {/* Operating Supplies */}
+              <Box mb={3}>
+                <Typography
+                  variant="subtitle2"
+                  color="textSecondary"
+                  gutterBottom
+                  sx={{ textTransform: "uppercase", fontSize: "0.75rem", letterSpacing: 0.5 }}
+                >
+                  Operating Supplies
+                </Typography>
+                <Box display="flex" justifyContent="space-between" alignItems="baseline">
+                  <Typography variant="h5" fontWeight="bold">
+                    {formatCurrency(actualData.nonProductAndSupplies?.operatingSupplies?.usage || 0)}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    Usage
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Divider sx={{ my: 2, opacity: 0.6 }} />
+
+              {/* Non-Product */}
+              <Box>
+                <Typography
+                  variant="subtitle2"
+                  color="textSecondary"
+                  gutterBottom
+                  sx={{ textTransform: "uppercase", fontSize: "0.75rem", letterSpacing: 0.5 }}
+                >
+                  Non-Product
+                </Typography>
+                <Box display="flex" justifyContent="space-between" alignItems="baseline">
+                  <Typography variant="h5" fontWeight="bold">
+                    {formatCurrency(actualData.nonProductAndSupplies?.nonProduct?.usage || 0)}
+                  </Typography>
+                   <Typography variant="caption" color="textSecondary">
+                    Usage
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
     </Container>
   );
 };

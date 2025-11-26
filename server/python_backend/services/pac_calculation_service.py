@@ -600,6 +600,19 @@ def calculate_pac_actual(
         unexplained_input
     )
     
+    # Non-Product & Operating Supplies Usage
+    # Operating Supplies
+    ops_supplies_start = to_num(inventory_starting.get("opsSupplies"))
+    ops_supplies_purchases = to_num(invoice_totals.get("OP. SUPPLY"))
+    ops_supplies_end = to_num(inventory_ending.get("opsSupplies"))
+    ops_supplies_usage = ops_supplies_start + ops_supplies_purchases - ops_supplies_end
+
+    # Non-Product
+    non_product_start = to_num(inventory_starting.get("nonProduct"))
+    non_product_purchases = to_num(invoice_totals.get("NONPRODUCT"))
+    non_product_end = to_num(inventory_ending.get("nonProduct"))
+    non_product_usage = non_product_start + non_product_purchases - non_product_end
+
     return {
         "sales": {
             "productSales": {
@@ -749,5 +762,19 @@ def calculate_pac_actual(
             "statVariance": stat_variance_input,
             "foodOverBase": food_over_base,
             "empMgrMealsPercent": emp_mgr_meals_percent
+        },
+        "nonProductAndSupplies": {
+            "operatingSupplies": {
+                "starting": ops_supplies_start,
+                "purchases": ops_supplies_purchases,
+                "ending": ops_supplies_end,
+                "usage": ops_supplies_usage
+            },
+            "nonProduct": {
+                "starting": non_product_start,
+                "purchases": non_product_purchases,
+                "ending": non_product_end,
+                "usage": non_product_usage
+            }
         }
     }
