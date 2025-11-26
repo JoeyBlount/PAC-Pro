@@ -4,6 +4,7 @@ import {
   query,
   where,
   getDocs,
+  getDoc,
   doc,
   setDoc,
   serverTimestamp,
@@ -254,7 +255,7 @@ export const getInvoiceTotals = async (storeID, targetMonth, targetYear) => {
       "0"
     )}`;
     const totalsRef = doc(db, "invoice_log_totals", docId);
-    const totalsDoc = await getDocs(totalsRef);
+    const totalsDoc = await getDoc(totalsRef);
 
     if (totalsDoc.exists()) {
       return totalsDoc.data();
