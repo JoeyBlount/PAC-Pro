@@ -271,8 +271,8 @@ const SubmitInvoice = () => {
       (item) => item.id === itemToRemove.id
     );
 
-    console.log("handleRemove - OLD extras:", extras);
-    console.log("handleRemove - OLD confirmedItems:", confirmedItems);
+    //console.log("handleRemove - OLD extras:", extras);
+    //console.log("handleRemove - OLD confirmedItems:", confirmedItems);
 
     if (isConfirmed) {
       const proceed = window.confirm(
@@ -283,20 +283,20 @@ const SubmitInvoice = () => {
 
     setExtras((prev) => {
       const newExtras = prev.filter((_, i) => i !== idx);
-      console.log("handleRemove - NEW extras:", newExtras);
+      //console.log("handleRemove - NEW extras:", newExtras);
       return newExtras;
     });
     setConfirmedItems((prev) => {
       const newConfirmed = prev.filter((item) => item.id !== itemToRemove.id);
-      console.log("handleRemove - NEW confirmedItems:", newConfirmed);
+      //console.log("handleRemove - NEW confirmedItems:", newConfirmed);
       return newConfirmed;
     });
   };
 
   const handleConfirm = (idx) => {
     try {
-      console.log("handleConfirm - OLD extras:", extras);
-      console.log("handleConfirm - OLD confirmedItems:", confirmedItems);
+      //console.log("handleConfirm - OLD extras:", extras);
+      //console.log("handleConfirm - OLD confirmedItems:", confirmedItems);
 
       const rowCategory = extras[idx].category;
       if (rowCategory === "")
@@ -322,14 +322,14 @@ const SubmitInvoice = () => {
           ...prev,
           { id: extras[idx].id, category: rowCategory, amount: rowAmount },
         ];
-        console.log("handleConfirm - NEW confirmedItems:", newConfirmed);
+        //console.log("handleConfirm - NEW confirmedItems:", newConfirmed);
         return newConfirmed;
       });
       setExtras((prev) => {
         const newExtras = prev.map((r, i) =>
           i === idx ? { ...r, confirmed: true } : r
         );
-        console.log("handleConfirm - NEW extras:", newExtras);
+        //console.log("handleConfirm - NEW extras:", newExtras);
         return newExtras;
       });
     } catch (error) {

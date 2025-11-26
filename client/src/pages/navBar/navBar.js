@@ -207,13 +207,13 @@ export function NavBar() {
 
   // Handle report navigation with auto-print
   function handleReportNavigation(report) {
-    console.log('Navigating to report:', report.name, 'at path:', report.path);
+    //console.log('Navigating to report:', report.name, 'at path:', report.path);
     navigate(report.path);
     setReportsDropdownOpen(false);
     
     // Auto-trigger print/export after a delay to allow page load
     setTimeout(() => {
-      console.log('Attempting to auto-trigger print/export for:', report.name);
+      //console.log('Attempting to auto-trigger print/export for:', report.name);
       if (report.id === 'pac-actual-report') {
         const tabButtons = document.querySelectorAll('[role="tab"], .MuiTab-root, button[data-tab]');
         const actualTab = Array.from(tabButtons).find(btn => 
@@ -221,7 +221,7 @@ export function NavBar() {
           btn.getAttribute('data-tab') === '2'
         );
         if (actualTab) {
-          console.log('Switching to Actual tab...');
+          //console.log('Switching to Actual tab...');
           actualTab.click();
         }
         
@@ -233,10 +233,10 @@ export function NavBar() {
             btn.textContent.toLowerCase().includes('print')
           );
           if (printBtn) {
-            console.log('Found print button, clicking...');
+            //console.log('Found print button, clicking...');
             printBtn.click();
           } else {
-            console.log('No print button found');
+            //console.log('No print button found');
           }
         }, 1000); // Wait 1 second for tab to load
       } else if (report.id === 'invoice-log-report') {
@@ -246,10 +246,10 @@ export function NavBar() {
           btn.textContent.toLowerCase().includes('export')
         );
         if (exportBtn) {
-          console.log('Found export button, opening dialog...');
+          //console.log('Found export button, opening dialog...');
           exportBtn.click();
         } else {
-          console.log('No export button found');
+          //console.log('No export button found');
         }
       }
     }, 1500); 

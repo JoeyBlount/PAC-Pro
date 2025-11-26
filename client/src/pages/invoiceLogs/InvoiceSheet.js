@@ -85,7 +85,7 @@ const InvoiceLogs = () => {
   // console.log("Logged in user:", currentUser?.email);
   // console.log("User role:", userRole);
   const { userRole } = useAuth();
-  console.log("User role from invoicelogs is: ", userRole);
+  //console.log("User role from invoicelogs is: ", userRole);
 
   // Month locking state
   const [monthLockStatus, setMonthLockStatus] = useState(null);
@@ -181,7 +181,7 @@ const InvoiceLogs = () => {
       if (!res.ok)
         throw new Error(data.detail || "Failed to send notification");
 
-      console.log("✅ Notification sent:", data.message);
+      //console.log("✅ Notification sent:", data.message);
     } catch (err) {
       console.error("Error sending notification:", err);
     }
@@ -301,7 +301,7 @@ const InvoiceLogs = () => {
           invoice.targetMonth,
           invoice.targetYear
         );
-        console.log("Invoice totals updated after deletion");
+        //console.log("Invoice totals updated after deletion");
       } catch (totalsError) {
         console.error(
           "Error updating invoice totals after deletion:",
@@ -368,7 +368,7 @@ const InvoiceLogs = () => {
       fetchInvoices();
       fetchRecentlyDeleted();
     } catch (err) {
-      console.log("failed to delete the invoice from recentlydeleted, ", err);
+      //console.log("failed to delete the invoice from recentlydeleted, ", err);
       alert("failed to delete the invoice");
     }
   };
@@ -598,7 +598,7 @@ const InvoiceLogs = () => {
       }));
 
       // Debug logging
-      console.log("Debug - Fetched invoices:", {
+      /*console.log("Debug - Fetched invoices:", {
         totalInvoices: invoices.length,
         selectedStore,
         invoices: invoices.map((inv) => ({
@@ -609,7 +609,7 @@ const InvoiceLogs = () => {
           companyName: inv.companyName,
           storeID: inv.storeID,
         })),
-      });
+      });*/
 
       // Compute totals using the category amounts stored in the categories map.
       // Apply the same month/year filtering as individual rows
@@ -649,10 +649,10 @@ const InvoiceLogs = () => {
         budgets[col.id] = budgetData[col.id] || 0;
       });
 
-      console.log("Setting totals in fetchInvoices:", {
+      /*console.log("Setting totals in fetchInvoices:", {
         computedTotals: totals,
         budgets,
-      });
+      });*/
       // TOTAL row must reflect only the sum of invoice entries for the selected month/year
       setData({ invoices, total: totals, budget: budgets });
     } catch (err) {
@@ -700,7 +700,7 @@ const InvoiceLogs = () => {
       }
 
       if (!snap?.exists()) {
-        console.log("No PAC projections found for", tryIds);
+        //console.log("No PAC projections found for", tryIds);
         setBudgetData({});
         return;
       }
@@ -1032,7 +1032,7 @@ const InvoiceLogs = () => {
     const sorted = sortInvoices(filtered);
 
     // Debug logging
-    console.log("Debug - Invoice filtering:", {
+    /*console.log("Debug - Invoice filtering:", {
       totalInvoices: data.invoices.length,
       filteredInvoices: filtered.length,
       selectedMonth,
@@ -1044,7 +1044,7 @@ const InvoiceLogs = () => {
         dateSubmitted: inv.dateSubmitted,
         companyName: inv.companyName,
       })),
-    });
+    });*/
 
     return sorted.map((inv, i) => {
       const canEdit = isCurrentMonth(inv.invoiceDate) && !inv.locked;
@@ -1122,17 +1122,17 @@ const InvoiceLogs = () => {
                     }`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      console.log(
+                      /*console.log(
                         "Invoice lock status:",
                         inv.locked,
                         "isLocked:",
                         isLocked
-                      );
+                      );*/
                       if (isLocked) {
-                        console.log("Unlocking invoice:", inv.id);
+                        //console.log("Unlocking invoice:", inv.id);
                         unlockInvoice(inv.id);
                       } else {
-                        console.log("Locking invoice:", inv.id);
+                        //console.log("Locking invoice:", inv.id);
                         lockInvoice(inv.id);
                       }
                     }}
@@ -1515,7 +1515,7 @@ const InvoiceLogs = () => {
                 setShowRecentlyDeleted(true);
                 fetchRecentlyDeleted();
                 // Handle open modal or navigate to Recently Deleted
-                console.log("Open Recently Deleted Modal");
+                //console.log("Open Recently Deleted Modal");
               }}
             >
               Recently Deleted
