@@ -244,13 +244,13 @@ const PAC = () => {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
-    const res = await fetch(
-      `${BASE_URL}/api/pac/actual/${storeID}/${yearMonth}`,
-      {
-        method: "GET",
-        headers,
-      }
-    );
+
+    const url = apiUrl(`/api/pac/actual/${storeID}/${yearMonth}`);
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers,
+    });
 
     if (res.status === 404) {
       return null; // Data not found, return null
@@ -285,7 +285,8 @@ const PAC = () => {
     }
     const monthNumber = monthIndex + 1;
     const yearMonth = `${year}${String(monthNumber).padStart(2, "0")}`;
-    return api("/api/pac/actual/compute", {
+
+    return apiFetchJson(apiUrl("/api/pac/actual/compute"), {
       method: "POST",
       body: {
         store_id: storeID,
@@ -295,85 +296,6 @@ const PAC = () => {
     });
   }
 
-  // PAC Actual API wrappers
-  async function getPacActual(storeID, year, month) {
-    const months = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ];
-    const monthIndex = months.indexOf(month);
-    if (monthIndex === -1) {
-      throw new Error(`Invalid month name: ${month}`);
-    }
-    const monthNumber = monthIndex + 1;
-    const yearMonth = `${year}${String(monthNumber).padStart(2, "0")}`;
-
-    // Use fetch directly to handle 404 gracefully
-    const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-    const headers = {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
-    const res = await fetch(
-      `${BASE_URL}/api/pac/actual/${storeID}/${yearMonth}`,
-      {
-        method: "GET",
-        headers,
-      }
-    );
-
-    if (res.status === 404) {
-      return null; // Data not found, return null
-    }
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(
-        `Failed to fetch PAC actual: ${errorText || res.statusText}`
-      );
-    }
-    return res.json();
-  }
-
-  async function computeAndSavePacActual(storeID, year, month, submittedBy) {
-    const months = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ];
-    const monthIndex = months.indexOf(month);
-    if (monthIndex === -1) {
-      throw new Error(`Invalid month name: ${month}`);
-    }
-    const monthNumber = monthIndex + 1;
-    const yearMonth = `${year}${String(monthNumber).padStart(2, "0")}`;
-    return api("/api/pac/actual/compute", {
-      method: "POST",
-      body: {
-        store_id: storeID,
-        year_month: yearMonth,
-        submitted_by: submittedBy || "System",
-      },
-    });
-  }
 
   // projections API wrappers
   const seedProjections = async ({ year, month, month_index_1 }) => {
@@ -419,7 +341,7 @@ const PAC = () => {
   async function applyRows(rows) {
     return apiFetchJson(apiUrl("/api/pac/apply"), {
       method: "POST",
-      body:{ rows },
+      body: { rows },
     });
   }
 
@@ -452,7 +374,7 @@ const PAC = () => {
       // persist previous month rows into current draft so inputs reflect immediately
       try {
         localStorage.setItem(draftKey, JSON.stringify(data.rows));
-      } catch {}
+      } catch { }
       // Do NOT change PAC Goal when resetting to previous month
     } catch (e) {
       console.error("reset to previous month error", e);
@@ -510,9 +432,8 @@ const PAC = () => {
         const userDoc = await getDoc(userRef);
         if (userDoc.exists()) {
           const userData = userDoc.data();
-          return `${userData.firstName || ""} ${
-            userData.lastName || ""
-          }`.trim();
+          return `${userData.firstName || ""} ${userData.lastName || ""
+            }`.trim();
         }
       }
       return auth.currentUser?.displayName || "Unknown User";
@@ -607,7 +528,7 @@ const PAC = () => {
         } else {
           setLastUpdatedTimestamp(null);
         }
-      } catch {}
+      } catch { }
     } catch (error) {
       console.error("Error fetching month lock status:", error);
     }
@@ -704,7 +625,7 @@ const PAC = () => {
         if (!Number.isInteger(month1to12) || month1to12 < 1) return;
 
         const data = await seedProjections({ year, month: month1to12 });
-        
+
         // Check if cancelled (user changed month/year again)
         if (isCancelled) return;
         setPacGoal(String(data.pacGoal ?? ""));
@@ -2003,7 +1924,7 @@ const PAC = () => {
 
                         <TableCell align="center">
                           {hasUserInputAmountField.includes(expense.name) &&
-                          !isPac ? (
+                            !isPac ? (
                             <TextField
                               type="number"
                               size="small"
@@ -2424,8 +2345,8 @@ const PAC = () => {
                   pacMismatch
                     ? "PAC Projections do not match the goal"
                     : !authLoading && !roleAllowed
-                    ? "Your role cannot Apply. Please contact an Admin, Supervisor, or General Manager for assistance."
-                    : undefined
+                      ? "Your role cannot Apply. Please contact an Admin, Supervisor, or General Manager for assistance."
+                      : undefined
                 }
               >
                 Apply
@@ -2442,11 +2363,11 @@ const PAC = () => {
               >
                 {pacBelow
                   ? `PAC Projections are below goal. Remove ${fmtUsd(
-                      dollarAmountNeeded
-                    )} dollars to meet goal.`
+                    dollarAmountNeeded
+                  )} dollars to meet goal.`
                   : `PAC Projections are above goal. ${fmtUsd(
-                      dollarAmountNeeded
-                    )} over goal.`}
+                    dollarAmountNeeded
+                  )} over goal.`}
                 <Box component="span" sx={{ ml: 1, opacity: 0.8 }}>
                   Current: {fmtPercent(projectedPacPercent)} • Goal:{" "}
                   {fmtPercent(goalNumeric)}
@@ -2792,8 +2713,8 @@ const PAC = () => {
                   isCurrentPeriodLocked()
                     ? "This month is locked and cannot be modified."
                     : !authLoading && !roleAllowed
-                    ? "Your role cannot Submit. Please contact an Admin, Supervisor, or General Manager for assistance."
-                    : undefined
+                      ? "Your role cannot Submit. Please contact an Admin, Supervisor, or General Manager for assistance."
+                      : undefined
                 }
               >
                 Submit
@@ -2839,9 +2760,8 @@ const PAC = () => {
               {isMonthLocked() && (
                 <Chip
                   icon={<LockIcon />}
-                  label={`Month Locked by ${
-                    monthLockStatus?.locked_by || "Unknown"
-                  }`}
+                  label={`Month Locked by ${monthLockStatus?.locked_by || "Unknown"
+                    }`}
                   color="warning"
                   variant="outlined"
                 />

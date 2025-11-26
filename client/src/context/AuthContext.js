@@ -58,10 +58,9 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     let isMounted = true;
-    let unsub = null;
-    let unsubscribe = () => { };
+    let firebaseUnsub = null;
 
-    (async () => {
+    const initAuthFlow = async () => {
       setLoading(true);
 
       // 1) Try Microsoft cookie session first
@@ -70,79 +69,85 @@ export const AuthProvider = ({ children }) => {
         const microsoftUser = {
           email: microsoftSession.user.email,
           displayName: microsoftSession.user.name || microsoftSession.user.email,
-          authMethod: "microsoft",
+          authMethod: 'microsoft',
         };
         setCurrentUser(microsoftUser);
         setUserRole(microsoftSession.user.role || null);
-        setAuthMethod("microsoft");
+        setAuthMethod('microsoft');
         setLoading(false);
         return;
       }
 
-      // If no Microsoft session, check Firebase
-      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      // 2) Fallback to Firebase
+      firebaseUnsub = onAuthStateChanged(auth, async (firebaseUser) => {
         try {
           if (firebaseUser && firebaseUser.email) {
             setCurrentUser({ ...firebaseUser, authMethod: 'firebase' });
 
-            const info = await fetchUserInfo(firebaseUser.email);
+            const info = await fetchUserInfo(); // uses auth.currentUser internally
             setUserRole(info?.role ?? null);
             setAuthMethod('firebase');
 
             const fullName = composeName(info);
-            if ((!firebaseUser.displayName || firebaseUser.displayName.trim() === '') && fullName) {
-              setCurrentUser({ ...firebaseUser, displayName: fullName, authMethod: 'firebase' });
+            if (
+              (!firebaseUser.displayName || firebaseUser.displayName.trim() === '') &&
+              fullName
+            ) {
+              setCurrentUser({
+                ...firebaseUser,
+                displayName: fullName,
+                authMethod: 'firebase',
+              });
             }
           } else {
-            // No authenticated user
             setCurrentUser(null);
             setUserRole(null);
             setAuthMethod(null);
           }
-        } catch {
+        } catch (e) {
+          console.error('Error in onAuthStateChanged:', e);
           setCurrentUser(null);
           setUserRole(null);
           setAuthMethod(null);
         } finally {
-          setLoading(false);
+          if (isMounted) setLoading(false);
         }
       });
-    })();
+    };
 
+    initAuthFlow();
 
-initializeAuth();
-init();
-return () => {
-  isMounted = false;
-  if (typeof unsub === "function") unsub();
-};
-
-return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      if (typeof firebaseUnsub === 'function') {
+        firebaseUnsub();
+      }
+    };
   }, []);
 
 
-// -----------------------------
-// getToken: works for both Firebase and Microsoft
-// -----------------------------
-const getToken = async () => {
-  if (authMethod === 'firebase' && currentUser?.getIdToken) {
-    return currentUser.getIdToken();
-  }
-  // Microsoft token logic can be added here if needed
-  return null;
-};
+  // -----------------------------
+  // getToken: works for both Firebase and Microsoft
+  // -----------------------------
+  const getToken = async () => {
+    if (authMethod === 'firebase' && currentUser?.getIdToken) {
+      return currentUser.getIdToken();
+    }
+    // Microsoft token logic can be added here if needed
+    return null;
+  };
 
-const value = {
-  currentUser,
-  userRole,
-  authMethod,
-  loading,
-  getToken, // <--- safe token getter
-};
+  const value = {
+    currentUser,
+    userRole,
+    authMethod,
+    loading,
+    getToken, // <--- safe token getter
+  };
 
-return (
-  <AuthContext.Provider value={{ currentUser, userRole, loading, authMethod, getToken }}>
-    {children}
-  </AuthContext.Provider>
-);
+  return (
+    <AuthContext.Provider value={{ currentUser, userRole, loading, authMethod, getToken }}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
