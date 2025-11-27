@@ -39,7 +39,7 @@ import {
   Campaign,
 } from "@mui/icons-material";
 import { StoreContext } from "../../context/storeContext";
-import AnnoucementDialog from "./annoucement";
+import AnnoucementDialog from "./announcement";
 import { apiUrl } from "../../utils/api";
 
 // Helper to format timestamps into "x minutes ago"
