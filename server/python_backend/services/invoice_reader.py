@@ -30,9 +30,11 @@ class InvoiceReader:
         data_url = f"data:{mime};base64,{b64}"
 
         prompt = (
-            "Extract the following from this invoice image and return a raw JSON object with fields: "
-            "invoiceNumber (string), companyName (string), invoiceDate (MM/DD/YYYY string), "
-            "items (array of { category: string, amount: number }). "
+            "Extract the following from this invoice image and return a raw JSON object with fields:\n"
+            "1. invoiceNumber (string, can be found at the top-right corner of the invoice)\n"
+            "2. invoiceDate (MM/DD/YYYY string, can be found at the top-right corner of the invoice)\n"
+            "3. companyName (string, look for 'Remit To:', only return the company name and not the address)\n"
+            "4. items (array of { category: string, amount: number }), at the bottom, look for 'Description' for category, and 'Total' for amount\n"
             "Return ONLY valid JSON. Do NOT wrap in code blocks."
         )
 

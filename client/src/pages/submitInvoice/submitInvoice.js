@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef } from "react";
 import { auth } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext";
 import { useAuth } from "../../context/AuthContext";
@@ -68,6 +68,9 @@ const SubmitInvoice = () => {
   const [recurringEndYear, setRecurringEndYear] = useState(
     new Date().getFullYear() + 1
   );
+  const fileInputRef = useRef(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showReadWarning, setShowReadWarning] = useState(false);
 
   // Separate month/year selectors for controlling which month the invoice gets added to
   const currentDate = new Date();
@@ -82,6 +85,36 @@ const SubmitInvoice = () => {
   useEffect(() => {
     document.title = "PAC Pro - Submit Invoice";
   }, []);
+
+  // Shared helper to validate that an uploaded file looks like a real image
+  const isValidImageFile = (file) => {
+    if (!file) return false;
+    const allowedMimeTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/heic",
+      "image/heif",
+    ];
+    const mime = file.type || "";
+    const name = (file.name || "").toLowerCase();
+    const validByExtension = /\.(jpe?g|png|webp|heic|heif)$/.test(name);
+
+    // If extension is wrong, reject immediately
+    if (!validByExtension) return false;
+
+    // If browser provided a MIME type, ensure it looks like an image and
+    // matches our allowlist; otherwise treat it as suspicious.
+    if (
+      mime &&
+      !allowedMimeTypes.includes(mime) &&
+      !mime.startsWith("image/")
+    ) {
+      return false;
+    }
+
+    return true;
+  };
 
   // Close calendar when clicking outside
   useEffect(() => {
@@ -221,6 +254,14 @@ const SubmitInvoice = () => {
       alert("Please upload an image first.");
       return;
     }
+
+    if (!isValidImageFile(imageUpload)) {
+      alert(
+        "Invalid image type. Please upload a JPG, PNG, WEBP, or HEIC image."
+      );
+      return;
+    }
+
     const formData = new FormData();
     formData.append("image", imageUpload);
     setLoadingUpload(true);
@@ -232,6 +273,7 @@ const SubmitInvoice = () => {
       });
 
       const data = await res.json();
+      console.log("Invoice read result:", data);
       if (!res.ok) {
         alert("Failed to read invoice: " + JSON.stringify(data));
         return;
@@ -264,7 +306,8 @@ const SubmitInvoice = () => {
         setConfirmedItems([]);
       }
 
-      alert("Invoice fields auto-filled successfully!");
+      // Show guidance popup so user understands limitations of AI reader
+      setShowReadWarning(true);
     } catch (err) {
       console.error(err);
       alert("Error reading invoice.");
@@ -354,14 +397,27 @@ const SubmitInvoice = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // For non-recurring invoices, image is required
-    if (!isRecurring && !imageUpload) {
-      alert("Please upload an image first.");
-      return;
-    }
-
     try {
+      setIsSubmitting(true);
+
+      // Basic field validation (handles recurring vs non-recurring)
+      verifyInput();
+
+      // Ensure there are no unconfirmed amounts with data entered
+      const hasUnconfirmedAmounts = extras.some(
+        (row) =>
+          !row.confirmed &&
+          (String(row.category || "").trim() !== "" ||
+            String(row.amount || "").trim() !== "")
+      );
+
+      if (hasUnconfirmedAmounts) {
+        alert(
+          "You have unconfirmed amounts. Please confirm or remove them before submitting."
+        );
+        return;
+      }
+
       // Require at least one confirmed category/amount before submitting
       if (!confirmedItems || confirmedItems.length === 0) {
         alert("Please confirm at least one category amount before submitting.");
@@ -502,30 +558,113 @@ const SubmitInvoice = () => {
       setExtras([]);
       setConfirmedItems([]);
       setImageUpload(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
       setIsRecurring(false);
       setRecurringInterval(1);
       setRecurringEndType("forever");
     } catch (err) {
       console.error(err);
-      alert("Error submitting invoice: " + err.message);
+      const msg = err?.message || "";
+      // For validation errors and other handled errors, show message directly.
+      // For unexpected cases without a message, fall back to a generic alert.
+      if (msg) {
+        alert(msg);
+      } else {
+        alert("Error submitting invoice. Please try again or contact an administrator.");
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const verifyInput = async () => {
-    if (invoiceNumber === "") throw new Error("Invoice Number Required");
+  const verifyInput = () => {
+    const errors = [];
+
+    // Company name is always required
+    if (!companyName || companyName.trim() === "") {
+      errors.push("Company Name Required");
+    }
+
+    // For non-recurring invoices, invoice number is required
+    if (!isRecurring && (!invoiceNumber || invoiceNumber.trim() === "")) {
+      errors.push("Invoice Number Required");
+    }
+
+    // Validate invoice date
     const d = new Date(invoiceYear, invoiceMonth - 1, invoiceDay);
     if (
       d.getFullYear() !== invoiceYear ||
       d.getMonth() + 1 !== invoiceMonth ||
       d.getDate() !== invoiceDay
-    )
-      throw new Error("Invalid Date Selected");
-    if (!imageUpload) throw new Error("Image Upload Required");
-    if (!selectedStore) throw new Error("Store Selection Required");
+    ) {
+      errors.push("Invalid Date Selected");
+    }
+
+    // For non-recurring invoices, image upload is required
+    if (!isRecurring && !imageUpload) {
+      errors.push("Image Upload Required");
+    }
+
+    // If an image is provided, ensure it is a supported image type
+    if (imageUpload && !isValidImageFile(imageUpload)) {
+      errors.push(
+        "Invalid image type. Please upload a JPG, PNG, WEBP, or HEIC image."
+      );
+    }
+
+    // Store selection is always required
+    if (!selectedStore) {
+      errors.push("Store Selection Required");
+    }
+
+    if (errors.length > 0) {
+      throw new Error(errors.join("\n"));
+    }
   };
 
   return (
     <div className={styles.pageContainer}>
+      {showReadWarning && (
+        <div
+          className={styles.reviewModalOverlay}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className={styles.reviewModal}>
+            <h2 className={styles.reviewModalTitle}>Review Auto‑Filled Invoice</h2>
+            <p className={styles.reviewModalText}>
+              The information above was read automatically from your invoice image and
+              may be incomplete or inaccurate. Please carefully review everything
+              before submitting.
+            </p>
+            <ul className={styles.reviewModalList}>
+              <li>
+                <strong>Store, Month, and Year</strong> must be set manually by you and
+                verified for correctness.
+              </li>
+              <li>
+                <strong>Invoice #, Company Name, and Invoice Date</strong> were read by
+                AI and must be double‑checked against the invoice.
+              </li>
+              <li>
+                <strong>All category/amount rows</strong> are suggestions only. You must
+                confirm each amount and category manually using the{" "}
+                <span style={{ fontWeight: "600" }}>Confirm</span> button.
+              </li>
+            </ul>
+            <button
+              type="button"
+              className={styles.reviewModalButton}
+              onClick={() => setShowReadWarning(false)}
+            >
+              I Understand
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className={styles.topBar}>Submit Invoice</div>
 
       {/* Month Lock Warning */}
@@ -768,6 +907,8 @@ const SubmitInvoice = () => {
                 onClick={(e) => {
                   const rect = e.target.getBoundingClientRect();
                   setCalendarPosition({
+                    // Use document-relative coordinates so popup scrolls with the page
+                    // and stays roughly anchored to the input.
                     top: rect.bottom + window.scrollY + 5,
                     left: rect.left + window.scrollX,
                   });
@@ -784,6 +925,8 @@ const SubmitInvoice = () => {
                 onClick={(e) => {
                   const rect = e.target.getBoundingClientRect();
                   setCalendarPosition({
+                    // Use document-relative coordinates so popup scrolls with the page
+                    // and stays roughly anchored to the button.
                     top: rect.bottom + window.scrollY + 5,
                     left: rect.left + window.scrollX,
                   });
@@ -801,7 +944,9 @@ const SubmitInvoice = () => {
               <div
                 data-calendar-popup
                 style={{
-                  position: "fixed",
+                  // Absolute so it scrolls with the page content instead of
+                  // staying pinned to the viewport.
+                  position: "absolute",
                   top: `${calendarPosition.top}px`,
                   left: `${calendarPosition.left}px`,
                   background: "white",
@@ -1061,8 +1206,9 @@ const SubmitInvoice = () => {
             >
               <input
                 type="file"
+                ref={fileInputRef}
                 onChange={(e) => setImageUpload(e.target.files[0])}
-                disabled={isMonthLocked()}
+                disabled={isMonthLocked() || loadingUpload || isSubmitting}
               />
               {isRecurring && (
                 <span
@@ -1080,22 +1226,36 @@ const SubmitInvoice = () => {
               type="submit"
               data-testid="submit-invoice-btn"
               className={styles.submitBtn}
-              disabled={isMonthLocked()}
+              disabled={isMonthLocked() || loadingUpload || isSubmitting}
               style={isRecurring ? { backgroundColor: "#7b1fa2" } : {}}
             >
               {isMonthLocked()
                 ? "Month Locked - Cannot Submit"
+                : isSubmitting
+                ? isRecurring
+                  ? "Creating..."
+                  : "Submitting..."
                 : isRecurring
                 ? "Create Recurring Invoice"
                 : "Submit Invoice"}
+              {isSubmitting && !isMonthLocked() && (
+                <span className={styles.spinner} aria-hidden="true" />
+              )}
             </button>
             <button
               type="button"
               className={styles.readUploadBtn}
               onClick={handleReadFromUpload}
-              disabled={loadingUpload || isMonthLocked()}
+              disabled={loadingUpload || isMonthLocked() || isSubmitting}
             >
-              {loadingUpload ? "Reading..." : "Read from Upload"}
+              {loadingUpload ? (
+                <>
+                  Reading...
+                  <span className={styles.spinner} aria-hidden="true" />
+                </>
+              ) : (
+                "Read from Upload"
+              )}
             </button>
           </div>
         </form>
