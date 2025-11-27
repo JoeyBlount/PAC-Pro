@@ -23,6 +23,7 @@ from services.navBar_service import NavBarService
 from services.invoice_settings_service import InvoiceSettingsService
 
 from services.deadlines_service import DeadlinesService
+from services.year_range_service import YearRangeService, get_year_range_service
 
 from services.notification_service import NotificationService
 from services.store_management_service import StoreManagementService
@@ -576,6 +577,48 @@ async def get_pac_input_data(
 async def health_check() -> Dict[str, str]:
     """Health check endpoint"""
     return {"status": "healthy", "service": "PAC Calculation API"}
+
+
+# ---- System/Utility Routes ----
+@router.get("/system/earliest-year/{store_id}")
+async def get_earliest_year(
+    store_id: str,
+    svc: YearRangeService = Depends(get_year_range_service),
+) -> Dict[str, Any]:
+    """
+    Get the earliest year with data for a given store.
+    
+    Used by frontend dropdowns to determine the year range to display.
+    Returns the minimum of 10 years back from current or earliest data found.
+    Also returns next year for future month selection.
+    """
+    if not svc.is_available():
+        # Return sensible defaults if Firebase not available
+        from datetime import datetime
+        current_year = datetime.now().year
+        return {
+            "earliest_year": current_year - 10,
+            "current_year": current_year,
+            "next_year": current_year + 1,
+            "store_id": store_id,
+            "data_available": False
+        }
+    
+    try:
+        from datetime import datetime
+        current_year = datetime.now().year
+        earliest_year = await svc.get_earliest_year(store_id)
+        
+        return {
+            "earliest_year": earliest_year,
+            "current_year": current_year,
+            "next_year": current_year + 1,
+            "store_id": store_id,
+            "data_available": True
+        }
+    except Exception as e:
+        logger.error(f"Error getting earliest year for store {store_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting earliest year: {str(e)}")
 
 
 # ---- PAC Actual Routes ----

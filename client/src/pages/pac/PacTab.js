@@ -1396,12 +1396,16 @@ const PacTab = ({
                     )}</div>
                     <div style="text-align: right;">
                         <div style="font-weight: bold; ${(() => {
-                          const current = actualData.productNetSales || 0;
                           const lastYear =
                             actualData.salesComparison?.lastYearProductSales ||
                             0;
-                          if (lastYear === 0) return "";
-                          const diff = ((current - lastYear) / lastYear) * 100;
+                          const lastYearLastYear =
+                            actualData.salesComparison
+                              ?.lastYearLastYearProductSales || 0;
+                          if (lastYearLastYear === 0) return "";
+                          const diff =
+                            ((lastYear - lastYearLastYear) / lastYearLastYear) *
+                            100;
                           return diff > 0
                             ? "color: green;"
                             : diff < 0
@@ -1409,13 +1413,17 @@ const PacTab = ({
                             : "";
                         })()}">
                             ${(() => {
-                              const current = actualData.productNetSales || 0;
                               const lastYear =
                                 actualData.salesComparison
                                   ?.lastYearProductSales || 0;
-                              if (lastYear === 0) return "-";
+                              const lastYearLastYear =
+                                actualData.salesComparison
+                                  ?.lastYearLastYearProductSales || 0;
+                              if (lastYearLastYear === 0) return "-";
                               const diff =
-                                ((current - lastYear) / lastYear) * 100;
+                                ((lastYear - lastYearLastYear) /
+                                  lastYearLastYear) *
+                                100;
                               return `${diff > 0 ? "+" : ""}${formatPercentage(
                                 diff
                               )}`;
@@ -3329,11 +3337,12 @@ const PacTab = ({
         Account: "Last Year Same Month",
         "Actual $": actualData.salesComparison?.lastYearProductSales || 0,
         "Actual %": (() => {
-          const current = actualData.productNetSales || 0;
           const lastYear =
             actualData.salesComparison?.lastYearProductSales || 0;
-          if (lastYear === 0) return "-";
-          const diff = ((current - lastYear) / lastYear) * 100;
+          const lastYearLastYear =
+            actualData.salesComparison?.lastYearLastYearProductSales || 0;
+          if (lastYearLastYear === 0) return "-";
+          const diff = ((lastYear - lastYearLastYear) / lastYearLastYear) * 100;
           return formatPercentage(diff);
         })(),
         "Projected $": "",

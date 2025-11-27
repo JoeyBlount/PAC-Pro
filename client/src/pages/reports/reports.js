@@ -23,6 +23,7 @@ import PrintIcon from '@mui/icons-material/Print';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import { StoreContext } from "../../context/storeContext";
+import { useYearRange, useYearOptions } from "../../utils/yearUtils";
 import './reports.css';
 
 const Reports = () => {
@@ -37,14 +38,16 @@ const Reports = () => {
   const currentDate = new Date();
   const months = ["January", "February", "March", "April", "May", "June", 
                   "July", "August", "September", "October", "November", "December"];
-  const currentYear = currentDate.getFullYear();
-  const years = Array.from({ length: 11 }, (_, i) => currentYear - i);
+  
+  // Dynamic year ranges for dropdowns (1 year forward + 10 years back or earliest data)
+  const { years: pacYears, currentYear } = useYearRange(selectedStore);
+  const { yearOptions: invoiceYearOptions } = useYearOptions(selectedStore, true);
   
   const [pacMonth, setPacMonth] = useState(months[currentDate.getMonth()]);
-  const [pacYear, setPacYear] = useState(currentYear);
+  const [pacYear, setPacYear] = useState(() => currentDate.getFullYear());
   
   const [invoiceMonth, setInvoiceMonth] = useState(String(currentDate.getMonth() + 1));
-  const [invoiceYear, setInvoiceYear] = useState(String(currentYear));
+  const [invoiceYear, setInvoiceYear] = useState(String(currentDate.getFullYear()));
 
   React.useEffect(() => {
     document.title = "PAC Pro - Reports";
@@ -184,7 +187,7 @@ const Reports = () => {
                 label="Year"
                 onChange={(e) => setPacYear(e.target.value)}
               >
-                {years.map((year) => (
+                {pacYears.map((year) => (
                   <MenuItem key={year} value={year}>
                     {year}
                   </MenuItem>
@@ -262,10 +265,11 @@ const Reports = () => {
                 label="Year"
                 onChange={(e) => setInvoiceYear(e.target.value)}
               >
-                <MenuItem value="">All Years</MenuItem>
-                <MenuItem value="2023">2023</MenuItem>
-                <MenuItem value="2024">2024</MenuItem>
-                <MenuItem value="2025">2025</MenuItem>
+                {invoiceYearOptions.map((y) => (
+                  <MenuItem key={y.value} value={y.value}>
+                    {y.label}
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
 

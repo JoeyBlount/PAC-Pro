@@ -54,6 +54,7 @@ import { getStorage, ref, getDownloadURL } from "firebase/storage";
 import MonthLockService from "../../services/monthLockService";
 import { recomputeMonthlyTotals } from "../../services/invoiceTotalsService";
 import { apiUrl } from "../../utils/api";
+import { useYearOptions } from "../../utils/yearUtils";
 
 // Map Invoice Log category IDs -> PAC "projections[].name"
 const PROJECTION_LOOKUP = {
@@ -140,6 +141,9 @@ const InvoiceLogs = () => {
 
   // Global store
   const { selectedStore } = useContext(StoreContext);
+
+  // Dynamic year options for filter dropdown (includes "All Years" option)
+  const { yearOptions } = useYearOptions(selectedStore, true);
 
   //editing invoice data
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -2043,12 +2047,7 @@ const InvoiceLogs = () => {
     { value: "11", label: "November" },
     { value: "12", label: "December" },
   ];
-  const years = [
-    { value: "", label: "All Years" },
-    { value: "2023", label: "2023" },
-    { value: "2024", label: "2024" },
-    { value: "2025", label: "2025" },
-  ];
+  // Years array now comes from useYearOptions hook (dynamic based on store data)
 
   return (
     <Container maxWidth={false} disableGutters sx={{ mt: 2, px: 2 }}>
@@ -2109,7 +2108,7 @@ const InvoiceLogs = () => {
               onChange={(e) => setSelectedYear(e.target.value)}
               sx={{ minWidth: 120 }}
             >
-              {years.map((y) => (
+              {yearOptions.map((y) => (
                 <MenuItem key={y.value} value={y.value}>
                   {y.label}
                 </MenuItem>

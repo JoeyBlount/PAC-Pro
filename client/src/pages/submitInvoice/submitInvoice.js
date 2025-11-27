@@ -9,6 +9,7 @@ import { invoiceCatList } from "../settings/InvoiceSettings";
 // Frontend no longer uploads to Storage or writes to Firestore; backend handles it
 import { useTheme } from "@mui/material/styles";
 import { apiUrl } from "../../utils/api";
+import { useYearRange } from "../../utils/yearUtils";
 import {
   Alert,
   TextField,
@@ -79,6 +80,9 @@ const SubmitInvoice = () => {
 
   const [targetMonth, setTargetMonth] = useState(currentMonth);
   const [targetYear, setTargetYear] = useState(currentYear);
+
+  // Dynamic year range for target year dropdown (1 year forward + 10 years back or earliest data)
+  const { years: targetYears } = useYearRange(selectedStore);
 
   const user = auth.currentUser;
 
@@ -1108,10 +1112,7 @@ const SubmitInvoice = () => {
                   onChange={(e) => setTargetYear(e.target.value)}
                   label="Year"
                 >
-                  {Array.from(
-                    { length: 11 },
-                    (_, i) => new Date().getFullYear() - i
-                  ).map((year) => (
+                  {targetYears.map((year) => (
                     <MenuItem key={year} value={year}>
                       {year}
                     </MenuItem>

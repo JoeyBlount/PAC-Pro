@@ -35,6 +35,7 @@ import { saveGenerateInput } from "../../services/generateInputService";
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 import { apiUrl } from "../../utils/api";
+import { useYearRange } from "../../utils/yearUtils";
 
 const expenseList = [
   "Product Sales",
@@ -160,9 +161,13 @@ const PAC = () => {
     "November",
     "December",
   ];
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 11 }, (_, i) => currentYear - i);
-  const [year, setYear] = useState(currentYear);
+
+  // Get selected store from context (needed for year range hook)
+  const { selectedStore } = useContext(StoreContext);
+
+  // Dynamic year range: 1 year forward + 10 years back (or earliest data year)
+  const { years, currentYear } = useYearRange(selectedStore);
+  const [year, setYear] = useState(() => new Date().getFullYear());
 
   // Separate state for actual data dropdowns in projections tab
   // Default to previous month when page loads (calculated from current month/year)
@@ -187,9 +192,6 @@ const PAC = () => {
       if (location.state.year) setYear(location.state.year);
     }
   }, [location]);
-
-  // Get selected store from context
-  const { selectedStore } = useContext(StoreContext);
   const [pacGoal, setPacGoal] = useState("");
 
   // debounced autosave timer
@@ -368,39 +370,40 @@ const PAC = () => {
   };
 
   // State variables for Generate tab; legacy pacGen removed
-  const [productNetSales, setProductNetSales] = useState(0);
-  const [cash, setCash] = useState(0);
-  const [promo, setPromo] = useState(0);
-  const [allNetSales, setAllNetSales] = useState(0);
-  const [managerMeal, setManagerMeal] = useState(0);
-  const [advertising, setAdvertising] = useState(0);
-  const [duesAndSubscriptions, setDuesAndSubscriptions] = useState(0);
+  // Initialize with empty strings so fields display as empty when no data exists
+  const [productNetSales, setProductNetSales] = useState("");
+  const [cash, setCash] = useState("");
+  const [promo, setPromo] = useState("");
+  const [allNetSales, setAllNetSales] = useState("");
+  const [managerMeal, setManagerMeal] = useState("");
+  const [advertising, setAdvertising] = useState("");
+  const [duesAndSubscriptions, setDuesAndSubscriptions] = useState("");
 
-  const [crewLabor, setCrewLabor] = useState(0);
-  const [totalLabor, setTotalLabor] = useState(0);
-  const [payrollTax, setPayrollTax] = useState(0);
-  const [additionalLaborDollars, setAdditionalLaborDollars] = useState(0);
+  const [crewLabor, setCrewLabor] = useState("");
+  const [totalLabor, setTotalLabor] = useState("");
+  const [payrollTax, setPayrollTax] = useState("");
+  const [additionalLaborDollars, setAdditionalLaborDollars] = useState("");
 
-  const [completeWaste, setCompleteWaste] = useState(0);
-  const [rawWaste, setRawWaste] = useState(0);
-  const [condiment, setCondiment] = useState(0);
-  const [variance, setVariance] = useState(0);
-  const [unexplained, setUnexplained] = useState(0);
-  const [discounts, setDiscounts] = useState(0);
-  const [baseFood, setBaseFood] = useState(0);
-  const [empMgrMealsPercent, setEmpMgrMealsPercent] = useState(0);
+  const [completeWaste, setCompleteWaste] = useState("");
+  const [rawWaste, setRawWaste] = useState("");
+  const [condiment, setCondiment] = useState("");
+  const [variance, setVariance] = useState("");
+  const [unexplained, setUnexplained] = useState("");
+  const [discounts, setDiscounts] = useState("");
+  const [baseFood, setBaseFood] = useState("");
+  const [empMgrMealsPercent, setEmpMgrMealsPercent] = useState("");
 
-  const [startingFood, setStartingFood] = useState(0);
-  const [startingCondiment, setStartingCondiment] = useState(0);
-  const [startingPaper, setStartingPaper] = useState(0);
-  const [startingNonProduct, setStartingNonProduct] = useState(0);
-  const [startingOpsSupplies, setStartingOpsSupplies] = useState(0);
+  const [startingFood, setStartingFood] = useState("");
+  const [startingCondiment, setStartingCondiment] = useState("");
+  const [startingPaper, setStartingPaper] = useState("");
+  const [startingNonProduct, setStartingNonProduct] = useState("");
+  const [startingOpsSupplies, setStartingOpsSupplies] = useState("");
 
-  const [endingFood, setEndingFood] = useState(0);
-  const [endingCondiment, setEndingCondiment] = useState(0);
-  const [endingPaper, setEndingPaper] = useState(0);
-  const [endingNonProduct, setEndingNonProduct] = useState(0);
-  const [endingOpsSupplies, setEndingOpsSupplies] = useState(0);
+  const [endingFood, setEndingFood] = useState("");
+  const [endingCondiment, setEndingCondiment] = useState("");
+  const [endingPaper, setEndingPaper] = useState("");
+  const [endingNonProduct, setEndingNonProduct] = useState("");
+  const [endingOpsSupplies, setEndingOpsSupplies] = useState("");
 
   const { userRole, loading: authLoading } = useAuth();
 
@@ -721,10 +724,16 @@ const PAC = () => {
         return String(val).toLowerCase();
       };
 
+      // Helper to get value - preserves 0 if saved, returns empty string if not set
+      const getVal = (val) => {
+        if (val === undefined || val === null) return "";
+        return val;
+      };
+
       const isLocked = isMonthLocked();
 
       // If month is locked, load previously submitted data
-      // If month is unlocked, set all fields to 0
+      // If month is unlocked, set all fields to empty
       if (isLocked) {
         const existingData = await getGenerateInput(
           norm(selectedStore),
@@ -738,115 +747,119 @@ const PAC = () => {
             existingData
           );*/
 
-          // Sales section
-          setProductNetSales(existingData.sales?.productNetSales || 0);
-          setCash(existingData.sales?.cash || 0);
-          setPromo(existingData.sales?.promo || 0);
-          setAllNetSales(existingData.sales?.allNetSales || 0);
-          setManagerMeal(existingData.sales?.managerMeal || 0);
-          setAdvertising(existingData.sales?.advertising || 0);
+          // Sales section - use getVal to preserve 0 if saved
+          setProductNetSales(getVal(existingData.sales?.productNetSales));
+          setCash(getVal(existingData.sales?.cash));
+          setPromo(getVal(existingData.sales?.promo));
+          setAllNetSales(getVal(existingData.sales?.allNetSales));
+          setManagerMeal(getVal(existingData.sales?.managerMeal));
+          setAdvertising(getVal(existingData.sales?.advertising));
           setDuesAndSubscriptions(
-            existingData.sales?.duesAndSubscriptions || 0
+            getVal(existingData.sales?.duesAndSubscriptions)
           );
 
           // Labor section
-          setCrewLabor(existingData.labor?.crewLabor || 0);
-          setTotalLabor(existingData.labor?.totalLabor || 0);
-          setPayrollTax(existingData.labor?.payrollTax || 0);
+          setCrewLabor(getVal(existingData.labor?.crewLabor));
+          setTotalLabor(getVal(existingData.labor?.totalLabor));
+          setPayrollTax(getVal(existingData.labor?.payrollTax));
           setAdditionalLaborDollars(
-            existingData.labor?.additionalLaborDollars || 0
+            getVal(existingData.labor?.additionalLaborDollars)
           );
 
           // Food section
-          setCompleteWaste(existingData.food?.completeWaste || 0);
-          setRawWaste(existingData.food?.rawWaste || 0);
-          setCondiment(existingData.food?.condiment || 0);
-          setVariance(existingData.food?.variance || 0);
-          setUnexplained(existingData.food?.unexplained || 0);
-          setDiscounts(existingData.food?.discounts || 0);
-          setBaseFood(existingData.food?.baseFood || 0);
-          setEmpMgrMealsPercent(existingData.food?.empMgrMealsPercent || 0);
+          setCompleteWaste(getVal(existingData.food?.completeWaste));
+          setRawWaste(getVal(existingData.food?.rawWaste));
+          setCondiment(getVal(existingData.food?.condiment));
+          setVariance(getVal(existingData.food?.variance));
+          setUnexplained(getVal(existingData.food?.unexplained));
+          setDiscounts(getVal(existingData.food?.discounts));
+          setBaseFood(getVal(existingData.food?.baseFood));
+          setEmpMgrMealsPercent(getVal(existingData.food?.empMgrMealsPercent));
 
           // Inventory - Starting
-          setStartingFood(existingData.inventoryStarting?.food || 0);
-          setStartingCondiment(existingData.inventoryStarting?.condiment || 0);
-          setStartingPaper(existingData.inventoryStarting?.paper || 0);
+          setStartingFood(getVal(existingData.inventoryStarting?.food));
+          setStartingCondiment(
+            getVal(existingData.inventoryStarting?.condiment)
+          );
+          setStartingPaper(getVal(existingData.inventoryStarting?.paper));
           setStartingNonProduct(
-            existingData.inventoryStarting?.nonProduct || 0
+            getVal(existingData.inventoryStarting?.nonProduct)
           );
           setStartingOpsSupplies(
-            existingData.inventoryStarting?.opsSupplies || 0
+            getVal(existingData.inventoryStarting?.opsSupplies)
           );
 
           // Inventory - Ending
-          setEndingFood(existingData.inventoryEnding?.food || 0);
-          setEndingCondiment(existingData.inventoryEnding?.condiment || 0);
-          setEndingPaper(existingData.inventoryEnding?.paper || 0);
-          setEndingNonProduct(existingData.inventoryEnding?.nonProduct || 0);
-          setEndingOpsSupplies(existingData.inventoryEnding?.opsSupplies || 0);
+          setEndingFood(getVal(existingData.inventoryEnding?.food));
+          setEndingCondiment(getVal(existingData.inventoryEnding?.condiment));
+          setEndingPaper(getVal(existingData.inventoryEnding?.paper));
+          setEndingNonProduct(getVal(existingData.inventoryEnding?.nonProduct));
+          setEndingOpsSupplies(
+            getVal(existingData.inventoryEnding?.opsSupplies)
+          );
 
           //console.log("Generate tab autofilled with locked month data");
         } else {
-          // Locked but no data - set to 0
+          // Locked but no data - set to empty
           /*console.log(
-            "Month is locked but no existing data found - setting to 0"
+            "Month is locked but no existing data found - setting to empty"
           );*/
           resetGenerateFields();
         }
       } else {
-        // Month is unlocked - set all fields to 0
-        //console.log("Month is unlocked - resetting all fields to 0");
+        // Month is unlocked - set all fields to empty
+        //console.log("Month is unlocked - resetting all fields to empty");
         resetGenerateFields();
       }
     } catch (error) {
       //console.error("Error loading existing generate data:", error);
-      // On error, reset to 0 if unlocked
+      // On error, reset to empty if unlocked
       if (!isMonthLocked()) {
         resetGenerateFields();
       }
     }
   };
 
-  // Helper function to reset all generate fields to 0
+  // Helper function to reset all generate fields to empty
   const resetGenerateFields = () => {
     // Sales section
-    setProductNetSales(0);
-    setCash(0);
-    setPromo(0);
-    setAllNetSales(0);
-    setManagerMeal(0);
-    setAdvertising(0);
-    setDuesAndSubscriptions(0);
+    setProductNetSales("");
+    setCash("");
+    setPromo("");
+    setAllNetSales("");
+    setManagerMeal("");
+    setAdvertising("");
+    setDuesAndSubscriptions("");
 
     // Labor section
-    setCrewLabor(0);
-    setTotalLabor(0);
-    setPayrollTax(0);
-    setAdditionalLaborDollars(0);
+    setCrewLabor("");
+    setTotalLabor("");
+    setPayrollTax("");
+    setAdditionalLaborDollars("");
 
     // Food section
-    setCompleteWaste(0);
-    setRawWaste(0);
-    setCondiment(0);
-    setVariance(0);
-    setUnexplained(0);
-    setDiscounts(0);
-    setBaseFood(0);
-    setEmpMgrMealsPercent(0);
+    setCompleteWaste("");
+    setRawWaste("");
+    setCondiment("");
+    setVariance("");
+    setUnexplained("");
+    setDiscounts("");
+    setBaseFood("");
+    setEmpMgrMealsPercent("");
 
     // Inventory - Starting
-    setStartingFood(0);
-    setStartingCondiment(0);
-    setStartingPaper(0);
-    setStartingNonProduct(0);
-    setStartingOpsSupplies(0);
+    setStartingFood("");
+    setStartingCondiment("");
+    setStartingPaper("");
+    setStartingNonProduct("");
+    setStartingOpsSupplies("");
 
     // Inventory - Ending
-    setEndingFood(0);
-    setEndingCondiment(0);
-    setEndingPaper(0);
-    setEndingNonProduct(0);
-    setEndingOpsSupplies(0);
+    setEndingFood("");
+    setEndingCondiment("");
+    setEndingPaper("");
+    setEndingNonProduct("");
+    setEndingOpsSupplies("");
   };
 
   // Fetch month lock status when month, year, or store changes
@@ -1202,37 +1215,38 @@ const PAC = () => {
       return;
     }
 
-    // Allow partial submissions - convert empty strings/undefined to 0
-    // At least one field should have a value (not all zero)
+    // Allow partial submissions - at least one field should have a value entered
+    // Check if field is not empty string (0 is a valid input)
     const hasAnyValue =
-      Number(productNetSales) ||
-      Number(cash) ||
-      Number(promo) ||
-      Number(allNetSales) ||
-      Number(advertising) ||
-      Number(duesAndSubscriptions) ||
-      Number(crewLabor) ||
-      Number(totalLabor) ||
-      Number(payrollTax) ||
-      Number(additionalLaborDollars) ||
-      Number(completeWaste) ||
-      Number(rawWaste) ||
-      Number(condiment) ||
-      Number(variance) ||
-      Number(unexplained) ||
-      Number(discounts) ||
-      Number(baseFood) ||
-      Number(empMgrMealsPercent) ||
-      Number(startingFood) ||
-      Number(startingCondiment) ||
-      Number(startingPaper) ||
-      Number(startingNonProduct) ||
-      Number(startingOpsSupplies) ||
-      Number(endingFood) ||
-      Number(endingCondiment) ||
-      Number(endingPaper) ||
-      Number(endingNonProduct) ||
-      Number(endingOpsSupplies);
+      productNetSales !== "" ||
+      cash !== "" ||
+      promo !== "" ||
+      allNetSales !== "" ||
+      managerMeal !== "" ||
+      advertising !== "" ||
+      duesAndSubscriptions !== "" ||
+      crewLabor !== "" ||
+      totalLabor !== "" ||
+      payrollTax !== "" ||
+      additionalLaborDollars !== "" ||
+      completeWaste !== "" ||
+      rawWaste !== "" ||
+      condiment !== "" ||
+      variance !== "" ||
+      unexplained !== "" ||
+      discounts !== "" ||
+      baseFood !== "" ||
+      empMgrMealsPercent !== "" ||
+      startingFood !== "" ||
+      startingCondiment !== "" ||
+      startingPaper !== "" ||
+      startingNonProduct !== "" ||
+      startingOpsSupplies !== "" ||
+      endingFood !== "" ||
+      endingCondiment !== "" ||
+      endingPaper !== "" ||
+      endingNonProduct !== "" ||
+      endingOpsSupplies !== "";
 
     if (!hasAnyValue) {
       alert("Please enter at least one field before submitting.");
@@ -1248,51 +1262,52 @@ const PAC = () => {
       // Get user's full name
       const submittedBy = await getUserFullName();
 
-      // Save generate input data - only include non-zero fields to preserve existing values
-      // This ensures that empty/zero fields don't overwrite previously submitted data
+      // Save generate input data - only include fields that have been explicitly provided
+      // Empty fields are skipped to preserve existing Firebase values
       const inputData = {};
 
-      // Helper to only add non-zero values (preserves existing values for 0/empty fields)
-      const addIfNonZero = (key, value) => {
-        // Check if value is provided and non-zero
+      // Helper to add values that have been explicitly provided (including 0)
+      // Skips empty/undefined/null values to preserve existing data in Firebase
+      const addIfProvided = (key, value) => {
+        // Check if value is provided (not empty string, undefined, or null)
         if (value !== undefined && value !== null && value !== "") {
           const numValue = Number(value);
-          // Only include if it's a valid number and non-zero
-          if (!isNaN(numValue) && numValue !== 0) {
+          // Only include if it's a valid number (including 0)
+          if (!isNaN(numValue)) {
             inputData[key] = numValue;
           }
         }
       };
 
-      addIfNonZero("productNetSales", productNetSales);
-      addIfNonZero("cash", cash);
-      addIfNonZero("promo", promo);
-      addIfNonZero("allNetSales", allNetSales);
-      addIfNonZero("managerMeal", managerMeal);
-      addIfNonZero("advertising", advertising);
-      addIfNonZero("duesAndSubscriptions", duesAndSubscriptions);
-      addIfNonZero("crewLabor", crewLabor);
-      addIfNonZero("totalLabor", totalLabor);
-      addIfNonZero("payrollTax", payrollTax);
-      addIfNonZero("additionalLaborDollars", additionalLaborDollars);
-      addIfNonZero("completeWaste", completeWaste);
-      addIfNonZero("rawWaste", rawWaste);
-      addIfNonZero("condiment", condiment);
-      addIfNonZero("variance", variance);
-      addIfNonZero("unexplained", unexplained);
-      addIfNonZero("discounts", discounts);
-      addIfNonZero("baseFood", baseFood);
-      addIfNonZero("empMgrMealsPercent", empMgrMealsPercent);
-      addIfNonZero("startingFood", startingFood);
-      addIfNonZero("startingCondiment", startingCondiment);
-      addIfNonZero("startingPaper", startingPaper);
-      addIfNonZero("startingNonProduct", startingNonProduct);
-      addIfNonZero("startingOpsSupplies", startingOpsSupplies);
-      addIfNonZero("endingFood", endingFood);
-      addIfNonZero("endingCondiment", endingCondiment);
-      addIfNonZero("endingPaper", endingPaper);
-      addIfNonZero("endingNonProduct", endingNonProduct);
-      addIfNonZero("endingOpsSupplies", endingOpsSupplies);
+      addIfProvided("productNetSales", productNetSales);
+      addIfProvided("cash", cash);
+      addIfProvided("promo", promo);
+      addIfProvided("allNetSales", allNetSales);
+      addIfProvided("managerMeal", managerMeal);
+      addIfProvided("advertising", advertising);
+      addIfProvided("duesAndSubscriptions", duesAndSubscriptions);
+      addIfProvided("crewLabor", crewLabor);
+      addIfProvided("totalLabor", totalLabor);
+      addIfProvided("payrollTax", payrollTax);
+      addIfProvided("additionalLaborDollars", additionalLaborDollars);
+      addIfProvided("completeWaste", completeWaste);
+      addIfProvided("rawWaste", rawWaste);
+      addIfProvided("condiment", condiment);
+      addIfProvided("variance", variance);
+      addIfProvided("unexplained", unexplained);
+      addIfProvided("discounts", discounts);
+      addIfProvided("baseFood", baseFood);
+      addIfProvided("empMgrMealsPercent", empMgrMealsPercent);
+      addIfProvided("startingFood", startingFood);
+      addIfProvided("startingCondiment", startingCondiment);
+      addIfProvided("startingPaper", startingPaper);
+      addIfProvided("startingNonProduct", startingNonProduct);
+      addIfProvided("startingOpsSupplies", startingOpsSupplies);
+      addIfProvided("endingFood", endingFood);
+      addIfProvided("endingCondiment", endingCondiment);
+      addIfProvided("endingPaper", endingPaper);
+      addIfProvided("endingNonProduct", endingNonProduct);
+      addIfProvided("endingOpsSupplies", endingOpsSupplies);
 
       // Calculate Food Over Base
       // Formula: Raw Waste + Complete Waste + Condiment + Stat Variance + Unexplained
@@ -1304,7 +1319,7 @@ const PAC = () => {
         (Number(variance) || 0) +
         (Number(unexplained) || 0);
 
-      addIfNonZero("foodOverBase", foodOverBaseCalc);
+      addIfProvided("foodOverBase", foodOverBaseCalc);
 
       await saveGenerateInput(
         selectedStore,
@@ -1751,16 +1766,14 @@ const PAC = () => {
                             {fmtPercent(pacGoal)}
                           </Box>
 
-                          {/* Change button only if current/future period */}
-                          {!isPastPeriod(year, month) && (
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              onClick={() => setEditingGoal(true)}
-                            >
-                              Change
-                            </Button>
-                          )}
+                          {/* Change button for admin - allowed for all periods (past, current, future) */}
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => setEditingGoal(true)}
+                          >
+                            Change
+                          </Button>
                         </>
                       )}
 
