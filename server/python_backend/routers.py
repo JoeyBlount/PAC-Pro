@@ -67,6 +67,49 @@ router = APIRouter(prefix="/api/pac", tags=["PAC"])
 logger = logging.getLogger(__name__)
 
 
+def _ensure_valid_image_bytes(filename: Optional[str], contents: bytes) -> None:
+  """
+  Lightweight server-side validation that uploaded bytes look like a real image.
+  This protects downstream services (OpenAI, Firebase Storage, etc.) from obviously
+  invalid content such as text files renamed with an image extension.
+
+  Supported types (by magic bytes):
+  - JPEG: FF D8 FF
+  - PNG:  89 50 4E 47 0D 0A 1A 0A
+  - WEBP: 'RIFF'....'WEBP'
+  - HEIC/HEIF: 'ftyp' + 'heic' / 'heif' / 'hevc' / 'hevx'
+  """
+  if not contents or len(contents) < 4:
+      raise HTTPException(status_code=400, detail="Uploaded file is empty or too small to be a valid image.")
+
+  header = contents[:16]
+
+  # JPEG
+  if header.startswith(b"\xFF\xD8\xFF"):
+      return
+
+  # PNG
+  if header.startswith(b"\x89PNG\r\n\x1a\n"):
+      return
+
+  # WEBP (RIFF....WEBP)
+  if header[:4] == b"RIFF" and contents[8:12] == b"WEBP":
+      return
+
+  # HEIC/HEIF family: look for 'ftyp' followed by known brand
+  if b"ftyp" in header[:12]:
+      brand = contents[8:12]
+      if brand in (b"heic", b"heix", b"hevc", b"hevx", b"mif1", b"msf1"):
+          return
+
+  # If we reach here, it's not a recognized image type
+  name = filename or "uploaded file"
+  raise HTTPException(
+      status_code=400,
+      detail=f"{name} is not a supported image type. Please upload a JPG, PNG, WEBP, or HEIC image.",
+  )
+
+
 # ---- Dependencies ----
 security_scheme = HTTPBearer(auto_error=False)
 
@@ -939,6 +982,9 @@ async def read_invoice(
     if not contents or len(contents) == 0:
         raise HTTPException(status_code=400, detail="Empty image upload.")
 
+    # Server-side guard: ensure bytes look like a supported image type
+    _ensure_valid_image_bytes(image.filename, contents)
+
     try:
         result = await reader.read_bytes(contents, image.filename)
         logger.info("✅ Invoice parsed successfully")
@@ -993,6 +1039,9 @@ async def submit_invoice(
         contents = await image.read()
         await image.close()
         image_filename = image.filename or "invoice.jpg"
+        # Validate that the uploaded file is a supported image type
+        if contents:
+            _ensure_valid_image_bytes(image_filename, contents)
     
     # For non-recurring invoices, image is required
     if not is_recurring and (not contents or len(contents) == 0):
@@ -1461,6 +1510,8 @@ async def read_invoice_compat(
     await image.close()
     if not data:
         raise HTTPException(status_code=400, detail="No image uploaded.")
+    # Validate bytes as a supported image type
+    _ensure_valid_image_bytes(image.filename, data)
     try:
         return await reader.read_bytes(data, image.filename)
     except ValueError as e:

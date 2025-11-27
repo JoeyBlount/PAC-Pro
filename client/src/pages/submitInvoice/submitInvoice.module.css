@@ -158,6 +158,25 @@ select {
   background-color: var(--btn-green-hover);
 }
 
+/* Inline spinner for buttons */
+.spinner {
+  display: inline-block;
+  margin-left: 8px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-top-color: #ffffff;
+  animation: submitInvoiceSpinner 0.6s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes submitInvoiceSpinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Button Row */
 .buttonRow {
   display: flex;
@@ -170,6 +189,65 @@ select {
   color: var(--btn-green);
   margin-left: 8px;
   font-weight: bold;
+}
+
+/* ================================
+   REVIEW MODAL (AI READ WARNING)
+=================================*/
+.reviewModalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000000;
+}
+
+.reviewModal {
+  background-color: var(--card-bg);
+  color: var(--text-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px var(--shadow-color);
+  max-width: 520px;
+  width: 90%;
+  padding: 20px 24px;
+}
+
+.reviewModalTitle {
+  margin: 0 0 10px 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.reviewModalText {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.reviewModalList {
+  margin: 0 0 16px 20px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.reviewModalButton {
+  background-color: var(--btn-blue);
+  color: #ffffff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.reviewModalButton:hover {
+  background-color: var(--btn-blue-hover);
 }
 
 /* ================================
@@ -244,7 +322,8 @@ select {
   padding: 5px 10px;
   border-radius: 4px;
   transition: background-color 0.2s;
-  color: var(--text-color);
+  /* Keep navigation arrows consistent across themes */
+  color: #333333;
 }
 .calendarNav:hover {
   background-color: rgba(255, 255, 255, 0.1);
@@ -253,6 +332,8 @@ select {
 .calendarMonthYear {
   font-weight: 600;
   font-size: 16px;
+  /* Keep month/year title consistent across themes */
+  color: #333333;
 }
 
 .calendarWeekdays {
@@ -266,7 +347,8 @@ select {
   text-align: center;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-color);
+  /* Keep weekday labels consistent across themes */
+  color: #555555;
   opacity: 0.7;
   padding: 5px;
 }
@@ -289,7 +371,8 @@ select {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-color);
+  /* Keep calendar day text color independent of theme */
+  color: #222222;
 }
 .calendarDay:hover:not(.disabled) {
   background-color: rgba(33, 150, 243, 0.2);
@@ -305,12 +388,12 @@ select {
   font-weight: bold;
 }
 .calendarDay.otherMonth {
-  color: #777;
+  color: #999999;
 }
 .calendarDay.disabled {
-  color: #555;
+  color: #bbbbbb;
   cursor: not-allowed;
-  background-color: #333;
+  background-color: #f0f0f0;
 }
 
 .calendarFooter {
