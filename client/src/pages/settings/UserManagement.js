@@ -27,7 +27,7 @@ import { ROLES } from '../../constants/roles'; // Adjust path
 import { apiUrl } from '../../utils/api';
 
 const UserManagement = () => {
-  const { userRole, currentUser } = useAuth(); // Get current user's role and info
+  const { userRole, currentUser, getToken } = useAuth(); // Get current user's role and info
   const [users, setUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
@@ -124,26 +124,44 @@ const UserManagement = () => {
   };
 
   const fetchAllStores = async () => {
-    try {
-      const token = currentUser ? await currentUser.getIdToken() : null;
-      const response = await fetch(apiUrl('/api/account/stores'), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : { 'X-Dev-Email': currentUser?.email || 'dev@example.com' }),
-        },
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
-      }
-      const data = await response.json();
-      setAllStores(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error fetching stores for assignment:', error);
-      setAllStores([]);
+  try {
+    // use the shared helper
+    const token = await getToken();
+
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+
+    if (token) {
+      // Firebase-authenticated request
+      headers.Authorization = `Bearer ${token}`;
+    } else if (currentUser?.email) {
+      // Microsoft or dev fallback
+      headers['X-Dev-Email'] = currentUser.email;
+    } else {
+      // last-resort fallback
+      headers['X-Dev-Email'] = 'dev@example.com';
     }
-  };
+
+    const response = await fetch(apiUrl('/api/account/stores'), {
+      method: 'GET',
+      headers,
+      credentials: 'include', // optional, if backend uses cookies too
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    setAllStores(Array.isArray(data) ? data : []);
+  } catch (error) {
+    console.error('Error fetching stores for assignment:', error);
+    setAllStores([]);
+  }
+};
+
 
   const handleAssignMenuOpen = (event) => setAssignAnchorEl(event.currentTarget);
   const handleAssignMenuClose = () => setAssignAnchorEl(null);
