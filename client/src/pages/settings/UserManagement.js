@@ -64,7 +64,7 @@ const UserManagement = () => {
         throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
-      console.log("Fetched users data:", data.users); // Debug log
+      //console.log("Fetched users data:", data.users); // Debug log
       setUsers(data.users || []);
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -104,7 +104,7 @@ const UserManagement = () => {
       }
 
       const result = await response.json();
-      console.log("User deleted successfully:", result);
+      //console.log("User deleted successfully:", result);
       
       fetchUsers(); // Refresh the user list
     } catch (error) {
@@ -217,13 +217,13 @@ const UserManagement = () => {
         }
 
         const result = await response.json();
-        console.log("User added successfully:", result);
+        //console.log("User added successfully:", result);
                 // After the "User added successfully" line:
        // Replace the invite email section in handleAddUserSubmit (around line 197)
 
 // After user is added successfully:
 try {
-  console.log("📧 Triggering invite email...");
+  //console.log("📧 Triggering invite email...");
   
   const inviteResponse = await fetch(
     "https://us-central1-pacpro-ef499.cloudfunctions.net/sendUserInvite",
@@ -242,7 +242,7 @@ try {
 
   if (inviteResponse.ok) {
     const inviteData = await inviteResponse.json();
-    console.log("✅ Invite email sent:", inviteData);
+    //console.log("✅ Invite email sent:", inviteData);
     alert(`User added successfully! Invitation email sent to ${newUser.email}`);
   } else {
     const errorData = await inviteResponse.json();
@@ -337,7 +337,7 @@ try {
       }
 
       const result = await response.json();
-      console.log("User role updated successfully:", result);
+      //console.log("User role updated successfully:", result);
       
       fetchUsers(); // Refresh the user list
     } catch (error) {

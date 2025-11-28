@@ -52,33 +52,41 @@ export const saveGenerateInput = async (
     // Create document ID: storeID_YYYYMM
     const docId = `${storeID}_${year}${String(monthNumber).padStart(2, "0")}`;
 
-    // Get existing data to preserve non-zero values
+    // Get existing data to preserve previously saved values
     const docRef = doc(db, "generate_input", docId);
     const existingDoc = await getDoc(docRef);
     const existingData = existingDoc.exists() ? existingDoc.data() : null;
 
-    // Helper function to get existing value or default to 0
+    // Helper function to get existing value, returns null if no data exists
+    // This allows distinguishing between "no data" and "user entered 0"
     const getExistingValue = (section, field) => {
       if (
         existingData &&
         existingData[section] &&
-        existingData[section][field] !== undefined
+        existingData[section][field] !== undefined &&
+        existingData[section][field] !== null
       ) {
-        return Number(existingData[section][field]) || 0;
+        const numValue = Number(existingData[section][field]);
+        return isNaN(numValue) ? null : numValue;
       }
-      return 0;
+      return null;
     };
 
     // Helper function to update value only if provided in inputData
+    // If value is provided (including 0), use it; otherwise preserve existing value
     const getValue = (section, field, inputKey) => {
       if (
         inputData[inputKey] !== undefined &&
         inputData[inputKey] !== null &&
         inputData[inputKey] !== ""
       ) {
-        return Number(inputData[inputKey]) || 0;
+        // Value was explicitly provided - use it (including 0)
+        const numValue = Number(inputData[inputKey]);
+        return isNaN(numValue) ? 0 : numValue;
       }
-      return getExistingValue(section, field);
+      // No new value provided - keep existing value (may be null if never set)
+      const existingVal = getExistingValue(section, field);
+      return existingVal !== null ? existingVal : 0;
     };
 
     // Structure the data, preserving existing values for fields not provided
@@ -129,6 +137,12 @@ export const saveGenerateInput = async (
         unexplained: getValue("food", "unexplained", "unexplained"),
         discounts: getValue("food", "discounts", "discounts"),
         baseFood: getValue("food", "baseFood", "baseFood"),
+        foodOverBase: getValue("food", "foodOverBase", "foodOverBase"),
+        empMgrMealsPercent: getValue(
+          "food",
+          "empMgrMealsPercent",
+          "empMgrMealsPercent"
+        ),
       },
 
       // Inventory - Starting - only update fields that are provided
@@ -176,13 +190,13 @@ export const saveGenerateInput = async (
     // Save to Firestore
     await setDoc(docRef, generateData, { merge: true });
 
-    console.log(`Saved generate input data for ${storeID} - ${month} ${year}`);
+    //console.log(`Saved generate input data for ${storeID} - ${month} ${year}`);
 
     // Trigger PAC actual recalculation after generate input is saved
     try {
-      console.log(
+      /*console.log(
         `[Generate Input] Triggering PAC actual recalculation for ${storeID} - ${month} ${year}`
-      );
+      );*/
       const months = [
         "January",
         "February",
@@ -233,9 +247,9 @@ export const saveGenerateInput = async (
         );
       }
 
-      console.log(
+      /*console.log(
         `[Generate Input] PAC actual recalculation completed for ${storeID} - ${month} ${year}`
-      );
+      );*/
     } catch (pacError) {
       console.error(
         `[Generate Input] Failed to recalculate PAC actual for ${storeID}:`,

@@ -11,3 +11,4 @@ pytest-asyncio==0.21.1
 msal==1.28.0
 PyJWT==2.8.0
 itsdangerous==2.1.2
+python-dateutil==2.9.0

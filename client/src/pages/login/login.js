@@ -29,7 +29,7 @@ const Login = () => {
   // Function to handle Google login
   const handleGoogleLogin = async () => {
     try {
-      console.log("Attempting to sign in with Google...");
+      //console.log("Attempting to sign in with Google...");
       const result = await signInWithPopup(auth, googleAuthProvider);
       const idToken = await result.user.getIdToken();
 

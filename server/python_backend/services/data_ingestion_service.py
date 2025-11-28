@@ -124,38 +124,202 @@ class DataIngestionService:
     
     async def get_input_data_async(self, entity_id: str, year_month: str) -> PacInputData:
         """
-        Get all input data for PAC calculation from Firebase
-        
-        Args:
-            entity_id: Store/entity identifier
-            year_month: Year and month in YYYYMM format
-            
-        Returns:
-            PacInputData object with all required data
+        Get all input data for PAC calculation from Firebase.
+        fetches from generate_input and invoice_log_totals for Actuals.
         """
+        # --- Fetch Historical Sales Data ---
+        try:
+            year = int(year_month[:4])
+            month_num = int(year_month[4:])
+            
+            # Helper to format YYYYMM
+            def get_ym_str(y, m):
+                return f"{y}{m:02d}"
+            
+            # Last Year Same Month
+            last_year_ym = get_ym_str(year - 1, month_num)
+            
+            # Last Month
+            if month_num == 1:
+                last_month_ym = get_ym_str(year - 1, 12)
+            else:
+                last_month_ym = get_ym_str(year, month_num - 1)
+                
+            # Last Month Last Year
+            last_month_year = int(last_month_ym[:4])
+            last_month_mon = int(last_month_ym[4:])
+            last_month_last_year_ym = get_ym_str(last_month_year - 1, last_month_mon)
+            
+            # Last Year Same Month Last Year
+            last_year_last_year_ym = get_ym_str(year - 2, month_num)
+            
+            def get_sales_sync(ym):
+                """Synchronous helper to fetch sales data for a given year-month"""
+                try:
+                    # 1. Try generate_input (Actuals) - SOURCE OF TRUTH
+                    doc_id = f"{entity_id}_{ym}"
+                    doc_ref = self.db.collection('generate_input').document(doc_id)
+                    doc = doc_ref.get()
+                    if doc.exists:
+                        data = doc.to_dict() or {}
+                        sales = data.get('sales', {})
+                        val = sales.get('productNetSales')
+                        if val is not None and val != 0 and val != '0':
+                            try:
+                                return Decimal(str(val).replace('$', '').replace(',', ''))
+                            except:
+                                pass
+                    
+                    # 2. Fallback to pac-projections
+                    proj_doc = self.db.collection('pac-projections').document(doc_id).get()
+                    if proj_doc.exists:
+                        proj_data = proj_doc.to_dict() or {}
+                        val = proj_data.get('product_net_sales')
+                        if val is not None:
+                            try:
+                                return Decimal(str(val).replace('$', '').replace(',', ''))
+                            except:
+                                pass
+                    
+                    return Decimal('0')
+                except Exception as e:
+                    print(f"Warning: Error fetching sales for {ym}: {e}")
+                    return Decimal('0')
+
+            last_year_sales = get_sales_sync(last_year_ym)
+            last_month_sales = get_sales_sync(last_month_ym)
+            last_month_last_year_sales = get_sales_sync(last_month_last_year_ym)
+            last_year_last_year_sales = get_sales_sync(last_year_last_year_ym)
+            
+        except Exception as e:
+            print(f"Warning: Could not fetch historical sales data: {e}")
+            last_year_sales = Decimal('0')
+            last_month_sales = Decimal('0')
+            last_month_last_year_sales = Decimal('0')
+            last_year_last_year_sales = Decimal('0')
+
+        # --- Fetch Actuals Data (Generate Input + Invoice Logs) ---
+        doc_id = f"{entity_id}_{year_month}"
+        gen_doc = self.db.collection('generate_input').document(doc_id).get()
+        
+        if gen_doc.exists:
+            # Use Actuals Data
+            gen_data = gen_doc.to_dict() or {}
+            
+            inv_doc = self.db.collection('invoice_log_totals').document(doc_id).get()
+            inv_data = inv_doc.to_dict() if inv_doc.exists else {}
+            inv_totals = inv_data.get('totals') or {}
+            
+            # Normalize keys for robust matching
+            normalized_totals = {}
+            for k, v in inv_totals.items():
+                # e.g. "OP. SUPPLY" -> "OPSUPPLY"
+                key_norm = str(k).strip().upper().replace('.', '').replace(' ', '').replace('_', '')
+                normalized_totals[key_norm] = v
+
+            def d(val):
+                try:
+                    if val is None: return Decimal('0')
+                    # Handle string formatting like "$1,234.56"
+                    s = str(val).replace('$', '').replace(',', '').strip()
+                    if not s: return Decimal('0')
+                    return Decimal(s)
+                except:
+                    return Decimal('0')
+
+            def get_inv(keys):
+                for k in keys:
+                    # 1. Exact match
+                    if k in inv_totals:
+                        return d(inv_totals[k])
+                    # 2. Normalized match
+                    for variant in [k, k.upper()]:
+                        k_clean = variant.strip().replace('.', '').replace(' ', '').replace('_', '')
+                        if k_clean in normalized_totals:
+                            return d(normalized_totals[k_clean])
+                return Decimal('0')
+
+            sales = gen_data.get('sales') or {}
+            labor = gen_data.get('labor') or {}
+            food = gen_data.get('food') or {}
+            inv_start = gen_data.get('inventoryStarting') or {}
+            inv_end = gen_data.get('inventoryEnding') or {}
+
+            return PacInputData(
+                last_year_product_sales=last_year_sales,
+                last_month_product_sales=last_month_sales,
+                last_month_last_year_product_sales=last_month_last_year_sales,
+                last_year_last_year_product_sales=last_year_last_year_sales,
+
+                product_net_sales=d(sales.get('productNetSales')),
+                cash_adjustments=d(sales.get('cashAdjustments')),
+                promotions=d(sales.get('promo')),
+                manager_meals=d(sales.get('managerMeal')),
+                
+                crew_labor_percent=d(labor.get('crewLabor')),
+                total_labor_percent=d(labor.get('totalLabor')),
+                payroll_tax_rate=d(labor.get('payrollTax')),
+                additional_labor_dollars=d(labor.get('additionalLaborDollars')),
+                
+                dues_and_subscriptions=d(sales.get('duesAndSubscriptions')),
+                
+                complete_waste_percent=d(food.get('completeWaste')),
+                raw_waste_percent=d(food.get('rawWaste')),
+                condiment_percent=d(food.get('condiment')),
+                advertising_percent=d(sales.get('advertising')), # percent
+
+                beginning_inventory=InventoryData(
+                    food=d(inv_start.get('food')),
+                    paper=d(inv_start.get('paper')),
+                    condiment=d(inv_start.get('condiment')),
+                    non_product=d(inv_start.get('nonProduct')),
+                    op_supplies=d(inv_start.get('opsSupplies'))
+                ),
+                ending_inventory=InventoryData(
+                    food=d(inv_end.get('food')),
+                    paper=d(inv_end.get('paper')),
+                    condiment=d(inv_end.get('condiment')),
+                    non_product=d(inv_end.get('nonProduct')),
+                    op_supplies=d(inv_end.get('opsSupplies'))
+                ),
+                
+                purchases=PurchaseData(
+                    food=get_inv(['FOOD']),
+                    paper=get_inv(['PAPER']),
+                    condiment=get_inv(['CONDIMENT']),
+                    non_product=get_inv(['NONPRODUCT', 'NON PRODUCT']),
+                    # PurchaseData has operating_supply, not op_supplies
+                    operating_supply=get_inv(['OP. SUPPLY', 'OP SUPPLY']),
+                    travel=get_inv(['TRAVEL']),
+                    advertising_other=get_inv(['ADV-OTHER', 'ADV OTHER']),
+                    promotion=get_inv(['PROMO']),
+                    outside_services=get_inv(['OUTSIDE SVC', 'OUTSIDE SERVICES']),
+                    linen=get_inv(['LINEN']),
+                    maintenance_repair=get_inv(['M+R', 'MAINTENANCE & REPAIR']),
+                    small_equipment=get_inv(['SML EQUIP', 'SMALL EQUIPMENT']),
+                    utilities=get_inv(['UTILITIES']),
+                    office=get_inv(['OFFICE']),
+                    training=get_inv(['TRAINING']),
+                    crew_relations=get_inv(['CREW RELATIONS'])
+                )
+            )
+
+        # --- Fallback to Projections (Legacy/Budget logic) ---
         data = await self._get_pac_data_from_firebase(entity_id, year_month)
         
-        # Also read from generate_input for additional labor dollars and dues and subscriptions
+        # Also read from generate_input for additional labor dollars and dues and subscriptions (Legacy partial read)
         try:
-            doc_id = f"{entity_id}_{year_month}"
-            generate_input_doc = self.db.collection('generate_input').document(doc_id).get()
-            if generate_input_doc.exists:
-                generate_input_data = generate_input_doc.to_dict() or {}
-                labor_data = generate_input_data.get('labor', {})
-                sales_data = generate_input_data.get('sales', {})
-                # Always read additionalLaborDollars (default to 0 if not present)
+            if gen_doc.exists:
+                gen_data = gen_doc.to_dict() or {}
+                labor_data = gen_data.get('labor', {})
+                sales_data = gen_data.get('sales', {})
                 data['additional_labor_dollars'] = float(labor_data.get('additionalLaborDollars', 0))
-                # Always read duesAndSubscriptions (default to 0 if not present)
                 data['dues_and_subscriptions'] = float(sales_data.get('duesAndSubscriptions', 0))
             else:
-                # No generate_input document exists, default to 0
                 data['additional_labor_dollars'] = 0.0
                 data['dues_and_subscriptions'] = 0.0
-        except Exception as e:
-            # Non-fatal; proceed without additional labor dollars and dues and subscriptions
-            print(f"Warning: Could not read additional labor dollars or dues and subscriptions: {e}")
-            data['additional_labor_dollars'] = 0.0
-            data['dues_and_subscriptions'] = 0.0
+        except Exception:
+            pass
 
         # --- Backward compatible derivation ---
         # Older documents may only contain `rows` without a structured `purchases` map.
@@ -241,8 +405,59 @@ class DataIngestionService:
             # Non-fatal; proceed with whatever we have
             pass
         
+        # --- Fetch Historical Sales Data ---
+        try:
+            year = int(year_month[:4])
+            month_num = int(year_month[4:])
+            
+            # Helper to format YYYYMM
+            def get_ym_str(y, m):
+                return f"{y}{m:02d}"
+            
+            # Last Year Same Month
+            last_year_ym = get_ym_str(year - 1, month_num)
+            
+            # Last Month
+            if month_num == 1:
+                last_month_ym = get_ym_str(year - 1, 12)
+            else:
+                last_month_ym = get_ym_str(year, month_num - 1)
+                
+            # Last Month Last Year (Same month as "Last Month" but previous year)
+            # e.g. if Current is Jan 2025, Last Month is Dec 2024, Last Month Last Year is Dec 2023
+            # If Current is Feb 2025, Last Month is Jan 2025, Last Month Last Year is Jan 2024
+            last_month_year = int(last_month_ym[:4])
+            last_month_mon = int(last_month_ym[4:])
+            last_month_last_year_ym = get_ym_str(last_month_year - 1, last_month_mon)
+            
+            # Last Year Same Month Last Year (2 years ago)
+            last_year_last_year_ym = get_ym_str(year - 2, month_num)
+            
+            async def get_sales(ym):
+                try:
+                    d = await self._get_pac_data_from_firebase(entity_id, ym)
+                    return Decimal(str(d.get('product_net_sales', 0)))
+                except:
+                    return Decimal('0')
+
+            last_year_sales = await get_sales(last_year_ym)
+            last_month_sales = await get_sales(last_month_ym)
+            last_month_last_year_sales = await get_sales(last_month_last_year_ym)
+            last_year_last_year_sales = await get_sales(last_year_last_year_ym)
+            
+        except Exception as e:
+            print(f"Warning: Could not fetch historical sales data: {e}")
+            last_year_sales = Decimal('0')
+            last_month_sales = Decimal('0')
+            last_month_last_year_sales = Decimal('0')
+            last_year_last_year_sales = Decimal('0')
+
         # Convert Firebase data to PacInputData
         return PacInputData(
+            last_year_product_sales=last_year_sales,
+            last_month_product_sales=last_month_sales,
+            last_month_last_year_product_sales=last_month_last_year_sales,
+            last_year_last_year_product_sales=last_year_last_year_sales,
             product_net_sales=Decimal(str(data.get('product_net_sales', 0))),
             cash_adjustments=Decimal(str(data.get('cash_adjustments', 0))),
             promotions=Decimal(str(data.get('promotions', 0))),

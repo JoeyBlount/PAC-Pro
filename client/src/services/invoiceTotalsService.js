@@ -4,6 +4,7 @@ import {
   query,
   where,
   getDocs,
+  getDoc,
   doc,
   setDoc,
   serverTimestamp,
@@ -111,10 +112,10 @@ export const recomputeMonthlyTotals = async (
       { merge: true }
     );
 
-    console.log(
+    /*console.log(
       `Updated invoice totals for ${storeID} - ${targetMonth}/${targetYear}:`,
       totals
-    );
+    );*/
 
     // Trigger PAC actual recalculation after invoice totals are updated
     try {
@@ -135,9 +136,9 @@ export const recomputeMonthlyTotals = async (
       const monthName = months[targetMonth - 1];
       const yearMonth = `${targetYear}${String(targetMonth).padStart(2, "0")}`;
 
-      console.log(
+      /*console.log(
         `[Invoice Totals] Triggering PAC actual recalculation for ${storeID} - ${monthName} ${targetYear}`
-      );
+      );*/
 
       // Ensure user is authenticated before making API call
       if (!auth.currentUser) {
@@ -162,15 +163,26 @@ export const recomputeMonthlyTotals = async (
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Failed to compute PAC actual: ${errorText || response.statusText}`
+        // 404 is expected for future months that don't have generate_input data yet
+        if (response.status === 404) {
+          console.log(
+            `[Invoice Totals] No generate_input data for ${storeID} - ${monthName} ${targetYear} (expected for future months)`
+          );
+        } else {
+          const errorText = await response.text();
+          throw new Error(
+            `Failed to compute PAC actual: ${errorText || response.statusText}`
+          );
+        }
+      } else {
+        console.log(
+          `[Invoice Totals] PAC actual recalculation completed for ${storeID} - ${monthName} ${targetYear}`
         );
       }
 
-      console.log(
+      /*console.log(
         `[Invoice Totals] PAC actual recalculation completed for ${storeID} - ${monthName} ${targetYear}`
-      );
+      );*/
     } catch (pacError) {
       console.error(
         `[Invoice Totals] Failed to recalculate PAC actual for ${storeID}:`,
@@ -213,9 +225,9 @@ export const backfillInvoiceTotals = async (storeID = null) => {
       }
     });
 
-    console.log(
+    /*console.log(
       `Found ${uniqueCombinations.size} unique store/month combinations to process`
-    );
+    );*/
 
     // Process each unique combination
     let processed = 0;
@@ -247,7 +259,7 @@ export const getInvoiceTotals = async (storeID, targetMonth, targetYear) => {
       "0"
     )}`;
     const totalsRef = doc(db, "invoice_log_totals", docId);
-    const totalsDoc = await getDocs(totalsRef);
+    const totalsDoc = await getDoc(totalsRef);
 
     if (totalsDoc.exists()) {
       return totalsDoc.data();

@@ -22,11 +22,11 @@ const Invite = () => {
       const querySnapshot = await getDocs(collection(db, "users"));
 
       if (querySnapshot.empty) {
-        console.log("⚠️ No documents found in the 'users' collection.");
+        // console.log("⚠️ No documents found in the 'users' collection.");
       } else {
-        console.log("✅ Documents found in 'users':");
+        // console.log("✅ Documents found in 'users':");
         querySnapshot.forEach((doc) => {
-          console.log(doc.id, " => ", doc.data());
+          // console.log(doc.id, " => ", doc.data());
         });
       }
     } catch (error) {
@@ -83,7 +83,7 @@ const Invite = () => {
         createdAt: new Date().toISOString()
       });
 
-      console.log("✅ User added successfully!");
+      // console.log("✅ User added successfully!");
       setSuccessMessage("User added successfully!");
     } catch (error) {
       console.error("❌ Error adding user:", error);

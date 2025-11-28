@@ -792,3 +792,418 @@ def test_calculate_pac_actual_with_missing_data():
     assert "foodAndPaper" in result
     assert "labor" in result
     assert "purchases" in result
+
+
+# ============================================================================
+# Tests for New PAC Actual Features (Gross Profit, Food Cost, Non-Product & Supplies)
+# ============================================================================
+
+@pytest.fixture
+def sample_generate_input_with_food_cost():
+    """Sample generate_input data with food cost module fields for PAC actual tests"""
+    return {
+        "sales": {
+            "productNetSales": 100000,
+            "allNetSales": 102800,
+            "promo": 2000,
+            "managerMeal": 300,
+            "cash": 500,
+            "advertising": 2.0,
+            "duesAndSubscriptions": 150
+        },
+        "food": {
+            "rawWaste": 1.8,
+            "completeWaste": 2.5,
+            "condiment": 3.2,
+            "baseFood": 28.5,
+            "discounts": 0.5,
+            "variance": 0.3,
+            "unexplained": -0.2,
+            "empMgrMealsPercent": 0.15
+        },
+        "labor": {
+            "crewLabor": 25.5,
+            "totalLabor": 35.0,
+            "payrollTax": 8.5,
+            "additionalLaborDollars": 0
+        },
+        "inventoryStarting": {
+            "food": 15000,
+            "condiment": 2000,
+            "paper": 3000,
+            "opsSupplies": 500,
+            "nonProduct": 1000
+        },
+        "inventoryEnding": {
+            "food": 12000,
+            "condiment": 1800,
+            "paper": 2500,
+            "opsSupplies": 400,
+            "nonProduct": 800
+        }
+    }
+
+
+@pytest.fixture
+def sample_invoice_log_totals_with_non_product():
+    """Sample invoice_log_totals data with non-product for PAC actual tests"""
+    return {
+        "totals": {
+            "FOOD": 45000,
+            "PAPER": 2000,
+            "CONDIMENT": 3000,
+            "TRAVEL": 800,
+            "ADV-OTHER": 1200,
+            "PROMOTION": 0,
+            "ADVERTISING": 0,
+            "OUTSIDE SVC": 600,
+            "LINEN": 400,
+            "OP. SUPPLY": 300,
+            "M+R": 500,
+            "SML EQUIP": 200,
+            "UTILITIES": 1200,
+            "OFFICE": 150,
+            "CREW RELATIONS": 200,
+            "TRAINING": 300,
+            "NONPRODUCT": 500
+        }
+    }
+
+
+def test_calculate_pac_actual_gross_profit_calculation(sample_generate_input, sample_invoice_log_totals):
+    """Test calculate_pac_actual gross profit calculation"""
+    # Act
+    result = calculate_pac_actual(sample_generate_input, sample_invoice_log_totals)
+    
+    # Assert
+    # Gross Profit % = 100 - Food & Paper Total %
+    assert "grossProfit" in result["totals"]
+    assert "percent" in result["totals"]["grossProfit"]
+    
+    # Calculate expected food & paper total %
+    food_and_paper_total = result["foodAndPaper"]["total"]["dollars"]
+    product_sales = result["sales"]["productSales"]["dollars"]
+    food_and_paper_percent = (food_and_paper_total / product_sales * 100) if product_sales > 0 else 0
+    expected_gross_profit = 100 - food_and_paper_percent
+    
+    assert abs(result["totals"]["grossProfit"]["percent"] - expected_gross_profit) < 0.01
+
+
+def test_calculate_pac_actual_gross_profit_with_zero_sales():
+    """Test calculate_pac_actual gross profit handles zero sales gracefully"""
+    # Arrange - zero sales
+    generate_input = {
+        "sales": {"productNetSales": 0, "allNetSales": 0},
+        "food": {},
+        "labor": {},
+        "inventoryStarting": {},
+        "inventoryEnding": {}
+    }
+    invoice_log_totals = {"totals": {}}
+    
+    # Act
+    result = calculate_pac_actual(generate_input, invoice_log_totals)
+    
+    # Assert - should handle zero sales without errors
+    assert "grossProfit" in result["totals"]
+    assert result["totals"]["grossProfit"]["percent"] == 100  # 100 - 0%
+
+
+def test_calculate_pac_actual_food_cost_module(sample_generate_input_with_food_cost, sample_invoice_log_totals):
+    """Test calculate_pac_actual food cost module fields"""
+    # Act
+    result = calculate_pac_actual(sample_generate_input_with_food_cost, sample_invoice_log_totals)
+    
+    # Assert
+    assert "foodCost" in result
+    food_cost = result["foodCost"]
+    
+    # Verify all food cost fields are present
+    assert "baseFood" in food_cost
+    assert "discount" in food_cost
+    assert "rawWaste" in food_cost
+    assert "completeWaste" in food_cost
+    assert "statVariance" in food_cost
+    assert "foodOverBase" in food_cost
+    assert "empMgrMealsPercent" in food_cost
+    
+    # Verify values match input
+    assert food_cost["baseFood"] == 28.5
+    assert food_cost["discount"] == 0.5
+    assert food_cost["rawWaste"] == 1.8
+    assert food_cost["completeWaste"] == 2.5
+    assert food_cost["statVariance"] == 0.3
+    assert food_cost["empMgrMealsPercent"] == 0.15
+
+
+def test_calculate_pac_actual_food_over_base_calculation(sample_generate_input_with_food_cost, sample_invoice_log_totals):
+    """Test calculate_pac_actual food over base calculation"""
+    # Act
+    result = calculate_pac_actual(sample_generate_input_with_food_cost, sample_invoice_log_totals)
+    
+    # Assert
+    # Food Over Base = Raw Waste + Complete Waste + Condiment + Stat Variance + Unexplained
+    # = 1.8 + 2.5 + 3.2 + 0.3 + (-0.2) = 7.6
+    expected_food_over_base = 1.8 + 2.5 + 3.2 + 0.3 + (-0.2)
+    assert abs(result["foodCost"]["foodOverBase"] - expected_food_over_base) < 0.01
+
+
+def test_calculate_pac_actual_food_cost_with_missing_fields():
+    """Test calculate_pac_actual food cost handles missing fields gracefully"""
+    # Arrange - minimal data with no food cost fields
+    generate_input = {
+        "sales": {"productNetSales": 100000, "allNetSales": 100000},
+        "food": {"rawWaste": 1.0, "completeWaste": 2.0},  # partial data
+        "labor": {},
+        "inventoryStarting": {},
+        "inventoryEnding": {}
+    }
+    invoice_log_totals = {"totals": {}}
+    
+    # Act
+    result = calculate_pac_actual(generate_input, invoice_log_totals)
+    
+    # Assert - should have food cost section with defaults
+    assert "foodCost" in result
+    assert result["foodCost"]["baseFood"] == 0  # default
+    assert result["foodCost"]["rawWaste"] == 1.0
+    assert result["foodCost"]["completeWaste"] == 2.0
+
+
+def test_calculate_pac_actual_non_product_and_supplies(sample_generate_input_with_food_cost, sample_invoice_log_totals_with_non_product):
+    """Test calculate_pac_actual non-product and supplies calculations"""
+    # Act
+    result = calculate_pac_actual(sample_generate_input_with_food_cost, sample_invoice_log_totals_with_non_product)
+    
+    # Assert
+    assert "nonProductAndSupplies" in result
+    non_product_supplies = result["nonProductAndSupplies"]
+    
+    # Verify operating supplies structure
+    assert "operatingSupplies" in non_product_supplies
+    ops = non_product_supplies["operatingSupplies"]
+    assert "starting" in ops
+    assert "purchases" in ops
+    assert "ending" in ops
+    assert "usage" in ops
+    
+    # Verify non-product structure
+    assert "nonProduct" in non_product_supplies
+    np = non_product_supplies["nonProduct"]
+    assert "starting" in np
+    assert "purchases" in np
+    assert "ending" in np
+    assert "usage" in np
+
+
+def test_calculate_pac_actual_operating_supplies_usage_calculation(sample_generate_input_with_food_cost, sample_invoice_log_totals_with_non_product):
+    """Test calculate_pac_actual operating supplies usage calculation"""
+    # Act
+    result = calculate_pac_actual(sample_generate_input_with_food_cost, sample_invoice_log_totals_with_non_product)
+    
+    # Assert
+    ops = result["nonProductAndSupplies"]["operatingSupplies"]
+    
+    # Operating Supplies Usage = Starting + Purchases - Ending
+    # = 500 + 300 - 400 = 400
+    expected_usage = 500 + 300 - 400
+    
+    assert ops["starting"] == 500
+    assert ops["purchases"] == 300
+    assert ops["ending"] == 400
+    assert ops["usage"] == expected_usage
+
+
+def test_calculate_pac_actual_non_product_usage_calculation(sample_generate_input_with_food_cost, sample_invoice_log_totals_with_non_product):
+    """Test calculate_pac_actual non-product usage calculation"""
+    # Act
+    result = calculate_pac_actual(sample_generate_input_with_food_cost, sample_invoice_log_totals_with_non_product)
+    
+    # Assert
+    np = result["nonProductAndSupplies"]["nonProduct"]
+    
+    # Non-Product Usage = Starting + Purchases - Ending
+    # = 1000 + 500 - 800 = 700
+    expected_usage = 1000 + 500 - 800
+    
+    assert np["starting"] == 1000
+    assert np["purchases"] == 500
+    assert np["ending"] == 800
+    assert np["usage"] == expected_usage
+
+
+def test_calculate_pac_actual_non_product_supplies_with_missing_data():
+    """Test calculate_pac_actual non-product and supplies handles missing data"""
+    # Arrange - no inventory or non-product data
+    generate_input = {
+        "sales": {"productNetSales": 100000, "allNetSales": 100000},
+        "food": {},
+        "labor": {},
+        "inventoryStarting": {},
+        "inventoryEnding": {}
+    }
+    invoice_log_totals = {"totals": {}}
+    
+    # Act
+    result = calculate_pac_actual(generate_input, invoice_log_totals)
+    
+    # Assert - should have section with zeros
+    assert "nonProductAndSupplies" in result
+    assert result["nonProductAndSupplies"]["operatingSupplies"]["usage"] == 0
+    assert result["nonProductAndSupplies"]["nonProduct"]["usage"] == 0
+
+
+# ============================================================================
+# Tests for PacCalculationService New Result Fields
+# ============================================================================
+
+def test_calculate_amount_used_op_supplies_includes_purchases(pac_service, test_input_data):
+    """Test amount used op supplies calculation includes purchases"""
+    # Act
+    result = pac_service.calculate_amount_used(test_input_data)
+    
+    # Assert
+    # Op Supplies = Beginning Inventory + Purchases - Ending Inventory
+    # = 500 + 300 - 500 = 300
+    expected_op_supplies = Decimal('300')
+    assert abs(result.op_supplies - expected_op_supplies) < Decimal('0.01')
+
+
+def test_calculate_amount_used_non_product_calculation(pac_service, test_input_data):
+    """Test amount used non-product calculation"""
+    # Act
+    result = pac_service.calculate_amount_used(test_input_data)
+    
+    # Assert
+    # Non-Product = Beginning Inventory + Purchases - Ending Inventory
+    # = 1000 + 1500 - 800 = 1700
+    expected_non_product = Decimal('1700')
+    assert abs(result.non_product - expected_non_product) < Decimal('0.01')
+
+
+@pytest.mark.asyncio
+async def test_pac_result_includes_non_product_and_supplies_data(pac_service):
+    """Test PAC calculation result includes non_product_and_supplies data"""
+    # Arrange
+    entity_id = "test_store"
+    year_month = "202401"
+    
+    # Act
+    result = await pac_service.calculate_pac_async(entity_id, year_month)
+    
+    # Assert
+    assert result.non_product_and_supplies is not None
+    
+    # Check operating supplies breakdown
+    ops = result.non_product_and_supplies.operatingSupplies
+    assert ops.starting == Decimal('500')
+    assert ops.purchases == Decimal('300')
+    assert ops.ending == Decimal('500')
+    assert ops.usage == Decimal('300')  # 500 + 300 - 500
+    
+    # Check non-product breakdown
+    np = result.non_product_and_supplies.nonProduct
+    assert np.starting == Decimal('1000')
+    assert np.purchases == Decimal('1500')
+    assert np.ending == Decimal('800')
+    assert np.usage == Decimal('1700')  # 1000 + 1500 - 800
+
+
+@pytest.mark.asyncio
+async def test_pac_result_includes_sales_comparison_data(pac_service):
+    """Test PAC calculation result includes sales_comparison data"""
+    # Arrange
+    entity_id = "test_store"
+    year_month = "202401"
+    
+    # Act
+    result = await pac_service.calculate_pac_async(entity_id, year_month)
+    
+    # Assert
+    assert result.sales_comparison is not None
+    
+    # Check sales comparison fields exist (default to 0 in mock data)
+    assert result.sales_comparison.lastYearProductSales == Decimal('0')
+    assert result.sales_comparison.lastMonthProductSales == Decimal('0')
+    assert result.sales_comparison.lastMonthLastYearProductSales == Decimal('0')
+    assert result.sales_comparison.lastYearLastYearProductSales == Decimal('0')
+
+
+@pytest.fixture
+def test_input_data_with_sales_comparison():
+    """Create test input data with sales comparison fields"""
+    return PacInputData(
+        # POS / Sales Data
+        product_net_sales=Decimal('100000'),
+        cash_adjustments=Decimal('500'),
+        promotions=Decimal('2000'),
+        manager_meals=Decimal('300'),
+        
+        # Historical Sales Data
+        last_year_product_sales=Decimal('95000'),
+        last_month_product_sales=Decimal('98000'),
+        last_month_last_year_product_sales=Decimal('92000'),
+        last_year_last_year_product_sales=Decimal('90000'),
+        
+        # Labor / Payroll Data
+        crew_labor_percent=Decimal('25.5'),
+        total_labor_percent=Decimal('35.0'),
+        payroll_tax_rate=Decimal('8.5'),
+        
+        # Waste / Operations Data
+        complete_waste_percent=Decimal('2.5'),
+        raw_waste_percent=Decimal('1.8'),
+        condiment_percent=Decimal('3.2'),
+        
+        # Inventory Counts
+        beginning_inventory=InventoryData(
+            food=Decimal('15000'),
+            condiment=Decimal('2000'),
+            paper=Decimal('3000'),
+            non_product=Decimal('1000'),
+            op_supplies=Decimal('500')
+        ),
+        ending_inventory=InventoryData(
+            food=Decimal('12000'),
+            condiment=Decimal('1800'),
+            paper=Decimal('2500'),
+            non_product=Decimal('800'),
+            op_supplies=Decimal('500')
+        ),
+        
+        # Purchases / Invoices
+        purchases=PurchaseData(
+            food=Decimal('45000'),
+            condiment=Decimal('3000'),
+            paper=Decimal('2000'),
+            non_product=Decimal('1500'),
+            travel=Decimal('800'),
+            advertising_other=Decimal('1200'),
+            promotion=Decimal('1000'),
+            outside_services=Decimal('600'),
+            linen=Decimal('400'),
+            operating_supply=Decimal('300'),
+            maintenance_repair=Decimal('500'),
+            small_equipment=Decimal('200'),
+            utilities=Decimal('1200'),
+            office=Decimal('150'),
+            training=Decimal('300'),
+            crew_relations=Decimal('200')
+        ),
+        
+        # Settings / Budgets
+        advertising_percent=Decimal('2.0')
+    )
+
+
+def test_pac_result_sales_comparison_populated(pac_service, test_input_data_with_sales_comparison):
+    """Test PAC calculation properly populates sales comparison from input data"""
+    # Act
+    result = pac_service.calculate_pac_from_input(test_input_data_with_sales_comparison)
+    
+    # Assert
+    assert result.sales_comparison is not None
+    assert result.sales_comparison.lastYearProductSales == Decimal('95000')
+    assert result.sales_comparison.lastMonthProductSales == Decimal('98000')
+    assert result.sales_comparison.lastMonthLastYearProductSales == Decimal('92000')
+    assert result.sales_comparison.lastYearLastYearProductSales == Decimal('90000')

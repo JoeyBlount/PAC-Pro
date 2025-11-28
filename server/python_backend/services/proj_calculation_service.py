@@ -279,28 +279,43 @@ class ProjCalculationService:
     # ------------------------------ utilities -------------------------------
 
     @staticmethod
+    def _normalize_value(val: Any) -> Any:
+        """
+        Normalize a numeric value, preserving empty strings to indicate "no data".
+        Returns "" for empty/None values, otherwise returns the float value.
+        """
+        if val is None or val == "" or val == "":
+            return ""
+        try:
+            return float(_q2(_D(val)))
+        except Exception:
+            return ""
+
+    @staticmethod
     def seed_merge(expense_names: Iterable[str], rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Ensure a complete ordered set of rows using the provided names.
-        Any missing row is created with zeros and numerics are normalized.
+        Any missing row is created with empty strings to indicate "no data entered".
+        Existing values are normalized while preserving empty strings.
         """
         by_name = {str(r.get("name")): r for r in rows or []}
         merged: List[Dict[str, Any]] = []
         for nm in expense_names:
             base = by_name.get(nm)
             if base is None:
+                # No saved data - use empty strings to indicate "no data entered"
                 base = {
                     "name": nm,
-                    "projectedDollar": 0.0,
-                    "projectedPercent": 0.0,
-                    "historicalDollar": 0.0,
-                    "historicalPercent": 0.0,
+                    "projectedDollar": "",
+                    "projectedPercent": "",
+                    "historicalDollar": "",
+                    "historicalPercent": "",
                 }
             out = dict(base)
-            out["projectedDollar"] = float(_q2(_D(out.get("projectedDollar"))))
-            out["projectedPercent"] = float(_q2(_D(out.get("projectedPercent"))))
-            out["historicalDollar"] = float(_q2(_D(out.get("historicalDollar"))))
-            out["historicalPercent"] = float(_q2(_D(out.get("historicalPercent"))))
+            out["projectedDollar"] = ProjCalculationService._normalize_value(out.get("projectedDollar"))
+            out["projectedPercent"] = ProjCalculationService._normalize_value(out.get("projectedPercent"))
+            out["historicalDollar"] = ProjCalculationService._normalize_value(out.get("historicalDollar"))
+            out["historicalPercent"] = ProjCalculationService._normalize_value(out.get("historicalPercent"))
             merged.append(out)
         return merged
 

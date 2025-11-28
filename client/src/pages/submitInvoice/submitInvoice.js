@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef } from "react";
 import { auth } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext";
 import { useAuth } from "../../context/AuthContext";
 import MonthLockService from "../../services/monthLockService";
+import { recomputeMonthlyTotals } from "../../services/invoiceTotalsService";
 import styles from "./submitInvoice.module.css";
 import { invoiceCatList } from "../settings/InvoiceSettings";
 // Frontend no longer uploads to Storage or writes to Firestore; backend handles it
-import { useTheme } from '@mui/material/styles';
-import { apiUrl } from '../../utils/api';
+import { useTheme } from "@mui/material/styles";
+import { apiUrl } from "../../utils/api";
+import { useYearRange } from "../../utils/yearUtils";
 import {
   Alert,
   TextField,
@@ -16,8 +18,14 @@ import {
   Box,
   InputLabel,
   FormControl,
+  Checkbox,
+  FormControlLabel,
+  Radio,
+  RadioGroup,
+  FormLabel,
 } from "@mui/material";
 import LockIcon from "@mui/icons-material/Lock";
+import RepeatIcon from "@mui/icons-material/Repeat";
 
 const generateUUID = () => {
   return Math.random().toString(36).slice(2);
@@ -32,7 +40,6 @@ const SubmitInvoice = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [loadingUpload, setLoadingUpload] = useState(false);
   const theme = useTheme();
-  
 
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -54,6 +61,18 @@ const SubmitInvoice = () => {
   const [monthLockStatus, setMonthLockStatus] = useState(null);
   const [lockedMonths, setLockedMonths] = useState([]);
 
+  // Recurring invoice state
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringInterval, setRecurringInterval] = useState(1);
+  const [recurringEndType, setRecurringEndType] = useState("forever"); // "forever" or "specific"
+  const [recurringEndMonth, setRecurringEndMonth] = useState(1);
+  const [recurringEndYear, setRecurringEndYear] = useState(
+    new Date().getFullYear() + 1
+  );
+  const fileInputRef = useRef(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showReadWarning, setShowReadWarning] = useState(false);
+
   // Separate month/year selectors for controlling which month the invoice gets added to
   const currentDate = new Date();
   const currentMonth = currentDate.getMonth() + 1; // getMonth() returns 0-11, so add 1
@@ -62,11 +81,44 @@ const SubmitInvoice = () => {
   const [targetMonth, setTargetMonth] = useState(currentMonth);
   const [targetYear, setTargetYear] = useState(currentYear);
 
+  // Dynamic year range for target year dropdown (1 year forward + 10 years back or earliest data)
+  const { years: targetYears } = useYearRange(selectedStore);
+
   const user = auth.currentUser;
 
   useEffect(() => {
     document.title = "PAC Pro - Submit Invoice";
   }, []);
+
+  // Shared helper to validate that an uploaded file looks like a real image
+  const isValidImageFile = (file) => {
+    if (!file) return false;
+    const allowedMimeTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/heic",
+      "image/heif",
+    ];
+    const mime = file.type || "";
+    const name = (file.name || "").toLowerCase();
+    const validByExtension = /\.(jpe?g|png|webp|heic|heif)$/.test(name);
+
+    // If extension is wrong, reject immediately
+    if (!validByExtension) return false;
+
+    // If browser provided a MIME type, ensure it looks like an image and
+    // matches our allowlist; otherwise treat it as suspicious.
+    if (
+      mime &&
+      !allowedMimeTypes.includes(mime) &&
+      !mime.startsWith("image/")
+    ) {
+      return false;
+    }
+
+    return true;
+  };
 
   // Close calendar when clicking outside
   useEffect(() => {
@@ -206,17 +258,26 @@ const SubmitInvoice = () => {
       alert("Please upload an image first.");
       return;
     }
+
+    if (!isValidImageFile(imageUpload)) {
+      alert(
+        "Invalid image type. Please upload a JPG, PNG, WEBP, or HEIC image."
+      );
+      return;
+    }
+
     const formData = new FormData();
     formData.append("image", imageUpload);
     setLoadingUpload(true);
 
     try {
-      const res = await fetch(apiUrl('/api/invoiceread/read'), {
+      const res = await fetch(apiUrl("/api/invoiceread/read"), {
         method: "POST",
         body: formData,
       });
 
       const data = await res.json();
+      console.log("Invoice read result:", data);
       if (!res.ok) {
         alert("Failed to read invoice: " + JSON.stringify(data));
         return;
@@ -249,7 +310,8 @@ const SubmitInvoice = () => {
         setConfirmedItems([]);
       }
 
-      alert("Invoice fields auto-filled successfully!");
+      // Show guidance popup so user understands limitations of AI reader
+      setShowReadWarning(true);
     } catch (err) {
       console.error(err);
       alert("Error reading invoice.");
@@ -271,8 +333,8 @@ const SubmitInvoice = () => {
       (item) => item.id === itemToRemove.id
     );
 
-    console.log("handleRemove - OLD extras:", extras);
-    console.log("handleRemove - OLD confirmedItems:", confirmedItems);
+    //console.log("handleRemove - OLD extras:", extras);
+    //console.log("handleRemove - OLD confirmedItems:", confirmedItems);
 
     if (isConfirmed) {
       const proceed = window.confirm(
@@ -283,20 +345,20 @@ const SubmitInvoice = () => {
 
     setExtras((prev) => {
       const newExtras = prev.filter((_, i) => i !== idx);
-      console.log("handleRemove - NEW extras:", newExtras);
+      //console.log("handleRemove - NEW extras:", newExtras);
       return newExtras;
     });
     setConfirmedItems((prev) => {
       const newConfirmed = prev.filter((item) => item.id !== itemToRemove.id);
-      console.log("handleRemove - NEW confirmedItems:", newConfirmed);
+      //console.log("handleRemove - NEW confirmedItems:", newConfirmed);
       return newConfirmed;
     });
   };
 
   const handleConfirm = (idx) => {
     try {
-      console.log("handleConfirm - OLD extras:", extras);
-      console.log("handleConfirm - OLD confirmedItems:", confirmedItems);
+      //console.log("handleConfirm - OLD extras:", extras);
+      //console.log("handleConfirm - OLD confirmedItems:", confirmedItems);
 
       const rowCategory = extras[idx].category;
       if (rowCategory === "")
@@ -322,14 +384,14 @@ const SubmitInvoice = () => {
           ...prev,
           { id: extras[idx].id, category: rowCategory, amount: rowAmount },
         ];
-        console.log("handleConfirm - NEW confirmedItems:", newConfirmed);
+        //console.log("handleConfirm - NEW confirmedItems:", newConfirmed);
         return newConfirmed;
       });
       setExtras((prev) => {
         const newExtras = prev.map((r, i) =>
           i === idx ? { ...r, confirmed: true } : r
         );
-        console.log("handleConfirm - NEW extras:", newExtras);
+        //console.log("handleConfirm - NEW extras:", newExtras);
         return newExtras;
       });
     } catch (error) {
@@ -339,13 +401,27 @@ const SubmitInvoice = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!imageUpload) {
-      alert("Please upload an image first.");
-      return;
-    }
-
     try {
+      setIsSubmitting(true);
+
+      // Basic field validation (handles recurring vs non-recurring)
+      verifyInput();
+
+      // Ensure there are no unconfirmed amounts with data entered
+      const hasUnconfirmedAmounts = extras.some(
+        (row) =>
+          !row.confirmed &&
+          (String(row.category || "").trim() !== "" ||
+            String(row.amount || "").trim() !== "")
+      );
+
+      if (hasUnconfirmedAmounts) {
+        alert(
+          "You have unconfirmed amounts. Please confirm or remove them before submitting."
+        );
+        return;
+      }
+
       // Require at least one confirmed category/amount before submitting
       if (!confirmedItems || confirmedItems.length === 0) {
         alert("Please confirm at least one category amount before submitting.");
@@ -369,8 +445,16 @@ const SubmitInvoice = () => {
 
       // Create FormData for backend request
       const formData = new FormData();
-      formData.append("image", imageUpload);
-      formData.append("invoice_number", invoiceNumber);
+
+      // Image is optional for recurring invoices
+      if (imageUpload) {
+        formData.append("image", imageUpload);
+      }
+
+      formData.append(
+        "invoice_number",
+        isRecurring ? "Re-Occurring" : invoiceNumber
+      );
       formData.append("company_name", companyName);
       formData.append("invoice_day", invoiceDay.toString());
       formData.append("invoice_month", invoiceMonth.toString());
@@ -381,47 +465,210 @@ const SubmitInvoice = () => {
       formData.append("user_email", user.email);
       formData.append("categories", JSON.stringify(categories));
 
-      // Submit to backend service (no auth token required)
-      const response = await fetch(
-        apiUrl('/api/pac/invoices/submit'),
-        {
-          method: "POST",
-          body: formData,
+      // Add recurring invoice parameters
+      formData.append("is_recurring", isRecurring.toString());
+      if (isRecurring) {
+        formData.append("recurring_interval", recurringInterval.toString());
+        if (recurringEndType === "forever") {
+          formData.append("recurring_end_date", "forever");
+        } else {
+          formData.append(
+            "recurring_end_date",
+            `${recurringEndYear}-${String(recurringEndMonth).padStart(2, "0")}`
+          );
         }
-      );
+      }
+
+      // Submit to backend service (no auth token required)
+      const response = await fetch(apiUrl("/api/pac/invoices/submit"), {
+        method: "POST",
+        body: formData,
+      });
 
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result.detail || "Failed to submit invoice");
       }
 
-      alert("Invoice submitted successfully!");
+      // Update invoice totals and PAC actual for affected months
+      try {
+        if (isRecurring && result.invoice_ids?.length > 0) {
+          // For recurring invoices, we need to update totals for each month
+          // The backend creates invoices for multiple months based on the interval
+          // We'll update the current target month - the backend should handle the rest
+          // But to be safe, let's calculate all affected months
+          const startMonth = targetMonth;
+          const startYear = targetYear;
+          let endMonth, endYear;
+
+          if (recurringEndType === "forever") {
+            // Default to 1 year ahead
+            endMonth = startMonth;
+            endYear = startYear + 1;
+          } else {
+            endMonth = recurringEndMonth;
+            endYear = recurringEndYear;
+          }
+
+          // Calculate all months that need totals updated
+          let currentMonth = startMonth;
+          let currentYear = startYear;
+          const monthsToUpdate = [];
+
+          while (
+            currentYear < endYear ||
+            (currentYear === endYear && currentMonth <= endMonth)
+          ) {
+            monthsToUpdate.push({ month: currentMonth, year: currentYear });
+            currentMonth += recurringInterval;
+            while (currentMonth > 12) {
+              currentMonth -= 12;
+              currentYear++;
+            }
+          }
+
+          // Update totals for each affected month
+          for (const { month, year } of monthsToUpdate) {
+            await recomputeMonthlyTotals(selectedStore, month, year);
+            console.log(
+              `Invoice totals updated for ${selectedStore} - ${month}/${year}`
+            );
+          }
+        } else {
+          // Single invoice - just update the target month
+          await recomputeMonthlyTotals(selectedStore, targetMonth, targetYear);
+          console.log(
+            `Invoice totals updated for ${selectedStore} - ${targetMonth}/${targetYear}`
+          );
+        }
+      } catch (totalsError) {
+        console.error("Error updating invoice totals:", totalsError);
+        // Don't fail the submission if totals update fails
+      }
+
+      if (isRecurring) {
+        alert(
+          `Recurring invoice created successfully! ${
+            result.invoice_ids?.length || 1
+          } invoice entries generated.`
+        );
+      } else {
+        alert("Invoice submitted successfully!");
+      }
+
+      // Reset form
       setInvoiceNumber("");
       setCompanyName("");
       setExtras([]);
       setConfirmedItems([]);
       setImageUpload(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      setIsRecurring(false);
+      setRecurringInterval(1);
+      setRecurringEndType("forever");
     } catch (err) {
       console.error(err);
-      alert("Error submitting invoice: " + err.message);
+      const msg = err?.message || "";
+      // For validation errors and other handled errors, show message directly.
+      // For unexpected cases without a message, fall back to a generic alert.
+      if (msg) {
+        alert(msg);
+      } else {
+        alert("Error submitting invoice. Please try again or contact an administrator.");
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const verifyInput = async () => {
-    if (invoiceNumber === "") throw new Error("Invoice Number Required");
+  const verifyInput = () => {
+    const errors = [];
+
+    // Company name is always required
+    if (!companyName || companyName.trim() === "") {
+      errors.push("Company Name Required");
+    }
+
+    // For non-recurring invoices, invoice number is required
+    if (!isRecurring && (!invoiceNumber || invoiceNumber.trim() === "")) {
+      errors.push("Invoice Number Required");
+    }
+
+    // Validate invoice date
     const d = new Date(invoiceYear, invoiceMonth - 1, invoiceDay);
     if (
       d.getFullYear() !== invoiceYear ||
       d.getMonth() + 1 !== invoiceMonth ||
       d.getDate() !== invoiceDay
-    )
-      throw new Error("Invalid Date Selected");
-    if (!imageUpload) throw new Error("Image Upload Required");
-    if (!selectedStore) throw new Error("Store Selection Required");
+    ) {
+      errors.push("Invalid Date Selected");
+    }
+
+    // For non-recurring invoices, image upload is required
+    if (!isRecurring && !imageUpload) {
+      errors.push("Image Upload Required");
+    }
+
+    // If an image is provided, ensure it is a supported image type
+    if (imageUpload && !isValidImageFile(imageUpload)) {
+      errors.push(
+        "Invalid image type. Please upload a JPG, PNG, WEBP, or HEIC image."
+      );
+    }
+
+    // Store selection is always required
+    if (!selectedStore) {
+      errors.push("Store Selection Required");
+    }
+
+    if (errors.length > 0) {
+      throw new Error(errors.join("\n"));
+    }
   };
 
   return (
     <div className={styles.pageContainer}>
+      {showReadWarning && (
+        <div
+          className={styles.reviewModalOverlay}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className={styles.reviewModal}>
+            <h2 className={styles.reviewModalTitle}>Review Auto‑Filled Invoice</h2>
+            <p className={styles.reviewModalText}>
+              The information above was read automatically from your invoice image and
+              may be incomplete or inaccurate. Please carefully review everything
+              before submitting.
+            </p>
+            <ul className={styles.reviewModalList}>
+              <li>
+                <strong>Store, Month, and Year</strong> must be set manually by you and
+                verified for correctness.
+              </li>
+              <li>
+                <strong>Invoice #, Company Name, and Invoice Date</strong> were read by
+                AI and must be double‑checked against the invoice.
+              </li>
+              <li>
+                <strong>All category/amount rows</strong> are suggestions only. You must
+                confirm each amount and category manually using the{" "}
+                <span style={{ fontWeight: "600" }}>Confirm</span> button.
+              </li>
+            </ul>
+            <button
+              type="button"
+              className={styles.reviewModalButton}
+              onClick={() => setShowReadWarning(false)}
+            >
+              I Understand
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className={styles.topBar}>Submit Invoice</div>
 
       {/* Month Lock Warning */}
@@ -457,13 +704,181 @@ const SubmitInvoice = () => {
               placeholder={
                 isMonthLocked()
                   ? "Please select valid month"
+                  : isRecurring
+                  ? "Re-Occurring"
                   : "Enter Invoice Number"
               }
-              value={invoiceNumber}
+              value={isRecurring ? "Re-Occurring" : invoiceNumber}
               onChange={(e) => setInvoiceNumber(e.target.value)}
-              disabled={isMonthLocked()}
+              disabled={isMonthLocked() || isRecurring}
+              style={
+                isRecurring
+                  ? { backgroundColor: "#e8e0f0", color: "#6b4c9a" }
+                  : {}
+              }
             />
           </div>
+
+          {/* Recurring Invoice Option - Admin Only */}
+          {userRole === "Admin" && (
+            <div className={styles.formGroup}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={isRecurring}
+                    onChange={(e) => setIsRecurring(e.target.checked)}
+                    disabled={isMonthLocked()}
+                    sx={{
+                      color: "#9c27b0",
+                      "&.Mui-checked": {
+                        color: "#7b1fa2",
+                      },
+                    }}
+                  />
+                }
+                label={
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <RepeatIcon
+                      sx={{ color: isRecurring ? "#7b1fa2" : "inherit" }}
+                    />
+                    <span>Recurring Invoice</span>
+                  </Box>
+                }
+              />
+
+              {isRecurring && (
+                <Box
+                  sx={{
+                    mt: 2,
+                    p: 2,
+                    border: "1px solid #9c27b0",
+                    borderRadius: "8px",
+                    backgroundColor:
+                      theme.palette.mode === "dark" ? "#2d1f3d" : "#f3e5f5",
+                  }}
+                >
+                  {/* Recurring Interval */}
+                  <FormControl fullWidth sx={{ mb: 2 }}>
+                    <InputLabel>Repeat Every</InputLabel>
+                    <Select
+                      value={recurringInterval}
+                      onChange={(e) => setRecurringInterval(e.target.value)}
+                      label="Repeat Every"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(
+                        (months) => (
+                          <MenuItem key={months} value={months}>
+                            {months} {months === 1 ? "Month" : "Months"}
+                          </MenuItem>
+                        )
+                      )}
+                    </Select>
+                  </FormControl>
+
+                  {/* End Date Options */}
+                  <FormControl component="fieldset" sx={{ width: "100%" }}>
+                    <FormLabel
+                      component="legend"
+                      sx={{
+                        color:
+                          theme.palette.mode === "dark" ? "#ce93d8" : "#7b1fa2",
+                      }}
+                    >
+                      End Date
+                    </FormLabel>
+                    <RadioGroup
+                      value={recurringEndType}
+                      onChange={(e) => setRecurringEndType(e.target.value)}
+                    >
+                      <FormControlLabel
+                        value="forever"
+                        control={
+                          <Radio
+                            sx={{
+                              color: "#9c27b0",
+                              "&.Mui-checked": { color: "#7b1fa2" },
+                            }}
+                          />
+                        }
+                        label="Forever (auto-extends 1 year ahead)"
+                      />
+                      <FormControlLabel
+                        value="specific"
+                        control={
+                          <Radio
+                            sx={{
+                              color: "#9c27b0",
+                              "&.Mui-checked": { color: "#7b1fa2" },
+                            }}
+                          />
+                        }
+                        label="End on specific month"
+                      />
+                    </RadioGroup>
+
+                    {recurringEndType === "specific" && (
+                      <Box display="flex" gap={2} mt={1}>
+                        <FormControl sx={{ minWidth: 120 }}>
+                          <InputLabel>End Month</InputLabel>
+                          <Select
+                            value={recurringEndMonth}
+                            onChange={(e) =>
+                              setRecurringEndMonth(e.target.value)
+                            }
+                            label="End Month"
+                          >
+                            {[
+                              "January",
+                              "February",
+                              "March",
+                              "April",
+                              "May",
+                              "June",
+                              "July",
+                              "August",
+                              "September",
+                              "October",
+                              "November",
+                              "December",
+                            ].map((month, index) => (
+                              <MenuItem key={month} value={index + 1}>
+                                {month}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <FormControl sx={{ minWidth: 100 }}>
+                          <InputLabel>End Year</InputLabel>
+                          <Select
+                            value={recurringEndYear}
+                            onChange={(e) =>
+                              setRecurringEndYear(e.target.value)
+                            }
+                            label="End Year"
+                          >
+                            {Array.from(
+                              { length: 6 },
+                              (_, i) => currentYear + i
+                            ).map((year) => (
+                              <MenuItem key={year} value={year}>
+                                {year}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Box>
+                    )}
+                  </FormControl>
+
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    Recurring invoices will be automatically created for each
+                    interval. The invoice number will be set to "Re-Occurring"
+                    and photo upload is optional.
+                  </Alert>
+                </Box>
+              )}
+            </div>
+          )}
 
           <div className={styles.formGroup}>
             <label>Company Name</label>
@@ -496,6 +911,8 @@ const SubmitInvoice = () => {
                 onClick={(e) => {
                   const rect = e.target.getBoundingClientRect();
                   setCalendarPosition({
+                    // Use document-relative coordinates so popup scrolls with the page
+                    // and stays roughly anchored to the input.
                     top: rect.bottom + window.scrollY + 5,
                     left: rect.left + window.scrollX,
                   });
@@ -512,6 +929,8 @@ const SubmitInvoice = () => {
                 onClick={(e) => {
                   const rect = e.target.getBoundingClientRect();
                   setCalendarPosition({
+                    // Use document-relative coordinates so popup scrolls with the page
+                    // and stays roughly anchored to the button.
                     top: rect.bottom + window.scrollY + 5,
                     left: rect.left + window.scrollX,
                   });
@@ -529,7 +948,9 @@ const SubmitInvoice = () => {
               <div
                 data-calendar-popup
                 style={{
-                  position: "fixed",
+                  // Absolute so it scrolls with the page content instead of
+                  // staying pinned to the viewport.
+                  position: "absolute",
                   top: `${calendarPosition.top}px`,
                   left: `${calendarPosition.left}px`,
                   background: "white",
@@ -691,10 +1112,7 @@ const SubmitInvoice = () => {
                   onChange={(e) => setTargetYear(e.target.value)}
                   label="Year"
                 >
-                  {Array.from(
-                    { length: 11 },
-                    (_, i) => new Date().getFullYear() - i
-                  ).map((year) => (
+                  {targetYears.map((year) => (
                     <MenuItem key={year} value={year}>
                       {year}
                     </MenuItem>
@@ -784,28 +1202,61 @@ const SubmitInvoice = () => {
           </div>
 
           <div className={styles.buttonRow}>
-            <input
-              type="file"
-              onChange={(e) => setImageUpload(e.target.files[0])}
-              disabled={isMonthLocked()}
-            />
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+            >
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={(e) => setImageUpload(e.target.files[0])}
+                disabled={isMonthLocked() || loadingUpload || isSubmitting}
+              />
+              {isRecurring && (
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "#9c27b0",
+                    fontStyle: "italic",
+                  }}
+                >
+                  (Optional for recurring invoices)
+                </span>
+              )}
+            </div>
             <button
               type="submit"
               data-testid="submit-invoice-btn"
               className={styles.submitBtn}
-              disabled={isMonthLocked()}
+              disabled={isMonthLocked() || loadingUpload || isSubmitting}
+              style={isRecurring ? { backgroundColor: "#7b1fa2" } : {}}
             >
               {isMonthLocked()
                 ? "Month Locked - Cannot Submit"
+                : isSubmitting
+                ? isRecurring
+                  ? "Creating..."
+                  : "Submitting..."
+                : isRecurring
+                ? "Create Recurring Invoice"
                 : "Submit Invoice"}
+              {isSubmitting && !isMonthLocked() && (
+                <span className={styles.spinner} aria-hidden="true" />
+              )}
             </button>
             <button
               type="button"
               className={styles.readUploadBtn}
               onClick={handleReadFromUpload}
-              disabled={loadingUpload || isMonthLocked()}
+              disabled={loadingUpload || isMonthLocked() || isSubmitting}
             >
-              {loadingUpload ? "Reading..." : "Read from Upload"}
+              {loadingUpload ? (
+                <>
+                  Reading...
+                  <span className={styles.spinner} aria-hidden="true" />
+                </>
+              ) : (
+                "Read from Upload"
+              )}
             </button>
           </div>
         </form>

@@ -1,14 +1,22 @@
 // PAC-Pro/client/src/pages/account.js
 import React, { useState, useEffect } from "react";
 import {
-  Container, Typography, Button, Box, Table, TableBody, TableCell,
-  TableContainer, TableRow, Paper, Menu, MenuItem, Snackbar, Alert, Divider, Switch
+  Container, Typography, Button, Box, Table, TableBody, TableCell, CircularProgress,
+  TableContainer, TableRow, Paper, Snackbar, Alert, Divider, Switch, Stack
 } from "@mui/material";
 import { auth } from "../../config/firebase-config";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useThemeMode } from '../../context/ThemeContext';
 const BASE_URL = (process.env.REACT_APP_BACKEND_URL || "https://pac-pro-506342087804.us-west2.run.app").replace(/\/+$/, "");
+
+const headerTypographyStyle = {
+  variant: "h5",
+  fontWeight: "bold",
+  padding: 2,
+  textAlign: "center",
+  textTransform: "uppercase",
+};
 
 // Auth-aware fetch helper
 async function api(path, { method = "GET", body } = {}) {
@@ -31,33 +39,109 @@ async function api(path, { method = "GET", body } = {}) {
   return res.json();
 }
 
-const Account = () => {
+const UserInfomation = () => {
   const [userData, setUserData] = useState(null);
-  const [stores, setStores] = useState([]);
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [snackbar, setSnackbar] = useState({ open: false, message: "" });
-  const { mode, toggleMode } = useThemeMode();
-  useEffect(() => {
-    document.title = "PAC Pro - Account";
-  }, []);
+  const [loadingData, setLoadingData] = useState(false);
+  const [fetching, setFetching] = useState(false);
 
-  // Wait for Firebase Auth to settle before calling API
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async () => {
+  const fetchUserInfo = async () => {
+    setLoadingData(true);
+    onAuthStateChanged(auth, async () => {
       try {
-        const [me, allStores] = await Promise.all([
+        const [me] = await Promise.all([
           api("/api/account/me"),
-          api("/api/account/stores"),
         ]);
         setUserData(me);
-        setStores(allStores);
       } catch (err) {
         console.error("Initial load error:", err);
         setUserData(null);
-        setStores([]);
+      } finally {
+        setLoadingData(false);
       }
     });
-    return () => unsub();
+    setFetching(false);
+  }
+
+  useEffect(() => {
+    if (fetching) return;
+
+    fetchUserInfo();
+    setFetching(true);
+
+    const timer = setTimeout(() => {
+      setFetching(false);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    loadingData
+      ? <Box sx={{display: "flex", justifyContent: "center", alignItems: "center", height: "45vh"}}>
+          <Stack spacing={2}>
+            <Box><CircularProgress size={"75px"}/></Box>
+            <Box><Typography sx={{fontSize:"24px"}}>Loading Account Information</Typography></Box>
+          </Stack>
+        </Box>
+      : userData && (
+          <TableContainer sx={{ maxWidth: 500, margin: "auto", marginBottom: 4 }}>
+            <Stack spacing={2}>
+              
+              {/* ACCOUNT INFORMATION TABLE */}
+              <Paper elevation={0}>
+                <Typography sx={headerTypographyStyle}>Account Information</Typography>
+                <Divider />
+                <Table>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell><strong>Name</strong></TableCell>
+                      <TableCell>{userData.firstName} {userData.lastName}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell><strong>Email</strong></TableCell>
+                      <TableCell>{userData.email}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell><strong>Role</strong></TableCell>
+                      <TableCell>{userData.role}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </Paper>
+
+              {/* ASSIGNED STORES TABLE */}
+              <Paper elevation={0}>
+                <Typography sx={headerTypographyStyle}>Stores</Typography>
+                <Divider />
+                <Table>
+                  <TableBody>
+                    {userData?.assignedStores && userData.assignedStores.length > 0 ? (
+                      userData.assignedStores.map((store) => (
+                        <TableRow key={store.id}>
+                          <TableCell>{store.name}</TableCell>
+                          <TableCell>{store.address}</TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={3} align="center">No stores assigned</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </Paper>
+            </Stack>
+          </TableContainer>
+        )
+  );
+}
+
+const Account = () => {
+  const [snackbar, setSnackbar] = useState({ open: false, message: "" });
+  const { mode, toggleMode } = useThemeMode();
+  
+  useEffect(() => {
+    document.title = "PAC Pro - Account";
   }, []);
 
   const handleLogout = async () => {
@@ -77,166 +161,64 @@ const Account = () => {
     }
   };
 
-  const handleClose = () => setAnchorEl(null);
   const handleSnackbarClose = () => setSnackbar((s) => ({ ...s, open: false }));
-
-  const isStoreAssigned = (storeId) =>
-    userData?.assignedStores?.some((store) => store.id === storeId);
-
-  const handleAssignStore = async (store) => {
-    if (!store) return;
-    try {
-      const updatedMe = await api("/api/account/me/assigned-stores", {
-        method: "POST",
-        body: { storeId: store.id },
-      });
-      setUserData(updatedMe);
-      setSnackbar({ open: true, message: `Assigned store: ${store.name}` });
-      setAnchorEl(null);
-    } catch (err) {
-      console.error("Error assigning store:", err);
-    }
-  };
-
-  const handleRemoveStore = async (storeId) => {
-    try {
-      const updatedMe = await api(`/api/account/me/assigned-stores/${storeId}`, {
-        method: "DELETE",
-      });
-      setUserData(updatedMe);
-      setSnackbar({ open: true, message: "Store unassigned successfully" });
-    } catch (err) {
-      console.error("Error removing store:", err);
-    }
-  };
-
-  const headerTypographyStyle = {
-    variant: "h5",
-    fontWeight: "bold",
-    padding: 2,
-    textAlign: "center",
-    textTransform: "uppercase",
-  };
 
   return (
     <Container sx={{ textAlign: "center", marginTop: 5, position: "relative", minHeight: "80vh" }}>
-    {/* DARK MODE TOGGLE CARD */}
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 1.5,
-        backgroundColor: mode === "dark" ? "#1e1e1e" : "#f5f5f5",
-        borderRadius: "30px",
-        padding: "8px 16px",
-        boxShadow:
-          mode === "dark"
-            ? "0 0 10px rgba(255,255,255,0.1)"
-            : "0 2px 6px rgba(0,0,0,0.1)",
-        width: "fit-content",
-        margin: "0 auto 24px auto",
-        transition: "all 0.3s ease-in-out",
-      }}
-    >
-      <DarkModeIcon
+      {/* DARK MODE TOGGLE CARD */}
+      <Box
         sx={{
-          color: mode === "dark" ? "#ffb300" : "#333",
-          fontSize: 26,
-          transition: "color 0.3s ease",
-        }}
-      />
-      <Typography
-        sx={{
-          fontWeight: 600,
-          color: mode === "dark" ? "#fff" : "#000",
-          fontSize: "1rem",
-          userSelect: "none",
-          transition: "color 0.3s ease",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 1.5,
+          backgroundColor: mode === "dark" ? "#1e1e1e" : "#f5f5f5",
+          borderRadius: "30px",
+          padding: "8px 16px",
+          boxShadow:
+            mode === "dark"
+              ? "0 0 10px rgba(255,255,255,0.1)"
+              : "0 2px 6px rgba(0,0,0,0.1)",
+          width: "fit-content",
+          margin: "0 auto 24px auto",
+          transition: "all 0.3s ease-in-out",
         }}
       >
-        {mode === "dark" ? "Dark Mode" : "Light Mode"}
-      </Typography>
-      <Switch
-        checked={mode === "dark"}
-        onChange={toggleMode}
-        color="default"
-        sx={{
-          "& .MuiSwitch-switchBase.Mui-checked": {
-            color: "#ffb300",
-          },
-          "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
-            backgroundColor: "#ffb300",
-          },
-        }}
-      />
-    </Box>
+        <DarkModeIcon
+          sx={{
+            color: mode === "dark" ? "#ffb300" : "#333",
+            fontSize: 26,
+            transition: "color 0.3s ease",
+          }}
+        />
+        <Typography
+          sx={{
+            fontWeight: 600,
+            color: mode === "dark" ? "#fff" : "#000",
+            fontSize: "1rem",
+            userSelect: "none",
+            transition: "color 0.3s ease",
+          }}
+        >
+          {mode === "dark" ? "Dark Mode" : "Light Mode"}
+        </Typography>
+        <Switch
+          checked={mode === "dark"}
+          onChange={toggleMode}
+          color="default"
+          sx={{
+            "& .MuiSwitch-switchBase.Mui-checked": {
+              color: "#ffb300",
+            },
+            "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+              backgroundColor: "#ffb300",
+            },
+          }}
+        />
+      </Box>
 
-      {/* ACCOUNT INFORMATION TABLE */}
-      {userData && (
-        <TableContainer component={Paper} sx={{ maxWidth: 500, margin: "auto", marginBottom: 4 }}>
-          <Typography sx={headerTypographyStyle}>Account Information</Typography>
-          <Divider />
-          <Table>
-            <TableBody>
-              <TableRow>
-                <TableCell><strong>Name</strong></TableCell>
-                <TableCell>{userData.firstName} {userData.lastName}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell><strong>Email</strong></TableCell>
-                <TableCell>{userData.email}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell><strong>Role</strong></TableCell>
-                <TableCell>{userData.role}</TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-
-      {/* Store Dropdown Menu */}
-      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleClose}>
-        {stores
-          .filter(store => !isStoreAssigned(store.id))
-          .map((store) => (
-            <MenuItem key={store.id} onClick={() => handleAssignStore(store)}>
-              {store.name} — {store.address}
-            </MenuItem>
-          ))}
-      </Menu>
-
-      {/* ASSIGNED STORES TABLE */}
-      <TableContainer component={Paper} sx={{ maxWidth: 500, margin: "auto" }}>
-        <Divider />
-        <Table>
-          <TableBody>
-            {userData?.assignedStores && userData.assignedStores.length > 0 ? (
-              userData.assignedStores.map((store) => (
-                <TableRow key={store.id}>
-                  <TableCell>{store.name}</TableCell>
-                  <TableCell>{store.address}</TableCell>
-                  <TableCell>
-                    <Button
-                      variant="text"
-                      color="error"
-                      onClick={() => handleRemoveStore(store.id)}
-                      sx={{ minWidth: "auto", padding: "0 8px" }}
-                    >
-                      ❌
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={3} align="center">No stores assigned</TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      {/* User Information Box */}
+      <UserInfomation />
 
       {/* Log Out Button */}
       <Box sx={{ position: "absolute", bottom: 20, right: 20 }}>

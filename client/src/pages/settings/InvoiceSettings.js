@@ -60,7 +60,7 @@ const InvoiceSettings = () => {
     if (canActuallyView) { // Only fetch if allowed to view
       getCategories()
         .then(data => {
-          console.log("Loaded categories:", data);
+          //console.log("Loaded categories:", data);
           setCategories(data);
         })
         .catch(err => console.error(err));

@@ -16,6 +16,10 @@ import {
   CircularProgress,
   Alert,
   Button,
+  Grid,
+  Card,
+  CardContent,
+  Divider,
 } from "@mui/material";
 import "./pac.css";
 import { useTheme } from "@mui/material/styles";
@@ -223,7 +227,8 @@ const PacTab = ({
 
   // Generate print content
   const generatePrintContent = () => {
-    if (!pacData || !actualData.controllableExpenses)
+    const actualData = getActualData();
+    if (!pacData || !actualData?.controllableExpenses)
       return "<p>No data available</p>";
 
     // Helper functions for print content - use main component functions
@@ -1379,13 +1384,274 @@ const PacTab = ({
           </tr>
         </tbody>
       </table>
+      
+      <div style="page-break-inside: avoid;">
+        <h3 class="print-header" style="text-align: left; margin-bottom: 5px;">Product Sales Comparison</h3>
+        <div style="display: flex; gap: 20px;">
+            <div style="flex: 1; border: 1px solid #ccc; padding: 10px; border-radius: 4px;">
+                <div style="font-weight: bold; font-size: 0.9em; color: #666; margin-bottom: 5px; text-transform: uppercase;">Last Year Same Month</div>
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <div style="font-size: 1.2em; font-weight: bold;">${formatCurrency(
+                      actualData.salesComparison?.lastYearProductSales || 0
+                    )}</div>
+                    <div style="text-align: right;">
+                        <div style="font-weight: bold; ${(() => {
+                          const lastYear =
+                            actualData.salesComparison?.lastYearProductSales ||
+                            0;
+                          const lastYearLastYear =
+                            actualData.salesComparison
+                              ?.lastYearLastYearProductSales || 0;
+                          if (lastYearLastYear === 0) return "";
+                          const diff =
+                            ((lastYear - lastYearLastYear) / lastYearLastYear) *
+                            100;
+                          return diff > 0
+                            ? "color: green;"
+                            : diff < 0
+                            ? "color: red;"
+                            : "";
+                        })()}">
+                            ${(() => {
+                              const lastYear =
+                                actualData.salesComparison
+                                  ?.lastYearProductSales || 0;
+                              const lastYearLastYear =
+                                actualData.salesComparison
+                                  ?.lastYearLastYearProductSales || 0;
+                              if (lastYearLastYear === 0) return "-";
+                              const diff =
+                                ((lastYear - lastYearLastYear) /
+                                  lastYearLastYear) *
+                                100;
+                              return `${diff > 0 ? "+" : ""}${formatPercentage(
+                                diff
+                              )}`;
+                            })()}
+                        </div>
+                        <div style="font-size: 0.8em; color: #666;">YoY Change</div>
+                    </div>
+                </div>
+            </div>
+            <div style="flex: 1; border: 1px solid #ccc; padding: 10px; border-radius: 4px;">
+                <div style="font-weight: bold; font-size: 0.9em; color: #666; margin-bottom: 5px; text-transform: uppercase;">Last Month</div>
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <div style="font-size: 1.2em; font-weight: bold;">${formatCurrency(
+                      actualData.salesComparison?.lastMonthProductSales || 0
+                    )}</div>
+                    <div style="text-align: right;">
+                        <div style="font-weight: bold; ${(() => {
+                          const lastMonth =
+                            actualData.salesComparison?.lastMonthProductSales ||
+                            0;
+                          const lastMonthLastYear =
+                            actualData.salesComparison
+                              ?.lastMonthLastYearProductSales || 0;
+                          if (lastMonthLastYear === 0) return "";
+                          const diff =
+                            ((lastMonth - lastMonthLastYear) /
+                              lastMonthLastYear) *
+                            100;
+                          return diff > 0
+                            ? "color: green;"
+                            : diff < 0
+                            ? "color: red;"
+                            : "";
+                        })()}">
+                            ${(() => {
+                              const lastMonth =
+                                actualData.salesComparison
+                                  ?.lastMonthProductSales || 0;
+                              const lastMonthLastYear =
+                                actualData.salesComparison
+                                  ?.lastMonthLastYearProductSales || 0;
+                              if (lastMonthLastYear === 0) return "-";
+                              const diff =
+                                ((lastMonth - lastMonthLastYear) /
+                                  lastMonthLastYear) *
+                                100;
+                              return `${diff > 0 ? "+" : ""}${formatPercentage(
+                                diff
+                              )}`;
+                            })()}
+                        </div>
+                        <div style="font-size: 0.8em; color: #666;">YoY Change </div>
+                    </div>
+                </div>
+            </div>
+            <div style="flex: 1; border: 1px solid #ccc; padding: 10px; border-radius: 4px;">
+                <div style="font-weight: bold; font-size: 0.9em; color: #666; margin-bottom: 5px; text-transform: uppercase;">Current Month</div>
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <div style="font-size: 1.2em; font-weight: bold;">${formatCurrency(
+                      actualData.productNetSales || 0
+                    )}</div>
+                    <div style="text-align: right;">
+                        <div style="font-weight: bold; ${(() => {
+                          const current = actualData.productNetSales || 0;
+                          const lastYear =
+                            actualData.salesComparison?.lastYearProductSales ||
+                            0;
+                          if (lastYear === 0) return "";
+                          const diff = ((current - lastYear) / lastYear) * 100;
+                          return diff > 0
+                            ? "color: green;"
+                            : diff < 0
+                            ? "color: red;"
+                            : "";
+                        })()}">
+                            ${(() => {
+                              const current = actualData.productNetSales || 0;
+                              const lastYear =
+                                actualData.salesComparison
+                                  ?.lastYearProductSales || 0;
+                              if (lastYear === 0) return "-";
+                              const diff =
+                                ((current - lastYear) / lastYear) * 100;
+                              return `${diff > 0 ? "+" : ""}${formatPercentage(
+                                diff
+                              )}`;
+                            })()}
+                        </div>
+                        <div style="font-size: 0.8em; color: #666;">YoY Change</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </div>
+      
+      <br/>
+      <div style="page-break-inside: avoid; display: flex; gap: 20px;">
+        <!-- Gross Profit -->
+        <div style="flex: 1; border: 1px solid #ccc; padding: 10px; border-radius: 4px;">
+            <h3 class="print-header" style="text-align: left; margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Gross Profit</h3>
+            <table class="print-table" style="width: 100%;">
+                <tr>
+                    <td style="width: 60%; font-weight: bold;">Gross Profit %</td>
+                    <td style="text-align: right; font-weight: bold;">${formatPercentage(
+                      actualData.grossProfit?.percent || 0
+                    )}</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Food Cost -->
+        <div style="flex: 1; border: 1px solid #ccc; padding: 10px; border-radius: 4px;">
+            <h3 class="print-header" style="text-align: left; margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Food Cost</h3>
+            <table class="print-table" style="width: 100%;">
+                <tr>
+                    <td style="width: 60%;">Base Food</td>
+                    <td style="text-align: right;">${formatPercentage(
+                      actualData.foodCost?.baseFood || 0
+                    )}</td>
+                </tr>
+                <tr>
+                    <td>Discount</td>
+                    <td style="text-align: right;">${formatPercentage(
+                      actualData.foodCost?.discount || 0
+                    )}</td>
+                </tr>
+                <tr>
+                    <td>Raw Waste</td>
+                    <td style="text-align: right;">${formatPercentage(
+                      actualData.foodCost?.rawWaste || 0
+                    )}</td>
+                </tr>
+                <tr>
+                    <td>Complete Waste</td>
+                    <td style="text-align: right;">${formatPercentage(
+                      actualData.foodCost?.completeWaste || 0
+                    )}</td>
+                </tr>
+                <tr>
+                    <td>Stat Variance</td>
+                    <td style="text-align: right;">${formatPercentage(
+                      actualData.foodCost?.statVariance || 0
+                    )}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold; border-top: 1px solid #ccc;">Food Over Base</td>
+                    <td style="text-align: right; font-weight: bold; border-top: 1px solid #ccc;">${formatPercentage(
+                      actualData.foodCost?.foodOverBase || 0
+                    )}</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Non-Product & Supplies -->
+        <div style="flex: 1; border: 1px solid #ccc; padding: 10px; border-radius: 4px;">
+            <h3 class="print-header" style="text-align: left; margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Non-Product & Supplies</h3>
+            
+            <div style="font-weight: bold; margin-bottom: 5px; font-size: 0.9em;">Operating Supplies</div>
+            <table class="print-table" style="width: 100%; margin-bottom: 10px;">
+                <tr>
+                    <td style="width: 60%;">Starting</td>
+                    <td style="text-align: right;">${formatCurrency(
+                      actualData.nonProductAndSupplies?.operatingSupplies
+                        ?.starting || 0
+                    )}</td>
+                </tr>
+                <tr>
+                    <td>Purchases</td>
+                    <td style="text-align: right;">${formatCurrency(
+                      actualData.nonProductAndSupplies?.operatingSupplies
+                        ?.purchases || 0
+                    )}</td>
+                </tr>
+                <tr>
+                    <td>Ending</td>
+                    <td style="text-align: right;">${formatCurrency(
+                      actualData.nonProductAndSupplies?.operatingSupplies
+                        ?.ending || 0
+                    )}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold; border-top: 1px dashed #ccc;">Usage</td>
+                    <td style="text-align: right; font-weight: bold; border-top: 1px dashed #ccc;">${formatCurrency(
+                      actualData.nonProductAndSupplies?.operatingSupplies
+                        ?.usage || 0
+                    )}</td>
+                </tr>
+            </table>
+
+            <div style="font-weight: bold; margin-bottom: 5px; font-size: 0.9em;">Non-Product</div>
+            <table class="print-table" style="width: 100%;">
+                <tr>
+                    <td style="width: 60%;">Starting</td>
+                    <td style="text-align: right;">${formatCurrency(
+                      actualData.nonProductAndSupplies?.nonProduct?.starting ||
+                        0
+                    )}</td>
+                </tr>
+                <tr>
+                    <td>Purchases</td>
+                    <td style="text-align: right;">${formatCurrency(
+                      actualData.nonProductAndSupplies?.nonProduct?.purchases ||
+                        0
+                    )}</td>
+                </tr>
+                <tr>
+                    <td>Ending</td>
+                    <td style="text-align: right;">${formatCurrency(
+                      actualData.nonProductAndSupplies?.nonProduct?.ending || 0
+                    )}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold; border-top: 1px dashed #ccc;">Usage</td>
+                    <td style="text-align: right; font-weight: bold; border-top: 1px dashed #ccc;">${formatCurrency(
+                      actualData.nonProductAndSupplies?.nonProduct?.usage || 0
+                    )}</td>
+                </tr>
+            </table>
+        </div>
+      </div>
     `;
   };
 
   // Custom print function
   const handlePrint = () => {
     try {
-      if (!pacData || !actualData.controllableExpenses) {
+      const actualData = getActualData();
+      if (!pacData || !actualData?.controllableExpenses) {
         alert("No data available to print. Please wait for data to load.");
         return;
       }
@@ -1498,7 +1764,7 @@ const PacTab = ({
         "0"
       )}`;
 
-      const [actualData, projectionsData, pacActualData] = await Promise.all([
+      let [actualData, projectionsData, pacActualData] = await Promise.all([
         apiCall(`/api/pac/calc/${formattedStoreId}/${yearMonth}`).catch(
           () => null
         ),
@@ -1511,12 +1777,118 @@ const PacTab = ({
       if (!actualData) {
         throw new Error("Failed to fetch PAC data");
       }
+
+      // If PAC actual data exists but is missing new fields, trigger a recompute
+      if (
+        pacActualData &&
+        (!pacActualData.nonProductAndSupplies || !pacActualData.salesComparison)
+      ) {
+        console.log(
+          "PAC actual data missing new fields, triggering recompute..."
+        );
+        try {
+          await apiCall(`/api/pac/actual/compute`, {
+            method: "POST",
+            body: JSON.stringify({
+              store_id: formattedStoreId,
+              year_month: pacActualYearMonth,
+              submitted_by: "System",
+            }),
+          });
+          // Re-fetch the updated data
+          pacActualData = await apiCall(
+            `/api/pac/actual/${formattedStoreId}/${pacActualYearMonth}`
+          ).catch(() => null);
+        } catch (recomputeErr) {
+          console.warn("Failed to recompute PAC actual data:", recomputeErr);
+        }
+      }
+
       const data = actualData;
 
       // Convert snake_case from backend to camelCase for frontend
+      // Handle both snake_case (from Pydantic) and camelCase (if already converted)
+      const nonProductAndSupplies =
+        data.non_product_and_supplies || data.nonProductAndSupplies;
+      const salesComparison = data.sales_comparison || data.salesComparison;
+
       const convertedData = {
-        productNetSales: parseFloat(data.product_net_sales),
-        allNetSales: parseFloat(data.all_net_sales),
+        productNetSales: parseFloat(
+          data.product_net_sales || data.productNetSales || 0
+        ),
+        allNetSales: parseFloat(data.all_net_sales || data.allNetSales || 0),
+        nonProductAndSupplies: nonProductAndSupplies
+          ? {
+              operatingSupplies: {
+                starting: parseFloat(
+                  nonProductAndSupplies.operating_supplies?.starting ||
+                    nonProductAndSupplies.operatingSupplies?.starting ||
+                    0
+                ),
+                purchases: parseFloat(
+                  nonProductAndSupplies.operating_supplies?.purchases ||
+                    nonProductAndSupplies.operatingSupplies?.purchases ||
+                    0
+                ),
+                ending: parseFloat(
+                  nonProductAndSupplies.operating_supplies?.ending ||
+                    nonProductAndSupplies.operatingSupplies?.ending ||
+                    0
+                ),
+                usage: parseFloat(
+                  nonProductAndSupplies.operating_supplies?.usage ||
+                    nonProductAndSupplies.operatingSupplies?.usage ||
+                    0
+                ),
+              },
+              nonProduct: {
+                starting: parseFloat(
+                  nonProductAndSupplies.non_product?.starting ||
+                    nonProductAndSupplies.nonProduct?.starting ||
+                    0
+                ),
+                purchases: parseFloat(
+                  nonProductAndSupplies.non_product?.purchases ||
+                    nonProductAndSupplies.nonProduct?.purchases ||
+                    0
+                ),
+                ending: parseFloat(
+                  nonProductAndSupplies.non_product?.ending ||
+                    nonProductAndSupplies.nonProduct?.ending ||
+                    0
+                ),
+                usage: parseFloat(
+                  nonProductAndSupplies.non_product?.usage ||
+                    nonProductAndSupplies.nonProduct?.usage ||
+                    0
+                ),
+              },
+            }
+          : null,
+        salesComparison: salesComparison
+          ? {
+              lastYearProductSales: parseFloat(
+                salesComparison.last_year_product_sales ||
+                  salesComparison.lastYearProductSales ||
+                  0
+              ),
+              lastMonthProductSales: parseFloat(
+                salesComparison.last_month_product_sales ||
+                  salesComparison.lastMonthProductSales ||
+                  0
+              ),
+              lastMonthLastYearProductSales: parseFloat(
+                salesComparison.last_month_last_year_product_sales ||
+                  salesComparison.lastMonthLastYearProductSales ||
+                  0
+              ),
+              lastYearLastYearProductSales: parseFloat(
+                salesComparison.last_year_last_year_product_sales ||
+                  salesComparison.lastYearLastYearProductSales ||
+                  0
+              ),
+            }
+          : null,
         amountUsed: {
           food: parseFloat(data.amount_used.food),
           paper: parseFloat(data.amount_used.paper),
@@ -1783,6 +2155,10 @@ const PacTab = ({
         totalControllablePercent: tt.totalControllable?.percent ?? 0,
         pacPercent: tt.pac?.percent ?? 0,
         pacDollars: tt.pac?.dollars ?? 0,
+        grossProfit: tt.grossProfit || { percent: 0 },
+        foodCost: pacActualData.foodCost || {},
+        nonProductAndSupplies: pacActualData.nonProductAndSupplies || null,
+        salesComparison: pacActualData.salesComparison || null,
       };
     }
     // Fallback: map backend shape into the same structure to avoid runtime errors
@@ -1834,6 +2210,8 @@ const PacTab = ({
         totalControllablePercent: Number(pacData.totalControllablePercent || 0),
         pacPercent: Number(pacData.pacPercent || 0),
         pacDollars: Number(pacData.pacDollars || 0),
+        nonProductAndSupplies: pacData.nonProductAndSupplies || null,
+        salesComparison: pacData.salesComparison || null,
       };
     }
     return null;
@@ -2760,6 +3138,249 @@ const PacTab = ({
           )
         ),
       },
+      {
+        Account: "",
+        "Actual $": "",
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      // Gross Profit
+      {
+        Account: "Gross Profit",
+        "Actual $": "",
+        "Actual %": formatPercentage(actualData.grossProfit?.percent || 0),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "",
+        "Actual $": "",
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      // Food Cost
+      {
+        Account: "Food Cost Breakdown",
+        "Actual $": "",
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Base Food (Input)",
+        "Actual $": "",
+        "Actual %": formatPercentage(actualData.foodCost?.baseFood || 0),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Discount",
+        "Actual $": "",
+        "Actual %": formatPercentage(actualData.foodCost?.discount || 0),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Raw Waste",
+        "Actual $": "",
+        "Actual %": formatPercentage(actualData.foodCost?.rawWaste || 0),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Complete Waste",
+        "Actual $": "",
+        "Actual %": formatPercentage(actualData.foodCost?.completeWaste || 0),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Stat Variance",
+        "Actual $": "",
+        "Actual %": formatPercentage(actualData.foodCost?.statVariance || 0),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Food Over Base",
+        "Actual $": "",
+        "Actual %": formatPercentage(actualData.foodCost?.foodOverBase || 0),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "",
+        "Actual $": "",
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      // Non-Product & Supplies
+      {
+        Account: "Non-Product & Supplies",
+        "Actual $": "",
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      // Operating Supplies
+      {
+        Account: "Operating Supplies - Starting",
+        "Actual $":
+          actualData.nonProductAndSupplies?.operatingSupplies?.starting || 0,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Operating Supplies - Purchases",
+        "Actual $":
+          actualData.nonProductAndSupplies?.operatingSupplies?.purchases || 0,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Operating Supplies - Ending",
+        "Actual $":
+          actualData.nonProductAndSupplies?.operatingSupplies?.ending || 0,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Operating Supplies - Usage",
+        "Actual $":
+          actualData.nonProductAndSupplies?.operatingSupplies?.usage || 0,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "",
+        "Actual $": "",
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      // Non-Product
+      {
+        Account: "Non-Product - Starting",
+        "Actual $": actualData.nonProductAndSupplies?.nonProduct?.starting || 0,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Non-Product - Purchases",
+        "Actual $":
+          actualData.nonProductAndSupplies?.nonProduct?.purchases || 0,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Non-Product - Ending",
+        "Actual $": actualData.nonProductAndSupplies?.nonProduct?.ending || 0,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Non-Product - Usage",
+        "Actual $": actualData.nonProductAndSupplies?.nonProduct?.usage || 0,
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "",
+        "Actual $": "",
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      // Sales Comparison
+      {
+        Account: "Sales Comparison",
+        "Actual $": "",
+        "Actual %": "",
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Last Year Same Month",
+        "Actual $": actualData.salesComparison?.lastYearProductSales || 0,
+        "Actual %": (() => {
+          const lastYear =
+            actualData.salesComparison?.lastYearProductSales || 0;
+          const lastYearLastYear =
+            actualData.salesComparison?.lastYearLastYearProductSales || 0;
+          if (lastYearLastYear === 0) return "-";
+          const diff = ((lastYear - lastYearLastYear) / lastYearLastYear) * 100;
+          return formatPercentage(diff);
+        })(),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Last Month",
+        "Actual $": actualData.salesComparison?.lastMonthProductSales || 0,
+        "Actual %": (() => {
+          const lastMonth =
+            actualData.salesComparison?.lastMonthProductSales || 0;
+          const lastMonthLastYear =
+            actualData.salesComparison?.lastMonthLastYearProductSales || 0;
+          if (lastMonthLastYear === 0) return "-";
+          const diff =
+            ((lastMonth - lastMonthLastYear) / lastMonthLastYear) * 100;
+          return formatPercentage(diff);
+        })(),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
+      {
+        Account: "Current Month",
+        "Actual $": actualData.productNetSales || 0,
+        "Actual %": (() => {
+          const current = actualData.productNetSales || 0;
+          const lastYear =
+            actualData.salesComparison?.lastYearProductSales || 0;
+          if (lastYear === 0) return "-";
+          const diff = ((current - lastYear) / lastYear) * 100;
+          return formatPercentage(diff);
+        })(),
+        "Projected $": "",
+        "Projected %": "",
+        "Difference %": "",
+      },
     ];
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -3575,6 +4196,534 @@ const PacTab = ({
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Modern Modules Section */}
+
+      {/* Sales Comparison Module */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12}>
+          <Card
+            elevation={3}
+            sx={{
+              height: "100%",
+              backgroundColor: isDark ? "#1e1e1e" : "#fff",
+              borderRadius: 2,
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{
+                  fontWeight: "bold",
+                  borderBottom: "1px solid",
+                  borderColor: isDark
+                    ? "rgba(255,255,255,0.1)"
+                    : "rgba(0,0,0,0.1)",
+                  pb: 1.5,
+                  mb: 2,
+                  fontSize: "1.1rem",
+                }}
+              >
+                Product Sales Comparison
+              </Typography>
+              <Grid container spacing={3} alignItems="center">
+                {/* Current Month */}
+                <Grid item xs={12} md={3.5}>
+                  <Box
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="center"
+                  >
+                    <Box display="flex" flexDirection="column">
+                      <Typography
+                        variant="subtitle2"
+                        color="textSecondary"
+                        sx={{
+                          textTransform: "uppercase",
+                          fontSize: "0.75rem",
+                          letterSpacing: 0.5,
+                          mb: 0.5,
+                        }}
+                      >
+                        Current Month
+                      </Typography>
+                      <Typography variant="h5" fontWeight="bold">
+                        {formatCurrency(actualData.productNetSales || 0)}
+                      </Typography>
+                    </Box>
+                    <Box
+                      display="flex"
+                      flexDirection="column"
+                      alignItems="flex-end"
+                    >
+                      <Typography
+                        variant="body1"
+                        fontWeight="bold"
+                        sx={{
+                          color: (() => {
+                            const current = actualData.productNetSales || 0;
+                            const lastYear =
+                              actualData.salesComparison
+                                ?.lastYearProductSales || 0;
+                            if (lastYear === 0) return "text.primary";
+                            const diff =
+                              ((current - lastYear) / lastYear) * 100;
+                            return diff > 0
+                              ? "success.main"
+                              : diff < 0
+                              ? "error.main"
+                              : "text.primary";
+                          })(),
+                        }}
+                      >
+                        {(() => {
+                          const current = actualData.productNetSales || 0;
+                          const lastYear =
+                            actualData.salesComparison?.lastYearProductSales ||
+                            0;
+                          if (lastYear === 0) return "-";
+                          const diff = ((current - lastYear) / lastYear) * 100;
+                          return `${diff > 0 ? "+" : ""}${formatPercentage(
+                            diff
+                          )}`;
+                        })()}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        YoY Change
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Grid>
+
+                {/* Divider 1 */}
+                <Grid
+                  item
+                  xs={12}
+                  sx={{ display: { xs: "block", md: "none" }, py: 0 }}
+                >
+                  <Divider />
+                </Grid>
+                <Grid
+                  item
+                  md={0.75}
+                  sx={{
+                    display: { xs: "none", md: "flex" },
+                    justifyContent: "center",
+                    p: 0,
+                  }}
+                >
+                  <Divider
+                    orientation="vertical"
+                    flexItem
+                    sx={{ height: "60px" }}
+                  />
+                </Grid>
+
+                {/* Last Year Same Month */}
+                <Grid item xs={12} md={3.5}>
+                  <Box
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="center"
+                  >
+                    <Box display="flex" flexDirection="column">
+                      <Typography
+                        variant="subtitle2"
+                        color="textSecondary"
+                        sx={{
+                          textTransform: "uppercase",
+                          fontSize: "0.75rem",
+                          letterSpacing: 0.5,
+                          mb: 0.5,
+                        }}
+                      >
+                        Last Year Same Month
+                      </Typography>
+                      <Typography variant="h5" fontWeight="bold">
+                        {formatCurrency(
+                          actualData.salesComparison?.lastYearProductSales || 0
+                        )}
+                      </Typography>
+                    </Box>
+                    <Box
+                      display="flex"
+                      flexDirection="column"
+                      alignItems="flex-end"
+                    >
+                      <Typography
+                        variant="body1"
+                        fontWeight="bold"
+                        sx={{
+                          color: (() => {
+                            const lastYear =
+                              actualData.salesComparison
+                                ?.lastYearProductSales || 0;
+                            const lastYearLastYear =
+                              actualData.salesComparison
+                                ?.lastYearLastYearProductSales || 0;
+                            if (lastYearLastYear === 0) return "text.primary";
+                            const diff =
+                              ((lastYear - lastYearLastYear) /
+                                lastYearLastYear) *
+                              100;
+                            return diff > 0
+                              ? "success.main"
+                              : diff < 0
+                              ? "error.main"
+                              : "text.primary";
+                          })(),
+                        }}
+                      >
+                        {(() => {
+                          const lastYear =
+                            actualData.salesComparison?.lastYearProductSales ||
+                            0;
+                          const lastYearLastYear =
+                            actualData.salesComparison
+                              ?.lastYearLastYearProductSales || 0;
+                          if (lastYearLastYear === 0) return "-";
+                          const diff =
+                            ((lastYear - lastYearLastYear) / lastYearLastYear) *
+                            100;
+                          return `${diff > 0 ? "+" : ""}${formatPercentage(
+                            diff
+                          )}`;
+                        })()}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        YoY Change
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Grid>
+
+                {/* Divider 2 */}
+                <Grid
+                  item
+                  xs={12}
+                  sx={{ display: { xs: "block", md: "none" }, py: 0 }}
+                >
+                  <Divider />
+                </Grid>
+                <Grid
+                  item
+                  md={0.75}
+                  sx={{
+                    display: { xs: "none", md: "flex" },
+                    justifyContent: "center",
+                    p: 0,
+                  }}
+                >
+                  <Divider
+                    orientation="vertical"
+                    flexItem
+                    sx={{ height: "60px" }}
+                  />
+                </Grid>
+
+                {/* Last Month */}
+                <Grid item xs={12} md={3.5}>
+                  <Box
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="center"
+                  >
+                    <Box display="flex" flexDirection="column">
+                      <Typography
+                        variant="subtitle2"
+                        color="textSecondary"
+                        sx={{
+                          textTransform: "uppercase",
+                          fontSize: "0.75rem",
+                          letterSpacing: 0.5,
+                          mb: 0.5,
+                        }}
+                      >
+                        Last Month
+                      </Typography>
+                      <Typography variant="h5" fontWeight="bold">
+                        {formatCurrency(
+                          actualData.salesComparison?.lastMonthProductSales || 0
+                        )}
+                      </Typography>
+                    </Box>
+                    <Box
+                      display="flex"
+                      flexDirection="column"
+                      alignItems="flex-end"
+                    >
+                      <Typography
+                        variant="body1"
+                        fontWeight="bold"
+                        sx={{
+                          color: (() => {
+                            const lastMonth =
+                              actualData.salesComparison
+                                ?.lastMonthProductSales || 0;
+                            const lastMonthLastYear =
+                              actualData.salesComparison
+                                ?.lastMonthLastYearProductSales || 0;
+
+                            if (lastMonthLastYear === 0) return "text.primary";
+                            const diff =
+                              ((lastMonth - lastMonthLastYear) /
+                                lastMonthLastYear) *
+                              100;
+                            return diff > 0
+                              ? "success.main"
+                              : diff < 0
+                              ? "error.main"
+                              : "text.primary";
+                          })(),
+                        }}
+                      >
+                        {(() => {
+                          const lastMonth =
+                            actualData.salesComparison?.lastMonthProductSales ||
+                            0;
+                          const lastMonthLastYear =
+                            actualData.salesComparison
+                              ?.lastMonthLastYearProductSales || 0;
+
+                          if (lastMonthLastYear === 0) return "-";
+                          const diff =
+                            ((lastMonth - lastMonthLastYear) /
+                              lastMonthLastYear) *
+                            100;
+                          return `${diff > 0 ? "+" : ""}${formatPercentage(
+                            diff
+                          )}`;
+                        })()}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        YoY Change
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {/* Gross Profit Module */}
+        <Grid item xs={12} md={4}>
+          <Card
+            elevation={3}
+            sx={{
+              height: "100%",
+              backgroundColor: isDark ? "#1e1e1e" : "#fff",
+              borderRadius: 2,
+            }}
+          >
+            <CardContent
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                height: "100%",
+                p: 3,
+              }}
+            >
+              <Typography
+                variant="h6"
+                align="center"
+                color="textSecondary"
+                gutterBottom
+                sx={{
+                  fontWeight: "medium",
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                  fontSize: "0.85rem",
+                }}
+              >
+                Gross Profit
+              </Typography>
+              <Typography
+                variant="h3"
+                align="center"
+                color="primary"
+                sx={{ fontWeight: "bold", my: 2 }}
+              >
+                {formatPercentage(actualData.grossProfit?.percent || 0)}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Food Cost Module */}
+        <Grid item xs={12} md={4}>
+          <Card
+            elevation={3}
+            sx={{
+              height: "100%",
+              backgroundColor: isDark ? "#1e1e1e" : "#fff",
+              borderRadius: 2,
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{
+                  fontWeight: "bold",
+                  borderBottom: "1px solid",
+                  borderColor: isDark
+                    ? "rgba(255,255,255,0.1)"
+                    : "rgba(0,0,0,0.1)",
+                  pb: 1.5,
+                  mb: 2,
+                  fontSize: "1.1rem",
+                }}
+              >
+                Food Cost Breakdown
+              </Typography>
+              {[
+                { label: "Base Food", value: actualData.foodCost?.baseFood },
+                { label: "Discount", value: actualData.foodCost?.discount },
+                { label: "Raw Waste", value: actualData.foodCost?.rawWaste },
+                {
+                  label: "Complete Waste",
+                  value: actualData.foodCost?.completeWaste,
+                },
+                {
+                  label: "Stat Variance",
+                  value: actualData.foodCost?.statVariance,
+                },
+              ].map((item) => (
+                <Box
+                  key={item.label}
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  mb={1.5}
+                >
+                  <Typography variant="body2" color="textSecondary">
+                    {item.label}
+                  </Typography>
+                  <Typography variant="body2" fontWeight="600">
+                    {formatPercentage(item.value || 0)}
+                  </Typography>
+                </Box>
+              ))}
+              <Divider sx={{ my: 2, opacity: 0.6 }} />
+              <Box
+                display="flex"
+                justifyContent="space-between"
+                alignItems="center"
+              >
+                <Typography variant="subtitle1" fontWeight="bold">
+                  Food Over Base
+                </Typography>
+                <Typography
+                  variant="subtitle1"
+                  fontWeight="bold"
+                  color="primary"
+                >
+                  {formatPercentage(actualData.foodCost?.foodOverBase || 0)}
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Non-Product & Operating Supplies Usage Module */}
+        <Grid item xs={12} md={4}>
+          <Card
+            elevation={3}
+            sx={{
+              height: "100%",
+              backgroundColor: isDark ? "#1e1e1e" : "#fff",
+              borderRadius: 2,
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{
+                  fontWeight: "bold",
+                  borderBottom: "1px solid",
+                  borderColor: isDark
+                    ? "rgba(255,255,255,0.1)"
+                    : "rgba(0,0,0,0.1)",
+                  pb: 1.5,
+                  mb: 2,
+                  fontSize: "1.1rem",
+                }}
+              >
+                Usage Summary
+              </Typography>
+
+              {/* Operating Supplies */}
+              <Box mb={3}>
+                <Typography
+                  variant="subtitle2"
+                  color="textSecondary"
+                  gutterBottom
+                  sx={{
+                    textTransform: "uppercase",
+                    fontSize: "0.75rem",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  Operating Supplies
+                </Typography>
+                <Box
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems="baseline"
+                >
+                  <Typography variant="h5" fontWeight="bold">
+                    {formatCurrency(
+                      actualData.nonProductAndSupplies?.operatingSupplies
+                        ?.usage || 0
+                    )}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    Usage
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Divider sx={{ my: 2, opacity: 0.6 }} />
+
+              {/* Non-Product */}
+              <Box>
+                <Typography
+                  variant="subtitle2"
+                  color="textSecondary"
+                  gutterBottom
+                  sx={{
+                    textTransform: "uppercase",
+                    fontSize: "0.75rem",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  Non-Product
+                </Typography>
+                <Box
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems="baseline"
+                >
+                  <Typography variant="h5" fontWeight="bold">
+                    {formatCurrency(
+                      actualData.nonProductAndSupplies?.nonProduct?.usage || 0
+                    )}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    Usage
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
     </Container>
   );
 };

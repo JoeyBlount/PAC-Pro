@@ -28,10 +28,10 @@ const db = getFirestore();
 // -------------------------
 // 🧠 Confirm .env loaded
 // -------------------------
-console.log("✅ Gmail env loaded:", {
+/*console.log("✅ Gmail env loaded:", {
   email: process.env.GMAIL_EMAIL || "Missing ❌",
   pass: process.env.GMAIL_PASS ? "Loaded ✅" : "Missing ❌",
-});
+});*/
 
 // -------------------------
 // 🌐 CORS Configuration
@@ -46,19 +46,19 @@ const allowedOrigins = [
 
 const corsHandler = cors({
   origin: function (origin, callback) {
-    console.log("🔍 Checking origin:", origin);
+    //console.log("🔍 Checking origin:", origin);
     
     if (!origin) {
-      console.log("✅ No origin - allowing");
+      //console.log("✅ No origin - allowing");
       return callback(null, true);
     }
     
     if (allowedOrigins.includes(origin)) {
-      console.log("✅ Origin allowed:", origin);
+      //console.log("✅ Origin allowed:", origin);
       return callback(null, true);
     }
     
-    console.error("❌ Origin blocked:", origin);
+    //console.error("❌ Origin blocked:", origin);
     return callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
   },
   methods: ["GET", "POST", "OPTIONS"],
@@ -110,7 +110,7 @@ exports.notifyInvoiceSubmitted = onDocumentCreated("invoices/{invoiceId}", async
   });
 
   await batch.commit();
-  console.log(`📢 Invoice submitted notification sent for ${invoice.invoiceNumber}`);
+  //console.log(`📢 Invoice submitted notification sent for ${invoice.invoiceNumber}`);
 });
 
 // -------------------------
@@ -139,7 +139,7 @@ exports.notifyInvoiceDeleted = onDocumentDeleted("invoices/{invoiceId}", async (
   });
 
   await batch.commit();
-  console.log(`🗑️ Invoice deleted notification sent for ${invoice.invoiceNumber}`);
+  //console.log(`🗑️ Invoice deleted notification sent for ${invoice.invoiceNumber}`);
 });
 
 // -------------------------
@@ -158,7 +158,7 @@ exports.notifyNewUser = onDocumentCreated("users/{userId}", async (event) => {
     read: false,
   });
 
-  console.log(`👋 Welcome notification created for ${user.email}`);
+  //console.log(`👋 Welcome notification created for ${user.email}`);
 });
 
 // -------------------------
@@ -275,7 +275,7 @@ exports.dailyNotificationDigest = onSchedule("0 7 * * *", async () => {
   yesterday.setDate(yesterday.getDate() - 1);
   const since = Timestamp.fromDate(yesterday);
 
-  console.log("📬 Fetching notifications created since:", since.toDate());
+  //console.log("📬 Fetching notifications created since:", since.toDate());
 
   const snapshot = await db
     .collection("notifications")
@@ -287,7 +287,7 @@ exports.dailyNotificationDigest = onSchedule("0 7 * * *", async () => {
     });
 
   if (!snapshot || snapshot.empty) {
-    console.log("No notifications to email today.");
+    //console.log("No notifications to email today.");
     return null;
   }
 
@@ -312,7 +312,7 @@ exports.dailyNotificationDigest = onSchedule("0 7 * * *", async () => {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`✅ Sent digest to ${email}`);
+      //console.log(`✅ Sent digest to ${email}`);
     } catch (error) {
       console.error(`❌ Failed to send to ${email}:`, error);
     }
@@ -326,11 +326,11 @@ exports.dailyNotificationDigest = onSchedule("0 7 * * *", async () => {
 // -------------------------
 exports.sendUserInvite = onRequest({ cors: true }, async (req, res) => {
   try {
-    console.log("📨 sendUserInvite called, method:", req.method);
+    //console.log("📨 sendUserInvite called, method:", req.method);
 
     // Handle preflight OPTIONS request
     if (req.method === "OPTIONS") {
-      console.log("✅ Handling OPTIONS preflight");
+      //console.log("✅ Handling OPTIONS preflight");
       return res.status(204).send("");
     }
 
@@ -344,16 +344,16 @@ exports.sendUserInvite = onRequest({ cors: true }, async (req, res) => {
       });
     }
 
-    console.log("📧 Processing invite for:", email, "| Name:", firstName, "| Role:", role);
+    //console.log("📧 Processing invite for:", email, "| Name:", firstName, "| Role:", role);
 
     // ✅ Get environment variables
     const emailUser = process.env.GMAIL_EMAIL;
     const emailPass = process.env.GMAIL_PASS;
 
-    console.log("🔑 Email config check:", {
+    /*console.log("🔑 Email config check:", {
       email: emailUser ? "✅ Set" : "❌ Missing",
       pass: emailPass ? "✅ Set" : "❌ Missing",
-    });
+    });*/
 
     if (!emailUser || !emailPass) {
       console.error("❌ Gmail credentials not configured!");
@@ -412,10 +412,10 @@ The PAC-Pro Team
     };
 
     // ✅ Send email
-    console.log("📮 Attempting to send email...");
+    //console.log("📮 Attempting to send email...");
     await transporter.sendMail(mailOptions);
 
-    console.log(`✅ SUCCESS! Invite email sent to ${email}`);
+    //console.log(`✅ SUCCESS! Invite email sent to ${email}`);
 
     return res.status(200).json({
       success: true,
