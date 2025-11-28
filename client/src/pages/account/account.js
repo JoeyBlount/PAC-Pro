@@ -82,7 +82,7 @@ const UserInfomation = () => {
       ? <Box sx={{display: "flex", justifyContent: "center", alignItems: "center", height: "45vh"}}>
           <Stack spacing={2}>
             <Box><CircularProgress size={"75px"}/></Box>
-            <Box><Typography>Loading User Information</Typography></Box>
+            <Box><Typography sx={{fontSize:"24px"}}>Loading Account Information</Typography></Box>
           </Stack>
         </Box>
       : userData && (
