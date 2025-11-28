@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext, useRef } from "react";
+import { useEffect, useState, useContext, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import {
   Container,
@@ -17,14 +17,11 @@ import {
   InputLabel,
   InputAdornment,
   Typography,
-  Divider,
   Stack,
 } from "@mui/material";
 import {
   GetApp,
   Close,
-  AccessibilityNewSharp,
-  Lock,
   Lock as LockIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
@@ -43,7 +40,6 @@ import {
   doc,
   updateDoc,
   setDoc,
-  addDoc,
 } from "firebase/firestore";
 import { db } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext";

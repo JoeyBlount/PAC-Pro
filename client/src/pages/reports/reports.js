@@ -15,8 +15,7 @@ import {
   Select,
   MenuItem,
   FormControl,
-  InputLabel,
-  useTheme
+  InputLabel
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import PrintIcon from '@mui/icons-material/Print';
@@ -29,7 +28,6 @@ import './reports.css';
 const Reports = () => {
   const navigate = useNavigate();
   const { selectedStore } = useContext(StoreContext);
-  const theme = useTheme();
   // State for dialogs
   const [pacDialogOpen, setPacDialogOpen] = useState(false);
   const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);

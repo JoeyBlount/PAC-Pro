@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from "react";
+import { useState, useEffect, useContext, useRef } from "react";
 import { auth } from "../../config/firebase-config";
 import { StoreContext } from "../../context/storeContext";
 import { useAuth } from "../../context/AuthContext";
@@ -12,7 +12,6 @@ import { apiUrl } from "../../utils/api";
 import { useYearRange } from "../../utils/yearUtils";
 import {
   Alert,
-  TextField,
   Select,
   MenuItem,
   Box,
@@ -35,9 +34,7 @@ const SubmitInvoice = () => {
   const { selectedStore } = useContext(StoreContext);
   const { userRole } = useAuth();
   const [imageUpload, setImageUpload] = useState(null);
-  const [imageUrls, setImageUrls] = useState([]);
   const [extras, setExtras] = useState([]);
-  const [showUploadModal, setShowUploadModal] = useState(false);
   const [loadingUpload, setLoadingUpload] = useState(false);
   const theme = useTheme();
 
@@ -47,8 +44,6 @@ const SubmitInvoice = () => {
   const [invoiceMonth, setInvoiceMonth] = useState(new Date().getMonth() + 1);
   const [invoiceYear, setInvoiceYear] = useState(new Date().getFullYear());
   const [confirmedItems, setConfirmedItems] = useState([]);
-  const [userData, setUserData] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [calendarViewDate, setCalendarViewDate] = useState(new Date());
@@ -214,7 +209,7 @@ const SubmitInvoice = () => {
     setShowCalendar(false);
   };
 
-  const isDateDisabled = (date) => {
+  const isDateDisabled = () => {
     // Allow selection of any date
     return false;
   };
@@ -223,7 +218,6 @@ const SubmitInvoice = () => {
     const year = calendarViewDate.getFullYear();
     const month = calendarViewDate.getMonth();
     const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
     const startDate = new Date(firstDay);
     startDate.setDate(startDate.getDate() - firstDay.getDay());
 

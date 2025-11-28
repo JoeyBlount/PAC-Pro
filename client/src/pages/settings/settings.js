@@ -9,16 +9,12 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import EventIcon from '@mui/icons-material/Event';
-import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useThemeMode } from '../../context/ThemeContext';
-import { Switch } from '@mui/material';
 
 const Settings = () => {
   const navigate = useNavigate();
   const { userRole } = useAuth();
-  const { mode, toggleMode } = useThemeMode();
-  const isAdmin = userRole === ROLES.ADMIN;
-  const isAccountant = userRole === ROLES.ACCOUNTANT;
+  useThemeMode();
 
   const settingsItems = [
     {

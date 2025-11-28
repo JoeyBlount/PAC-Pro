@@ -138,13 +138,6 @@ const getToken = async () => {
 };
 
 
-  const value = {
-    currentUser,
-    userRole,
-    authMethod,
-    loading,
-    getToken, // <--- safe token getter
-  };
 
   return (
     <AuthContext.Provider value={{ currentUser, userRole, loading, authMethod, getToken }}>

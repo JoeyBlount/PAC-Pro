@@ -103,7 +103,6 @@ const UserManagement = () => {
         throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
       }
 
-      const result = await response.json();
       //console.log("User deleted successfully:", result);
       
       fetchUsers(); // Refresh the user list
@@ -216,7 +215,6 @@ const UserManagement = () => {
           throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
         }
 
-        const result = await response.json();
         //console.log("User added successfully:", result);
                 // After the "User added successfully" line:
        // Replace the invite email section in handleAddUserSubmit (around line 197)
@@ -241,7 +239,6 @@ try {
   );
 
   if (inviteResponse.ok) {
-    const inviteData = await inviteResponse.json();
     //console.log("✅ Invite email sent:", inviteData);
     alert(`User added successfully! Invitation email sent to ${newUser.email}`);
   } else {
@@ -336,7 +333,6 @@ try {
         throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
       }
 
-      const result = await response.json();
       //console.log("User role updated successfully:", result);
       
       fetchUsers(); // Refresh the user list

@@ -19,15 +19,6 @@ import {
 
 const rolesList = ["Admin", "Supervisor", "Office Manager", "General Manager", "Accountant"];
 
-const notificationTypes = [
-  "Generate Submission",
-  "Invoice Submission",
-  "Invoice Deletion",
-  "Invoice Edit",
-  "Projections Submission",
-  "Locking Month",
-];
-
 export default function Notifications() {
   const [settings, setSettings] = useState([]);
   const [success, setSuccess] = useState(false);

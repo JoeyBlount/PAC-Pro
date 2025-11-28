@@ -4,12 +4,8 @@ import "./index.css";
 import reportWebVitals from "./reportWebVitals";
 // Imports for react-router-dom v6 data routers (createBrowserRouter)
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
-// Imports for react-router-dom standard component routing (BrowserRouter, Routes, etc.)
-// NOTE: You typically use one style or the other, not both. See note below.
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 import PrivateRoute from "./routes/PrivateRoute"; // Assuming this is used with the Router/Routes structure
-import ProtectedRoute from './routes/ProtectedRoute';
 import Login from "./pages/login/login";
 import SignUpScreen from "./pages/login/signupscreen";
 import NotAllowed from "./pages/login/NotAllowed";
@@ -26,13 +22,9 @@ import StoreManagement from "./pages/settings/StoreManagement";
 import Notifications from "./pages/settings/Notifications";
 import InvoiceSettings from "./pages/settings/InvoiceSettings";
 import DeadlineManagement from "./pages/settings/DeadlineManagement";
-// import InviteUser from './pages/InviteUser'; // Kept unique import
-// import NavigationLayout from './components/NavigationLayout'; // Kept unique import
-// import NotAllowed from './pages/NotAllowed'; // Kept unique import
-
 import { StoreProvider } from "./context/storeContext";
 import { AuthProvider } from './context/AuthContext';
-import { AdminRoute, AdminOrOmRoute, SettingsViewRoute, StoreManagementRoute, UserManagementRoute, ViewOnlyRoute, AllAuthenticatedUsersRoute } from './routes/ProtectedRoute';
+import { AdminRoute, SettingsViewRoute, StoreManagementRoute, UserManagementRoute, ViewOnlyRoute, AllAuthenticatedUsersRoute } from './routes/ProtectedRoute';
 import { ThemeContextProvider } from "./context/ThemeContext";
 
 const router = createBrowserRouter([

@@ -159,7 +159,7 @@ const PAC = () => {
   const { selectedStore } = useContext(StoreContext);
 
   // Dynamic year range: 1 year forward + 10 years back (or earliest data year)
-  const { years, currentYear } = useYearRange(selectedStore);
+  const { years } = useYearRange(selectedStore);
   const [year, setYear] = useState(() => new Date().getFullYear());
 
   // Separate state for actual data dropdowns in projections tab
@@ -191,14 +191,6 @@ const PAC = () => {
   const saveTimer = useRef(null);
 
   // --- helpers: period checks ---
-  const isPastPeriod = (y, mName) => {
-    const m = months.indexOf(mName); // 0..11
-    const now = new Date();
-    const sel = new Date(y, m, 1);
-    // first day of current month for stable compare
-    const cur = new Date(now.getFullYear(), now.getMonth(), 1);
-    return sel < cur;
-  };
 
   // Return a color for the P.A.C. row based on projected $ vs goal.
   const getPacRowColor = () => (pacEqual ? "green" : "red");
@@ -459,11 +451,6 @@ const PAC = () => {
 
   // Only admins can unlock months
   const canUnlockMonth = isAdmin;
-  const getPrevPeriod = (y, mName) => {
-    const i = months.indexOf(mName); // 0..11
-    const d = new Date(y, i - 1, 1); // prev month
-    return { y: d.getFullYear(), m: d.getMonth() + 1 }; // 1..12
-  };
 
   // returns { monthIndex, year }
   function getPrevMonthYear(d = new Date()) {
@@ -638,7 +625,6 @@ const PAC = () => {
           : makeEmptyProjectionRows();
 
         // Log for debugging
-        const productSales = loadedRows.find((r) => r.name === "Product Sales");
         /*console.log("Loaded projections:", {
           source: data.source,
           productSales: productSales?.projectedDollar,
@@ -1093,13 +1079,7 @@ const PAC = () => {
       return;
     }
 
-    // Build a document ID: store_001_202509
-    const monthIndex = months.indexOf(month); // 0–11
-    const docId = `${selectedStore}_${year}${String(monthIndex + 1).padStart(
-      2,
-      "0"
-    )}`;
-
+  
     try {
       await saveProjections(
         selectedStore,
@@ -1149,10 +1129,7 @@ const PAC = () => {
 
   const [projections, setProjections] = useState(makeEmptyProjectionRows());
 
-  const [storeNumber, setStoreNumber] = useState("Store 123"); // You might want to make this dynamic
-  const [actualData, setActualData] = useState({}); // Will hold actual data from invoices
   const [pacActualData, setPacActualData] = useState(null); // Will hold PAC actual data
-  const [hoverInfo, setHoverInfo] = useState(null);
 
   // Categories for visual grouping
   const categories = {
@@ -1219,7 +1196,7 @@ const PAC = () => {
   };
 
   // this function saves all the user input data from the generate page via backend
-  const handleGenerate = async (e) => {
+  const handleGenerate = async () => {
     // Check if current month is locked
     if (isCurrentPeriodLocked()) {
       alert("This month is locked and cannot be modified.");
@@ -1341,7 +1318,6 @@ const PAC = () => {
       );
 
       // Persist current projections (authoritative structure for backend)
-      const monthIndex = months.indexOf(month); // 0..11
       await saveProjections(
         selectedStore,
         year,
@@ -1362,12 +1338,6 @@ const PAC = () => {
           month,
           submittedBy,
         });*/
-        const result = await computeAndSavePacActual(
-          selectedStore,
-          year,
-          month,
-          submittedBy
-        );
         //console.log("PAC Actual computation successful:", result);
       } catch (e) {
         console.error("PAC Actual compute failed:", e);
@@ -1394,7 +1364,6 @@ const PAC = () => {
   const pacEqual = Math.abs(goalNumeric - projectedPacPercent) <= 0.01;
 
   const pacBelow = hasGoal && projectedPacPercent < goalNumeric - 1e-9;
-  const pacAbove = hasGoal && projectedPacPercent > goalNumeric + 1e-9;
   const pacMismatch = hasGoal && !pacEqual; // includes below OR above
 
   // ----- Projection helpers for rendering -----
@@ -1606,17 +1575,6 @@ const PAC = () => {
       if (nm === "Advertising") return acc + advertisingPctOfPS;
       return acc + (Number(getRow(nm).projectedPercent) || 0);
     }, 0);
-  const sumActual = (names) =>
-    names.reduce(
-      (acc, nm) => acc + (Number(getRow(nm).historicalDollar) || 0),
-      0
-    );
-  const sumActualPct = (names) =>
-    names.reduce((acc, nm) => {
-      if (nm === "Payroll Tax") return acc + payrollTaxActualPctOfPS;
-      if (nm === "Advertising") return acc + advertisingActualPctOfPS;
-      return acc + (Number(getRow(nm).historicalPercent) || 0);
-    }, 0);
 
   return (
     <Box sx={{ flexGrow: 1 }}>
@@ -1820,9 +1778,6 @@ const PAC = () => {
                               const numericGoal = Number(pacGoal) || 0;
 
                               const monthIdx = months.indexOf(month);
-                              const periodId = `${selectedStore}_${year}${String(
-                                monthIdx + 1
-                              ).padStart(2, "0")}`;
 
                               await saveProjections(
                                 selectedStore,
