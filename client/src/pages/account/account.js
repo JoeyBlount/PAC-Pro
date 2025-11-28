@@ -50,9 +50,8 @@ const UserInfomation = () => {
     setLoadingData(true);
     onAuthStateChanged(auth, async () => {
       try {
-        const [me, allStores] = await Promise.all([
+        const [me] = await Promise.all([
           api("/api/account/me"),
-          api("/api/account/stores"),
         ]);
         setUserData(me);
       } catch (err) {
@@ -142,6 +141,7 @@ const UserInfomation = () => {
 const Account = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: "" });
   const { mode, toggleMode } = useThemeMode();
+  
   useEffect(() => {
     document.title = "PAC Pro - Account";
   }, []);
