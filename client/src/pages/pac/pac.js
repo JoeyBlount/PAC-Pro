@@ -590,7 +590,6 @@ const PAC = () => {
       }
     } catch (error) {
       console.error("Error updating month lock:", error);
-      alert("Failed to update month lock status.");
     }
   };
 
