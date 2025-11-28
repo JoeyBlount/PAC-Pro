@@ -33,8 +33,6 @@ async function api(path, { method = "GET", body } = {}) {
 
 const Account = () => {
   const [userData, setUserData] = useState(null);
-  const [stores, setStores] = useState([]);
-  const [anchorEl, setAnchorEl] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "" });
   const { mode, toggleMode } = useThemeMode();
   useEffect(() => {
@@ -50,11 +48,9 @@ const Account = () => {
           api("/api/account/stores"),
         ]);
         setUserData(me);
-        setStores(allStores);
       } catch (err) {
         console.error("Initial load error:", err);
         setUserData(null);
-        setStores([]);
       }
     });
     return () => unsub();
@@ -77,38 +73,7 @@ const Account = () => {
     }
   };
 
-  const handleClose = () => setAnchorEl(null);
   const handleSnackbarClose = () => setSnackbar((s) => ({ ...s, open: false }));
-
-  const isStoreAssigned = (storeId) =>
-    userData?.assignedStores?.some((store) => store.id === storeId);
-
-  const handleAssignStore = async (store) => {
-    if (!store) return;
-    try {
-      const updatedMe = await api("/api/account/me/assigned-stores", {
-        method: "POST",
-        body: { storeId: store.id },
-      });
-      setUserData(updatedMe);
-      setSnackbar({ open: true, message: `Assigned store: ${store.name}` });
-      setAnchorEl(null);
-    } catch (err) {
-      console.error("Error assigning store:", err);
-    }
-  };
-
-  const handleRemoveStore = async (storeId) => {
-    try {
-      const updatedMe = await api(`/api/account/me/assigned-stores/${storeId}`, {
-        method: "DELETE",
-      });
-      setUserData(updatedMe);
-      setSnackbar({ open: true, message: "Store unassigned successfully" });
-    } catch (err) {
-      console.error("Error removing store:", err);
-    }
-  };
 
   const headerTypographyStyle = {
     variant: "h5",
@@ -196,17 +161,6 @@ const Account = () => {
         </TableContainer>
       )}
 
-      {/* Store Dropdown Menu */}
-      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleClose}>
-        {stores
-          .filter(store => !isStoreAssigned(store.id))
-          .map((store) => (
-            <MenuItem key={store.id} onClick={() => handleAssignStore(store)}>
-              {store.name} — {store.address}
-            </MenuItem>
-          ))}
-      </Menu>
-
       {/* ASSIGNED STORES TABLE */}
       <TableContainer component={Paper} sx={{ maxWidth: 500, margin: "auto" }}>
         <Divider />
@@ -217,16 +171,6 @@ const Account = () => {
                 <TableRow key={store.id}>
                   <TableCell>{store.name}</TableCell>
                   <TableCell>{store.address}</TableCell>
-                  <TableCell>
-                    <Button
-                      variant="text"
-                      color="error"
-                      onClick={() => handleRemoveStore(store.id)}
-                      sx={{ minWidth: "auto", padding: "0 8px" }}
-                    >
-                      ❌
-                    </Button>
-                  </TableCell>
                 </TableRow>
               ))
             ) : (
