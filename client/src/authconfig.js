@@ -4,7 +4,7 @@ export const msalConfig = {
     auth: {
       clientId: "3bcad4b5-5779-47ac-bf55-df702260d948",
       authority: "https://login.microsoftonline.com/common",
-      redirectUri: "http://localhost:3000",
+      redirectUri: "https://pacpro-ef499.web.app",
     },
     cache: {
       cacheLocation: "sessionStorage",
