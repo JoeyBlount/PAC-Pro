@@ -18,6 +18,20 @@
   align-items: center;
 }
 
+@media (max-width: 600px) {
+  .topNavBar {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .topNavLeft,
+  .accountSection,
+  .spacer {
+    flex-shrink: 0;
+  }
+}
+
 /* Adjusted spacing for hamburger icon */
 .hamburgerButton {
   color: #fff;
@@ -28,7 +42,8 @@
 .storeSelectorWrapper {
   display: flex;
   align-items: center;
-  margin-left: 20px; /* Moved right to align with main content */
+  margin-left: 20px;
+  /* Moved right to align with main content */
 }
 
 .storeSelectorWrapper .MuiInputBase-root {
@@ -86,7 +101,8 @@
   top: 64px;
   left: 0;
   height: calc(100% - 64px);
-  width: 80px; /* Collapsed width */
+  width: 80px;
+  /* Collapsed width */
   background-color: #fff;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
   overflow: hidden;
@@ -95,7 +111,8 @@
 }
 
 .leftNavBar.open {
-  width: 240px; /* Expanded width */
+  width: 240px;
+  /* Expanded width */
 }
 
 .sideNavContent {
@@ -110,7 +127,8 @@
   display: flex;
   flex-direction: column;
   padding: 8px 0;
-  gap: 4px; /* Consistent spacing between items */
+  gap: 4px;
+  /* Consistent spacing between items */
 }
 
 /* Bottom container for Settings & Logout */
@@ -119,7 +137,8 @@
   border-top: 1px solid #ddd;
   display: flex;
   flex-direction: column;
-  gap: 4px; /* Consistent spacing between items */
+  gap: 4px;
+  /* Consistent spacing between items */
 }
 
 /* --- Nav Item Styles --- */
@@ -130,16 +149,19 @@
   font-weight: 500;
   width: 100%;
   border-radius: 0;
-  padding: 8px 16px; /* Reduced padding for better alignment */
+  padding: 8px 16px;
+  /* Reduced padding for better alignment */
   margin: 0;
   text-align: left;
   min-height: 48px;
   display: flex;
-  align-items: center; /* Center items vertically */
+  align-items: center;
+  /* Center items vertically */
 }
 
 .navItem .MuiButton-startIcon {
-  margin: 0 16px 0 8px; /* Consistent spacing */
+  margin: 0 16px 0 8px;
+  /* Consistent spacing */
   min-width: 24px;
   display: flex;
   align-items: center;
@@ -193,6 +215,7 @@
     opacity: 0;
     transform: translateY(-10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);

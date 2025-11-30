@@ -1078,7 +1078,7 @@ const PAC = () => {
       return;
     }
 
-  
+
     try {
       await saveProjections(
         selectedStore,
@@ -1660,6 +1660,9 @@ const PAC = () => {
                   onChange={(event, newIndex) => setTabIndex(newIndex)}
                   sx={{ padding: "10px", margin: "0 auto" }}
                   textColor="primary"
+                  variant="scrollable"         
+                  scrollButtons="auto"        
+                  allowScrollButtonsMobile     
                 >
                   <Tab label="Projections" />
                   <Tab label="Generate" />
