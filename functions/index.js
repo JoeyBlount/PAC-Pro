@@ -385,29 +385,27 @@ exports.sendUserInvite = onRequest({ cors: true }, async (req, res) => {
           <p>To get started:</p>
           <ol>
             <li>Visit <a href="https://pacpro-ef499.web.app">PAC-Pro Portal</a></li>
-            <li>Click "Sign Up" or "Create Account"</li>
-            <li>Use this email address: <strong>${email}</strong></li>
-            <li>Create your password</li>
+            <li>Click either "Login with Google" or "Login with Microsoft" and login using this email.</li>
           </ol>
           <p>If you have any questions, please contact your administrator.</p>
           <p>Best regards,<br/>The PAC-Pro Team</p>
         </div>
       `,
       text: `
-Welcome to PAC-Pro!
+        Welcome to PAC-Pro!
 
-Hi ${firstName || "there"},
+        Hi ${firstName || "there"},
 
-Your account has been created with the role: ${role || "User"}
+        Your account has been created with the role: ${role || "User"}
 
-To get started:
-1. Visit https://pacpro-ef499.web.app
-2. Use this email address: ${email}
+        To get started:
+        1. Visit https://pacpro-ef499.web.app
+        2. Click either "Login with Google" or "Login with Microsoft" and login using this email.
 
-If you have any questions, please contact your administrator.
+        If you have any questions, please contact your administrator.
 
-Best regards,
-The PAC-Pro Team
+        Best regards,
+        The PAC-Pro Team
       `,
     };
 
