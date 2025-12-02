@@ -2216,7 +2216,7 @@ const InvoiceLogs = () => {
               position: "relative",
             }}
           >
-            <h2>Recently Deleted</h2>
+            <h2>Invoice Recycle</h2>
             {recentlyDeleted.length === 0 ? (
               <p>No recently deleted invoices.</p>
             ) : (
@@ -2255,7 +2255,7 @@ const InvoiceLogs = () => {
                 ))}
               </div>
             )}
-            <p>Invoices here will be deleted after 14 days (Not yet working)</p>
+            <p>Deleted invoices are stored here for recovery. Once deleted from here, it's gone forever.</p>
             {/* Later you can map the deleted invoices here */}
             <Button
               variant="contained"
