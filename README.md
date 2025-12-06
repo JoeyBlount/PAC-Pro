@@ -400,10 +400,12 @@ cd ../..
 
 <p align="right"> (<a href="#top">Back to Top</a>) </p>
 
-## GitHub Stats
+## Repository Stats
 
-[![JoeyBlount's GitHub Stats](https://github-readme-stats.vercel.app/api?username=JoeyBlount&show_icons=true&count_private=true&include_all_commits=true&theme=default)](https://github.com/JoeyBlount)
+[![Repo Card](https://github-readme-stats.vercel.app/api/pin/?username=JoeyBlount&repo=PAC-Pro&show_owner=true)](https://github.com/JoeyBlount/PAC-Pro)
 
-[![Top Languages](https://github-readme-stats.vercel.app/api/top-langs/?username=JoeyBlount&layout=compact&langs_count=10)](https://github.com/JoeyBlount)
+[![Lines of Code](https://tokei.rs/b1/github/JoeyBlount/PAC-Pro?category=code)](https://github.com/JoeyBlount/PAC-Pro)
+
+View the full **[language breakdown with line counts](https://github.com/JoeyBlount/PAC-Pro)** on the repository page (see the colored bar under "About").
 
 <p align="right"> (<a href="#top">Back to Top</a>) </p>
