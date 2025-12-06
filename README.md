@@ -400,12 +400,19 @@ cd ../..
 
 <p align="right"> (<a href="#top">Back to Top</a>) </p>
 
-## Repository Stats
+## My Contributions (JoeyBlount)
 
-[![Repo Card](https://github-readme-stats.vercel.app/api/pin/?username=JoeyBlount&repo=PAC-Pro&show_owner=true)](https://github.com/JoeyBlount/PAC-Pro)
-
-[![Lines of Code](https://tokei.rs/b1/github/JoeyBlount/PAC-Pro?category=code)](https://github.com/JoeyBlount/PAC-Pro)
-
-View the full **[language breakdown with line counts](https://github.com/JoeyBlount/PAC-Pro)** on the repository page (see the colored bar under "About").
+| Language      | Lines of Code |
+| ------------- | ------------- |
+| JavaScript    | 18,193        |
+| JSON          | 9,143         |
+| Python        | 7,448         |
+| Markdown      | 2,784         |
+| CSS           | 911           |
+| HTML          | 534           |
+| Batch Scripts | 236           |
+| Shell Scripts | 88            |
+| Other         | 200           |
+| **Total**     | **43,537++**  |
 
 <p align="right"> (<a href="#top">Back to Top</a>) </p>
