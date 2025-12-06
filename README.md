@@ -399,4 +399,11 @@ cd ../..
 <p>Contact developer through developer's GitHub.<p>
 
 <p align="right"> (<a href="#top">Back to Top</a>) </p>
-[![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=JoeyBlount&layout=compact)](https://github.com/JoeyBlount/github-readme-stats)
+
+## GitHub Stats
+
+[![JoeyBlount's GitHub Stats](https://github-readme-stats.vercel.app/api?username=JoeyBlount&show_icons=true&count_private=true&include_all_commits=true&theme=default)](https://github.com/JoeyBlount)
+
+[![Top Languages](https://github-readme-stats.vercel.app/api/top-langs/?username=JoeyBlount&layout=compact&langs_count=10)](https://github.com/JoeyBlount)
+
+<p align="right"> (<a href="#top">Back to Top</a>) </p>
